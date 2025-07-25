@@ -16,9 +16,12 @@ class AnimationStateManager {
         this.isInCombo = false;
         this.comboStep = 0;
         this.comboTimer = 0;
-        this.comboTimeout = 800; // ms to reset combo
+        this.comboTimeout = 500; // ms to reset combo (longer window for easier chaining)
         this.animationLocked = false; // Prevents interruption during certain animations
         this.lockTimer = 0;
+        this.queuedAttacks = []; // Buffer for queued attacks (array for multiple)
+        this.bufferWindow = 150; // ms before animation ends to allow buffering
+        this.maxQueueSize = 2; // Maximum attacks that can be queued (allows up to 3-hit combo)
     }
 
     update(deltaTime) {
@@ -33,10 +36,56 @@ class AnimationStateManager {
         // Update animation lock timer
         if (this.lockTimer > 0) {
             this.lockTimer -= deltaTime;
+            
+            // Check if we're in the buffer window and have queued attacks
+            if (this.queuedAttacks.length > 0 && this.lockTimer <= this.bufferWindow) {
+                const nextAttack = this.executeQueuedAttack();
+                if (nextAttack) {
+                    console.log("Executing buffered attack:", nextAttack);
+                    return nextAttack; // Signal to game that we need to execute this attack
+                }
+            }
+            
             if (this.lockTimer <= 0) {
+                console.log("Animation lock timer expired, unlocking");
                 this.animationLocked = false;
+                if (this.currentState === 'attack') {
+                    console.log("Resetting attack state to idle after lock timer");
+                    this.currentState = 'idle';
+                }
             }
         }
+    }
+
+    executeQueuedAttack() {
+        if (this.queuedAttacks.length > 0) {
+            const attackType = this.queuedAttacks.shift(); // Remove first attack from queue
+            console.log(`Executing queued attack: ${attackType}, ${this.queuedAttacks.length} remaining in queue`);
+            return attackType;
+        }
+        return null;
+    }
+
+    queueAttack() {
+        // Only queue if we haven't reached the maximum queue size
+        if (this.queuedAttacks.length >= this.maxQueueSize) {
+            console.log("Queue full! Cannot queue more attacks");
+            return false;
+        }
+
+        // Only queue if we're currently attacking
+        if (this.currentState === 'attack' || this.currentState === 'airkick') {
+            const attackType = this.startCombo();
+            this.queuedAttacks.push(attackType);
+            console.log(`Queued attack: ${attackType}, queue size: ${this.queuedAttacks.length}/${this.maxQueueSize}`);
+            return true;
+        }
+        return false;
+    }
+
+    clearQueue() {
+        this.queuedAttacks = [];
+        console.log("Attack queue cleared");
     }
 
     canTransitionTo(newState) {
@@ -86,6 +135,7 @@ class AnimationStateManager {
         this.isInCombo = false;
         this.comboStep = 0;
         this.comboTimer = 0;
+        this.clearQueue(); // Clear any queued attacks when combo resets
     }
 }
 
@@ -103,12 +153,12 @@ const TIREEK_CONFIG = new CharacterConfig(
     },
     {
         run: { frames: 8, frameRate: 12, repeat: -1 },
-        jab: { frames: 4, frameRate: 12, repeat: 0 },
-        cross: { frames: 4, frameRate: 12, repeat: 0 },
-        kick: { frames: 5, frameRate: 12, repeat: 0 },
+        jab: { frames: 4, frameRate: 20, repeat: 0 },     // Very fast: 24 FPS
+        cross: { frames: 4, frameRate: 20, repeat: 0 },   // Very fast: 24 FPS  
+        kick: { frames: 5, frameRate: 16, repeat: 0 },    // Fast: 20 FPS
         jump: { frames: 1, frameRate: 12, repeat: 0 },
         airkick: { frames: 1, frameRate: 12, repeat: 0 },
-        idle: { frames: 5, frameRate: 12, repeat: -1 } // Corrected: 5 frames for idle animation
+        idle: { frames: 5, frameRate: 12, repeat: -1 }    // Keep idle at normal speed
     }
 );
 
@@ -174,6 +224,27 @@ class GameScene extends Phaser.Scene {
         
         // Initialize jump tracking
         this.isJumping = false;
+        
+        // Add visual debug text on screen - Safari compatibility fix
+        this.debugText = this.add.text(10, 10, 'Debug: Safari Test...', {
+            fontSize: '20px',
+            fill: '#ff0000',
+            backgroundColor: '#ffffff',
+            padding: { x: 15, y: 10 }
+        });
+        this.debugText.setDepth(2000); // Much higher depth
+        this.debugText.setScrollFactor(0); // Fixed position on screen
+        
+        // Add a visual indicator that changes color when attacking
+        this.attackIndicator = this.add.rectangle(200, 50, 100, 30, 0x00ff00);
+        this.attackIndicator.setDepth(2000);
+        this.attackIndicator.setScrollFactor(0);
+        this.attackText = this.add.text(200, 50, 'READY', {
+            fontSize: '16px',
+            fill: '#000000'
+        }).setOrigin(0.5);
+        this.attackText.setDepth(2001);
+        this.attackText.setScrollFactor(0);
     }
 
     createPlayer(characterConfig) {
@@ -226,8 +297,10 @@ class GameScene extends Phaser.Scene {
                 animKey === `${charName}_cross` || 
                 animKey === `${charName}_kick`) {
                 
-                // Reset animation state and return to idle
-                this.animationManager.setState('idle');
+                // Force reset animation state and return to idle
+                this.animationManager.currentState = 'idle';
+                this.animationManager.animationLocked = false;
+                this.animationManager.lockTimer = 0;
                 this.player.anims.play(`${charName}_idle`, true);
                 
                 console.log(`Attack animation ${animKey} completed, returning to idle`);
@@ -249,6 +322,23 @@ class GameScene extends Phaser.Scene {
         if (!this.isJumping) {
             this.updatePerspective();
         }
+        
+        // Update visual debug display - Safari compatible
+        const state = this.animationManager.currentState;
+        const locked = this.animationManager.animationLocked;
+        const timer = Math.round(this.animationManager.lockTimer);
+        const velX = Math.round(this.player.body.velocity.x);
+        
+        this.debugText.setText(`State: ${state}\nLocked: ${locked}\nTimer: ${timer}ms\nVelX: ${velX}\nSafari Test`);
+        
+        // Update attack indicator
+        if (state === 'attack' || locked) {
+            this.attackIndicator.setFillStyle(0xff0000); // Red when attacking
+            this.attackText.setText('ATTACKING');
+        } else {
+            this.attackIndicator.setFillStyle(0x00ff00); // Green when ready
+            this.attackText.setText('READY');
+        }
     }
 
     handleInput() {
@@ -257,15 +347,36 @@ class GameScene extends Phaser.Scene {
         // Handle attack input
         if (Phaser.Input.Keyboard.JustDown(this.attackKey)) {
             if (this.isJumping) {
-                // Air attack
-                if (this.animationManager.setState('airkick', 400)) {
-                    this.player.anims.play(`${charName}_airkick`, true);
-                }
+                // Air attack - shorter lock time and different state
+                this.animationManager.currentState = 'airkick';
+                this.animationManager.animationLocked = true;
+                this.animationManager.lockTimer = 400; // Shorter than ground attacks
+                this.player.anims.play(`${charName}_airkick`, true);
+                
+                // Visual feedback for air kick
+                this.attackIndicator.setFillStyle(0xffa500); // Orange for air kick
+                this.attackText.setText('AIR KICK');
             } else {
                 // Ground combo attack
-                const attackType = this.animationManager.startCombo();
-                if (this.animationManager.setState('attack', 300)) {
+                if (this.animationManager.currentState === 'attack') {
+                    // Try to queue the attack if we're already attacking
+                    this.animationManager.queueAttack();
+                } else {
+                    // Start new attack
+                    const attackType = this.animationManager.startCombo();
+                    const animConfig = TIREEK_CONFIG.animations[attackType];
+                    const animationDuration = (animConfig.frames / animConfig.frameRate) * 1000; // Convert to milliseconds
+                    
+                    // Force set attack state for the full duration of the animation
+                    this.animationManager.currentState = 'attack';
+                    this.animationManager.animationLocked = true;
+                    this.animationManager.lockTimer = animationDuration;
                     this.player.anims.play(`${charName}_${attackType}`, true);
+                    
+                    // Visual feedback - Safari compatible
+                    this.attackIndicator.setFillStyle(0xff0000); // Immediate red
+                    this.attackText.setText('ATTACKING!');
+                    console.log(`SAFARI DEBUG: Attack started - ${attackType}`);
                 }
             }
         }
@@ -277,26 +388,50 @@ class GameScene extends Phaser.Scene {
     }
 
     handleMovement() {
-        // Handle horizontal movement
+        // Check if we're doing an air kick (jumping + attacking)
+        const isAirKick = this.isJumping && (this.animationManager.currentState === 'airkick');
+        
+        // Don't allow movement during GROUND attacks only
+        if ((this.animationManager.currentState === 'attack' || this.animationManager.animationLocked) && !isAirKick) {
+            // Force stop all movement for ground attacks
+            this.player.setVelocityX(0);
+            this.player.body.velocity.x = 0;
+            this.player.body.acceleration.x = 0;
+            return;
+        }
+
+        // Handle horizontal movement (normal speed or slower for air kicks)
+        let speed = 420; // Normal speed
+        if (isAirKick) {
+            speed = 200; // Slower speed during air kick
+        }
+
         if (this.cursors.left.isDown) {
-            this.player.setVelocityX(-420);
+            this.player.setVelocityX(-speed);
             this.player.setFlipX(true); // Face left
         }
         else if (this.cursors.right.isDown) {
-            this.player.setVelocityX(420);
+            this.player.setVelocityX(speed);
             this.player.setFlipX(false); // Face right
         }
         else {
             this.player.setVelocityX(0);
         }
 
-        // Handle vertical movement (beat 'em up style) - ONLY when not jumping
+        // Handle vertical movement (beat 'em up style) - ONLY when not jumping and not attacking
         if (!this.isJumping) {
             // Disable physics for vertical movement
             this.player.setGravityY(0);
             this.player.setVelocityY(0);
             this.player.body.velocity.y = 0;
             this.player.body.acceleration.y = 0;
+            
+            // Don't allow vertical movement during attacks
+            if (this.animationManager.currentState === 'attack' || this.animationManager.animationLocked) {
+                this.player.body.velocity.y = 0;
+                console.log("Vertical movement blocked - in attack");
+                return;
+            }
             
             // Manual position control
             if (this.cursors.up.isDown && this.player.y > this.streetTopLimit) {
