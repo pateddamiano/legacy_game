@@ -162,9 +162,37 @@ const TIREEK_CONFIG = new CharacterConfig(
     }
 );
 
+// Define Tryston character configuration
+const TRYSTON_CONFIG = new CharacterConfig(
+    'tryston',
+    {
+        run: 'assets/characters/tryston/spritesheets/Tryston_Run.png',
+        jab: 'assets/characters/tryston/spritesheets/Tryston_Jab.png',
+        cross: 'assets/characters/tryston/spritesheets/Tryston_Cross.png',
+        kick: 'assets/characters/tryston/spritesheets/Tryston_Kick.png',
+        jump: 'assets/characters/tryston/spritesheets/Tryston_Jump.png',
+        airkick: 'assets/characters/tryston/spritesheets/Tryston_AirKick.png',
+        idle: 'assets/characters/tryston/spritesheets/Tryston_Idle.png'
+    },
+    {
+        run: { frames: 8, frameRate: 12, repeat: -1 },
+        jab: { frames: 4, frameRate: 20, repeat: 0 },     // Very fast: 24 FPS
+        cross: { frames: 4, frameRate: 20, repeat: 0 },   // Very fast: 24 FPS  
+        kick: { frames: 5, frameRate: 16, repeat: 0 },    // Fast: 20 FPS
+        jump: { frames: 1, frameRate: 12, repeat: 0 },
+        airkick: { frames: 1, frameRate: 12, repeat: 0 },
+        idle: { frames: 5, frameRate: 12, repeat: -1 }    // Keep idle at normal speed
+    }
+);
+
+// Array of all available characters
+const ALL_CHARACTERS = [TIREEK_CONFIG, TRYSTON_CONFIG];
+
 class GameScene extends Phaser.Scene {
     constructor() {
         super({ key: 'GameScene' });
+        this.currentCharacterIndex = 0; // Start with first character (Tireek)
+        this.currentCharacterConfig = ALL_CHARACTERS[this.currentCharacterIndex];
     }
 
     preload() {
@@ -172,8 +200,10 @@ class GameScene extends Phaser.Scene {
         this.load.image('street', 'assets/backgrounds/StreetTexture.png');
         this.load.image('cityscape', 'assets/backgrounds/Background.png');
         
-        // Load character sprite sheets
-        this.loadCharacterAssets(TIREEK_CONFIG);
+        // Load all character sprite sheets
+        ALL_CHARACTERS.forEach(characterConfig => {
+            this.loadCharacterAssets(characterConfig);
+        });
     }
 
     loadCharacterAssets(characterConfig) {
@@ -197,8 +227,8 @@ class GameScene extends Phaser.Scene {
         this.streetTopLimit = 520;
         this.streetBottomLimit = 650;
 
-        // Create player with Tireek character
-        this.createPlayer(TIREEK_CONFIG);
+        // Create player with current character
+        this.createPlayer(this.currentCharacterConfig);
         
         // Set up camera to follow player horizontally only
         this.cameras.main.startFollow(this.player, true, 0.1, 0);
@@ -209,18 +239,21 @@ class GameScene extends Phaser.Scene {
         this.cursors = this.input.keyboard.createCursorKeys();
         this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
         this.attackKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.X); // X key for attack
+        this.switchCharacterKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.C); // C key for character switch
 
-        // Create animations for the character
-        this.createCharacterAnimations(TIREEK_CONFIG);
+        // Create animations for all characters
+        ALL_CHARACTERS.forEach(characterConfig => {
+            this.createCharacterAnimations(characterConfig);
+        });
 
         // Initialize animation state manager
         this.animationManager = new AnimationStateManager(this.player);
         
-        // Set up animation complete listeners
-        this.setupAnimationEvents(TIREEK_CONFIG);
+        // Set up animation complete listeners for current character only
+        this.setupAnimationEvents(this.currentCharacterConfig);
         
         // Start with idle animation
-        this.player.anims.play(`${TIREEK_CONFIG.name}_idle`, true);
+        this.player.anims.play(`${this.currentCharacterConfig.name}_idle`, true);
         
         // Initialize jump tracking
         this.isJumping = false;
@@ -234,6 +267,18 @@ class GameScene extends Phaser.Scene {
         });
         this.debugText.setDepth(2000); // Much higher depth
         this.debugText.setScrollFactor(0); // Fixed position on screen
+        
+        // Add character indicator
+        this.characterIndicator = this.add.rectangle(10, 100, 200, 40, 0x000080);
+        this.characterIndicator.setDepth(2000);
+        this.characterIndicator.setScrollFactor(0);
+        this.characterIndicator.setOrigin(0, 0);
+        this.characterText = this.add.text(15, 120, `Character: ${this.currentCharacterConfig.name.toUpperCase()}\nPress C to switch`, {
+            fontSize: '14px',
+            fill: '#ffffff'
+        }).setOrigin(0, 0.5);
+        this.characterText.setDepth(2001);
+        this.characterText.setScrollFactor(0);
         
         // Add a visual indicator that changes color when attacking
         this.attackIndicator = this.add.rectangle(200, 50, 100, 30, 0x00ff00);
@@ -286,13 +331,16 @@ class GameScene extends Phaser.Scene {
     }
 
     setupAnimationEvents(characterConfig) {
+        // Remove any existing animation listeners to prevent conflicts
+        this.player.removeAllListeners('animationcomplete');
+        
         const charName = characterConfig.name;
         
-        // Listen for animation complete events
+        // Listen for animation complete events for current character
         this.player.on('animationcomplete', (animation, frame) => {
             const animKey = animation.key;
             
-            // Check if it's an attack animation that just finished
+            // Check if it's an attack animation that just finished for current character
             if (animKey === `${charName}_jab` || 
                 animKey === `${charName}_cross` || 
                 animKey === `${charName}_kick`) {
@@ -306,6 +354,56 @@ class GameScene extends Phaser.Scene {
                 console.log(`Attack animation ${animKey} completed, returning to idle`);
             }
         });
+    }
+
+    switchCharacter() {
+        // Only allow switching if not in middle of an action
+        if (this.animationManager.animationLocked || this.isJumping || 
+            this.animationManager.currentState === 'attack' || 
+            this.animationManager.currentState === 'airkick') {
+            console.log("Cannot switch characters during action");
+            return;
+        }
+
+        // Switch to next character
+        this.currentCharacterIndex = (this.currentCharacterIndex + 1) % ALL_CHARACTERS.length;
+        this.currentCharacterConfig = ALL_CHARACTERS[this.currentCharacterIndex];
+        
+        // Store current position and state
+        const currentX = this.player.x;
+        const currentY = this.player.y;
+        const currentScale = this.player.scaleX;
+        const currentFlipX = this.player.flipX;
+        
+        // Destroy current player sprite
+        this.player.destroy();
+        
+        // Create new player with new character
+        this.createPlayer(this.currentCharacterConfig);
+        
+        // Restore position and state
+        this.player.x = currentX;
+        this.player.y = currentY;
+        this.player.setScale(currentScale);
+        this.player.setFlipX(currentFlipX);
+        this.player.lastGroundY = currentY;
+        
+        // Reset animation manager with new character
+        this.animationManager = new AnimationStateManager(this.player);
+        
+        // Set up animation events for new character
+        this.setupAnimationEvents(this.currentCharacterConfig);
+        
+        // Start idle animation
+        this.player.anims.play(`${this.currentCharacterConfig.name}_idle`, true);
+        
+        // Update character text
+        this.characterText.setText(`Character: ${this.currentCharacterConfig.name.toUpperCase()}\nPress C to switch`);
+        
+        // Re-setup camera follow
+        this.cameras.main.startFollow(this.player, true, 0.1, 0);
+        
+        console.log(`Switched to character: ${this.currentCharacterConfig.name}`);
     }
 
     update(time, delta) {
@@ -328,8 +426,9 @@ class GameScene extends Phaser.Scene {
         const locked = this.animationManager.animationLocked;
         const timer = Math.round(this.animationManager.lockTimer);
         const velX = Math.round(this.player.body.velocity.x);
+        const charName = this.currentCharacterConfig.name;
         
-        this.debugText.setText(`State: ${state}\nLocked: ${locked}\nTimer: ${timer}ms\nVelX: ${velX}\nSafari Test`);
+        this.debugText.setText(`Character: ${charName}\nState: ${state}\nLocked: ${locked}\nTimer: ${timer}ms\nVelX: ${velX}`);
         
         // Update attack indicator
         if (state === 'attack' || locked) {
@@ -343,6 +442,12 @@ class GameScene extends Phaser.Scene {
 
     handleInput() {
         const charName = this.player.characterConfig.name;
+        
+        // Handle character switching
+        if (Phaser.Input.Keyboard.JustDown(this.switchCharacterKey)) {
+            this.switchCharacter();
+            return; // Skip other input processing during character switch
+        }
         
         // Handle attack input
         if (Phaser.Input.Keyboard.JustDown(this.attackKey)) {
@@ -364,7 +469,7 @@ class GameScene extends Phaser.Scene {
                 } else {
                     // Start new attack
                     const attackType = this.animationManager.startCombo();
-                    const animConfig = TIREEK_CONFIG.animations[attackType];
+                    const animConfig = this.currentCharacterConfig.animations[attackType];
                     const animationDuration = (animConfig.frames / animConfig.frameRate) * 1000; // Convert to milliseconds
                     
                     // Force set attack state for the full duration of the animation
