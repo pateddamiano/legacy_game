@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>First Off - Brooklyn Street Mini Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+            color: white;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+        
+        #gameContainer {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 10px;
+        }
+        
+        canvas {
+            border: 3px solid #e74c3c;
+            border-radius: 10px;
+            box-shadow: 0 0 30px rgba(231, 76, 60, 0.5);
+            max-width: 100vw;
+            max-height: 100vh;
+        }
+        
+        .game-info {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #e74c3c;
+            max-width: 300px;
+            font-size: 14px;
+            z-index: 1000;
+        }
+        
+        .game-info h3 {
+            color: #e74c3c;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        
+        .game-info ul {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .game-info li {
+            margin: 5px 0;
+            color: #ecf0f1;
+        }
+        
+        .game-info .key {
+            background: #34495e;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: bold;
+            color: #f1c40f;
+        }
+        
+        .toggle-info {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 1001;
+        }
+        
+        .toggle-info:hover {
+            background: #c0392b;
+        }
+        
+        @media (max-width: 768px) {
+            .game-info {
+                font-size: 12px;
+                max-width: 250px;
+                padding: 10px;
+            }
+            
+            .game-info h3 {
+                font-size: 16px;
+            }
+            
+            canvas {
+                width: calc(100vw - 20px);
+                height: auto;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .game-info {
+                display: none;
+            }
+        }
+        
+        .loading-text {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #95a5a6;
+            font-size: 16px;
+        }
+        
+        .error-message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(231, 76, 60, 0.9);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <!-- Game canvas will be inserted here by JavaScript -->
+    </div>
+    
+    <div class="game-info" id="gameInfo">
+        <h3>🎮 First Off - Controls</h3>
+        <ul>
+            <li><span class="key">← →</span> Move left/right</li>
+            <li><span class="key">↑</span> Jump</li>
+            <li><span class="key">SPACE</span> Switch character</li>
+            <li><span class="key">ENTER</span> Super move</li>
+            <li><span class="key">P</span> Pause/Resume</li>
+            <li><span class="key">R</span> Restart (when game over)</li>
+        </ul>
+        <br>
+        <h3>🎯 Characters</h3>
+        <ul>
+            <li><span style="color: #3498db;">●</span> <strong>Tireek</strong> - Powerful Punch</li>
+            <li><span style="color: #e67e22;">●</span> <strong>Tryston</strong> - Knockback Yell</li>
+        </ul>
+        <br>
+        <h3>⚡ Obstacles</h3>
+        <ul>
+            <li>🎵 Spinning vinyl records</li>
+            <li>👤 Gangster enemies (purple)</li>
+            <li>🚶 Homeless blockers (gray)</li>
+            <li>🎤 Microphones (power-ups)</li>
+        </ul>
+        <br>
+        <p><strong>Goal:</strong> Survive 3 minutes to collect the song fragment!</p>
+    </div>
+    
+    <button class="toggle-info" onclick="toggleInfo()">ℹ️</button>
+    
+    <div class="loading-text" id="loadingText">
+        Loading Brooklyn Streets...
+    </div>
+    
+    <div class="error-message" id="errorMessage">
+        <h3>Game Loading Error</h3>
+        <p>Please refresh the page or check your browser compatibility.</p>
+        <button onclick="location.reload()" style="margin-top: 10px; padding: 5px 10px; background: white; color: #e74c3c; border: none; border-radius: 3px; cursor: pointer;">Reload Game</button>
+    </div>
+    
+    <script src="first-off-game-updated.js"></script>
+    
+    <script>
+        // Game launcher and error handling
+        let gameLoaded = false;
+        let infoVisible = true;
+        
+        function toggleInfo() {
+            const info = document.getElementById('gameInfo');
+            infoVisible = !infoVisible;
+            info.style.display = infoVisible ? 'block' : 'none';
+        }
+        
+        // Handle game loading
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                if (window.firstOffGame) {
+                    gameLoaded = true;
+                    document.getElementById('loadingText').style.display = 'none';
+                } else {
+                    document.getElementById('errorMessage').style.display = 'block';
+                    document.getElementById('loadingText').style.display = 'none';
+                }
+            }, 3000);
+        });
+        
+        // Error handling
+        window.addEventListener('error', (e) => {
+            console.error('Game error:', e.error);
+            if (!gameLoaded) {
+                document.getElementById('errorMessage').style.display = 'block';
+                document.getElementById('loadingText').style.display = 'none';
+            }
+        });
+        
+        // Prevent default touch behaviors that interfere with game
+        document.addEventListener('touchstart', function(e) {
+            if (e.target.tagName === 'CANVAS') {
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
+        document.addEventListener('touchmove', function(e) {
+            if (e.target.tagName === 'CANVAS') {
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
+        // Keyboard shortcuts for info panel
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'h' || e.key === 'H') {
+                toggleInfo();
+            }
+        });
+        
+        // Auto-hide info on mobile after 10 seconds
+        if (window.innerWidth <= 768) {
+            setTimeout(() => {
+                if (infoVisible) {
+                    toggleInfo();
+                }
+            }, 10000);
+        }
+        
+        // Performance monitoring
+        let frameCount = 0;
+        let lastTime = performance.now();
+        
+        function checkPerformance() {
+            const now = performance.now();
+            frameCount++;
+            
+            if (now - lastTime >= 1000) {
+                const fps = Math.round((frameCount * 1000) / (now - lastTime));
+                console.log(`Game FPS: ${fps}`);
+                
+                if (fps < 30 && gameLoaded) {
+                    console.warn('Low FPS detected. Consider closing other browser tabs for better performance.');
+                }
+                
+                frameCount = 0;
+                lastTime = now;
+            }
+            
+            if (gameLoaded) {
+                requestAnimationFrame(checkPerformance);
+            }
+        }
+        
+        setTimeout(() => {
+            if (gameLoaded) {
+                checkPerformance();
+            }
+        }, 5000);
+    </script>
+</body>
+</html>

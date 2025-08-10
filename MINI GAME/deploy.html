@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="description" content="First Off - A Brooklyn street-inspired mini game featuring Tireek and Tryston from rap group ++. Survive the urban obstacles and collect song fragments!">
+    <meta name="keywords" content="mini game, brooklyn, hip hop, street game, first off, browser game">
+    <meta name="author" content="++ Game Studio">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://yourusername.github.io/first-off-game/">
+    <meta property="og:title" content="First Off - Brooklyn Street Mini Game">
+    <meta property="og:description" content="Play as Tireek and Tryston in this Brooklyn street-inspired mini game. Dodge obstacles, collect microphones, and survive the urban challenge!">
+    <meta property="og:image" content="https://yourusername.github.io/first-off-game/preview.jpg">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://yourusername.github.io/first-off-game/">
+    <meta property="twitter:title" content="First Off - Brooklyn Street Mini Game">
+    <meta property="twitter:description" content="Play as Tireek and Tryston in this Brooklyn street-inspired mini game. Dodge obstacles, collect microphones, and survive the urban challenge!">
+    <meta property="twitter:image" content="https://yourusername.github.io/first-off-game/preview.jpg">
+    
+    <title>First Off - Brooklyn Street Mini Game</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Prevent zooming on mobile -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <!-- Preload critical resources -->
+    <link rel="preload" href="game.js" as="script">
+    <link rel="preload" href="styles.css" as="style">
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="ui">
+            <div id="hud">
+                <div id="score">Score: 0</div>
+                <div id="timer">Time: 180</div>
+                <div id="character">Character: Tireek</div>
+                <div id="hitMeter">
+                    <div>Hit Meter:</div>
+                    <div id="hitBar">
+                        <div id="hitBarFill"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="controls">
+                <div class="desktop-controls">
+                    <div>Arrow Keys: Move & Jump</div>
+                    <div>Space: Switch Character</div>
+                    <div>Enter: Super Move</div>
+                </div>
+                <div class="mobile-controls">
+                    <div>Tap buttons to play</div>
+                </div>
+            </div>
+            
+            <!-- Mobile Touch Controls -->
+            <div id="touchControls" class="touch-controls">
+                <div class="control-group left-controls">
+                    <button id="leftBtn" class="control-btn">←</button>
+                    <button id="rightBtn" class="control-btn">→</button>
+                </div>
+                <div class="control-group center-controls">
+                    <button id="jumpBtn" class="control-btn jump-btn">JUMP</button>
+                </div>
+                <div class="control-group right-controls">
+                    <button id="switchBtn" class="control-btn">SWITCH</button>
+                    <button id="superBtn" class="control-btn super-btn">SUPER</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Loading Screen -->
+        <div id="loadingScreen" class="loading-screen">
+            <div class="loading-content">
+                <h1>First Off</h1>
+                <div class="loading-bar">
+                    <div class="loading-fill"></div>
+                </div>
+                <p>Loading Brooklyn Streets...</p>
+            </div>
+        </div>
+        
+        <!-- Start Screen -->
+        <div id="startScreen" class="start-screen hidden">
+            <div class="start-content">
+                <h1>FIRST OFF</h1>
+                <h2>Brooklyn Street Challenge</h2>
+                <p>Choose your character and survive the urban obstacles!</p>
+                <div class="character-select">
+                    <div class="character-option" data-character="tireek">
+                        <div class="character-preview tireek"></div>
+                        <h3>TIREEK</h3>
+                        <p>Powerful Punch</p>
+                    </div>
+                    <div class="character-option" data-character="tryston">
+                        <div class="character-preview tryston"></div>
+                        <h3>TRYSTON</h3>
+                        <p>Knockback Yell</p>
+                    </div>
+                </div>
+                <button id="startBtn" class="start-btn">START GAME</button>
+                <div class="high-score">
+                    <p>High Score: <span id="highScoreDisplay">0</span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="game.js"></script>
+    
+    <!-- Error handling for missing files -->
+    <script>
+        window.addEventListener('error', function(e) {
+            console.error('Game loading error:', e.error);
+            document.body.innerHTML = '<div style="text-align:center; padding:50px; font-family:Arial;"><h1>Loading Error</h1><p>Please refresh the page or check your internet connection.</p></div>';
+        });
+    </script>
+</body>
+</html>
