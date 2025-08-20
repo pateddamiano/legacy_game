@@ -34,13 +34,22 @@
     <div>
         <div id="game-container"></div>
         <div class="controls">
-            Arrow keys: ← → move left/right, ↑ ↓ move up/down | SPACEBAR: jump | X: attack (combo: jab → cross → kick)
+            Arrow keys: ← → move left/right, ↑ ↓ move up/down | SPACEBAR: jump | X: attack (combo: jab → cross → kick) | C: switch character | D: debug mode | K: clear enemies | H: heal | M: music | N: SFX
         </div>
     </div>
     
     <!-- Phaser 3 CDN -->
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
-    <!-- Game Script with cache busting -->
-    <script src="game.js?v=1.0.3"></script>
+    
+    <!-- Modular Game Scripts - Load in dependency order -->
+    <script src="characters.js?v=4.9.0"></script>
+    <script src="animation-manager.js?v=4.9.0"></script>
+    <script src="audio-manager.js?v=4.9.0"></script>
+    <script src="ui-manager.js?v=4.9.0"></script>
+    <script src="environment-manager.js?v=4.9.0"></script>
+    <script src="input-manager.js?v=4.9.0"></script>
+    <script src="enemy-system.js?v=4.9.0"></script>
+    <script src="game-scene.js?v=4.9.0"></script>
+    <script src="game.js?v=4.9.0"></script>
 </body>
 </html> 
