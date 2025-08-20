@@ -28,19 +28,19 @@ const ENEMY_STATES = {
 
 const ENEMY_CONFIG = {
     // 👹 SPAWNING BEHAVIOR
-    spawnInterval: 1500,        // milliseconds between enemy spawns (lower = more frequent)
+    spawnInterval: 1200,        // milliseconds between enemy spawns (lower = more frequent)
     maxEnemiesOnScreen: 5,      // maximum enemies allowed at once (higher = more chaos)
     spawnOffscreenDistance: 50, // how far offscreen enemies spawn (higher = more spawn time)
     
     // 💪 ENEMY STATS
-    health: 8,                  // number of hits to kill an enemy (higher = tankier enemies)
-    speed: 160,                  // enemy movement speed (player is 420, so this is ~19% player speed)
+    health: 10,                  // strength of enemy (higher = tankier enemies)
+    speed: 180,                  // enemy movement speed (player is 420, so this is ~19% player speed)
     verticalMoveSpeed: 2,       // speed for up/down movement (beat 'em up style)
     
     // 🧠 AI BEHAVIOR
     detectionRange: 800,        // distance at which enemies notice player (higher = more aggressive)
-    attackRange: 120,           // distance at which enemies can attack (lower = need to get closer)
-    attackCooldown: 500,       // milliseconds between enemy attacks (lower = more frequent attacks)
+    attackRange: 140,           // distance at which enemies can attack (lower = need to get closer)
+    attackCooldown: 250,       // milliseconds between enemy attacks (lower = more frequent attacks)
     deadZoneHorizontal: 60,     // prevents jittering when close to player horizontally
     deadZoneVertical: 20,       // prevents vertical jittering (smoother movement)
     
@@ -54,7 +54,7 @@ const ENEMY_CONFIG = {
     maxScale: 2.5,              // enemy scale at bottom of street (closer to camera)
     
     // ⚔️ COMBAT
-    playerDamage: 1,            // damage enemies deal to player (higher = more punishing)
+    playerDamage: 5,           // damage enemies deal to player (higher = more punishing)
     playerFlashTime: 200,       // player damage flash duration (ms) - visual feedback
     attackWindupDelay: 300,     // delay before attack actually hits (ms) - gives player time to react
     

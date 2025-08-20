@@ -95,12 +95,14 @@ const HITBOX_CONFIG = {
         attackHeight: 100,              // height of player attack hitbox
         attackOffsetX: 20,              // how far in front of player the attack reaches (reduced from 120)
         attackOffsetY: -50,             // vertical offset for attack hitbox (raised up)
+        verticalTolerance: 60,          // Maximum vertical distance for melee attacks
         
         // Air kick hitboxes (when player does air attacks)
         airkickWidth: 60,              // width of air kick hitbox
         airkickHeight: 80,              // height of air kick hitbox
         airkickOffsetX: 50,             // how far in front of player the air kick reaches (reduced from 100)
         airkickOffsetY: -15,            // vertical offset for air kick hitbox (raised up)
+        airkickVerticalTolerance: 80,   // Slightly more tolerance for air kicks
     },
     
     // 👹 ENEMY HITBOXES  
@@ -111,7 +113,7 @@ const HITBOX_CONFIG = {
         enemyCollisionRadius: 50,       // collision radius between enemies
         
         // Attack hitboxes (when enemies attack player)
-        attackWidth: 80,               // width of enemy attack hitbox
+        attackWidth: 90,               // width of enemy attack hitbox
         attackHeight: 100,              // height of enemy attack hitbox
         attackOffsetX: 20,              // how far in front of enemy the attack reaches (reduced from 120)
         attackOffsetY: -50,             // vertical offset for attack hitbox (raised up)

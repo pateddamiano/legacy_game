@@ -11,6 +11,9 @@ class GameScene extends Phaser.Scene {
     }
 
     preload() {
+        // Set up loading progress tracking
+        this.setupLoadingProgress();
+        
         // Load background assets
         this.load.image('street', 'assets/backgrounds/StreetTexture.png');
         this.load.image('cityscape', 'assets/backgrounds/Background.png');
@@ -23,8 +26,60 @@ class GameScene extends Phaser.Scene {
         // Load enemy assets
         this.loadCharacterAssets(CRACKHEAD_CONFIG);
         
+        // Initialize and load weapon system
+        this.weaponManager = new WeaponManager(this);
+        this.weaponManager.loadWeaponAssets();
+        
+        // Load item pickup assets
+        this.loadItemPickupAssets();
+        
         // Load audio assets
         this.loadAudioAssets();
+    }
+    
+    setupLoadingProgress() {
+        // Start the 8-bit dot animation
+        this.startDotAnimation();
+        
+        this.load.on('complete', () => {
+            // Keep loading screen for 5 seconds total for smooth experience
+            setTimeout(() => {
+                this.hideLoadingScreen();
+            }, 5000);
+        });
+    }
+    
+    startDotAnimation() {
+        // Animate the dots in 8-bit style: . .. ... . .. ...
+        const dotsElement = document.getElementById('loading-dots-8bit');
+        if (!dotsElement) return;
+        
+        const dotPatterns = ['.', '..', '...', '.', '..', '...'];
+        let currentIndex = 0;
+        
+        this.dotInterval = setInterval(() => {
+            dotsElement.textContent = dotPatterns[currentIndex];
+            currentIndex = (currentIndex + 1) % dotPatterns.length;
+        }, 500); // Change every 500ms for retro feel
+    }
+    
+    hideLoadingScreen() {
+        // Clear the dot animation interval
+        if (this.dotInterval) {
+            clearInterval(this.dotInterval);
+        }
+        
+        const loadingScreen = document.getElementById('loading-screen');
+        if (loadingScreen) {
+            loadingScreen.style.opacity = '0';
+            loadingScreen.style.transition = 'opacity 0.5s ease';
+            setTimeout(() => {
+                loadingScreen.style.display = 'none';
+                // Enable game controls and enemy spawning after loading screen is hidden
+                this.isLoading = false;
+                console.log('🎮 Loading complete - game controls and enemy spawning enabled');
+            }, 500);
+        }
     }
 
     loadCharacterAssets(characterConfig) {
@@ -77,13 +132,23 @@ class GameScene extends Phaser.Scene {
         
         console.log('🎵 Audio loading configured - add your files and uncomment the load statements!');
     }
+    
+    loadItemPickupAssets() {
+        // Load golden microphone asset
+        this.load.image('goldenMicrophone', 'assets/pickups/GoldenMicrophone_64x64.png');
+        console.log('✨ Loading item pickup assets...');
+    }
 
     create() {
+        // Initialize loading state - prevents controls and enemy spawning during loading
+        this.isLoading = true;
+        
         // Initialize managers first
         this.environmentManager = new EnvironmentManager(this);
         this.audioManager = new AudioManager(this);
         this.uiManager = new UIManager(this);
         this.inputManager = new InputManager(this);
+        this.itemPickupManager = new ItemPickupManager(this);
         
         // Initialize environment (sets up world bounds and backgrounds)
         this.environmentManager.initializeWorld();
@@ -131,8 +196,25 @@ class GameScene extends Phaser.Scene {
         this.playerMaxHealth = 100;
         this.playerCurrentHealth = this.playerMaxHealth;
         
+        // Initialize player score system
+        this.playerScore = 0;
+        
         // Initialize UI system  
         this.uiManager.initializeUI();
+        
+        // Initialize health bar with full health (fix: bar wasn't showing initially)
+        this.uiManager.updateHealthBar(this.playerCurrentHealth, this.playerMaxHealth);
+        
+        // Initialize score display
+        this.uiManager.updateScoreDisplay(this.playerScore);
+        
+        // Initialize weapon system
+        this.weaponManager.createWeaponAnimations();
+        this.weaponManager.initializeWeapons();
+        this.weaponManager.createWeaponUI();
+        
+        // Initialize item pickup system
+        this.itemPickupManager.createParticleEffect();
         
         // Start background music after everything is loaded and created
         this.time.delayedCall(100, () => {
@@ -424,6 +506,12 @@ class GameScene extends Phaser.Scene {
         // Clear the enemies array
         this.enemies = [];
         
+        // Also clear all weapon projectiles
+        this.weaponManager.clearAllProjectiles();
+        
+        // Also clear all item pickups
+        this.itemPickupManager.clearAllPickups();
+        
         console.log(`Cleared ${enemyCount} enemies`);
         
         // Visual feedback - flash the screen briefly
@@ -542,8 +630,8 @@ class GameScene extends Phaser.Scene {
         const cameraX = this.cameras.main.scrollX;
         const cameraWidth = this.cameras.main.width;
         
-        // Randomly choose left or right side of screen
-        const spawnOnLeft = Math.random() < 0.5;
+        // Favor spawning from the right side (70% right, 30% left)
+        const spawnOnLeft = Math.random() < 0.3;
         const spawnX = spawnOnLeft ? 
             cameraX - ENEMY_CONFIG.spawnOffscreenDistance : // Spawn off-screen to the left
             cameraX + cameraWidth + ENEMY_CONFIG.spawnOffscreenDistance; // Spawn off-screen to the right
@@ -560,11 +648,14 @@ class GameScene extends Phaser.Scene {
     }
     
     updateEnemies(time, delta) {
-        // Update spawn timer
-        this.enemySpawnTimer += delta;
-        if (this.enemySpawnTimer >= this.enemySpawnInterval) {
-            this.spawnEnemy();
-            this.enemySpawnTimer = 0;
+        // Don't spawn enemies while loading
+        if (!this.isLoading) {
+            // Update spawn timer
+            this.enemySpawnTimer += delta;
+            if (this.enemySpawnTimer >= this.enemySpawnInterval) {
+                this.spawnEnemy();
+                this.enemySpawnTimer = 0;
+            }
         }
         
         // Update all enemies
@@ -593,9 +684,18 @@ class GameScene extends Phaser.Scene {
             const playerHitbox = this.getPlayerAttackHitbox();
             if (playerHitbox) {
                 this.enemies.forEach(enemy => {
-                    if (enemy.state !== ENEMY_STATES.DEAD && this.isColliding(playerHitbox, enemy.sprite)) {
-                        enemy.takeDamage(1);
-                        console.log("Player hit enemy with " + this.animationManager.currentState + "!");
+                    if (enemy.state !== ENEMY_STATES.DEAD) {
+                        // Check vertical distance first (street-level tolerance)
+                        const verticalDistance = Math.abs(this.player.y - enemy.sprite.y);
+                        const isAirKick = this.animationManager.currentState === 'airkick';
+                        const verticalTolerance = isAirKick ? 
+                            HITBOX_CONFIG.player.airkickVerticalTolerance : 
+                            HITBOX_CONFIG.player.verticalTolerance;
+                        
+                        if (verticalDistance <= verticalTolerance && this.isColliding(playerHitbox, enemy.sprite)) {
+                            enemy.takeDamage(1);
+                            console.log(`Player hit enemy with ${this.animationManager.currentState}! (Vertical dist: ${Math.round(verticalDistance)})`);
+                        }
                     }
                 });
             }
@@ -830,16 +930,16 @@ class GameScene extends Phaser.Scene {
         // Update animation state manager
         this.animationManager.update(delta);
 
-        // Update input state (only if input manager is ready)
-        if (this.inputManager) {
+        // Update input state (only if input manager is ready and not loading)
+        if (this.inputManager && !this.isLoading) {
             this.inputManager.updateInputState();
+            
+            // Handle input and movement using managers
+            this.handleInput();
+            this.handleMovement();
+            this.handleJumping(); // For landing detection only (input handled in handleInput)
+            this.handleAnimations();
         }
-        
-        // Handle input and movement using managers
-        this.handleInput();
-        this.handleMovement();
-        this.handleJumping(); // For landing detection only (input handled in handleInput)
-        this.handleAnimations();
 
         // Handle perspective scaling for player when not jumping (restored)
         if (!this.isJumping) {
@@ -856,8 +956,19 @@ class GameScene extends Phaser.Scene {
             }
         });
         
+        // Update weapon system
+        this.weaponManager.update();
+        
+        // Update item pickup system (only when not loading)
+        if (!this.isLoading) {
+            this.itemPickupManager.update(time, delta, this.player);
+        }
+        
         // Check combat interactions
         this.checkCombat();
+        
+        // Check weapon projectile collisions with enemies
+        this.weaponManager.checkProjectileCollisions(this.enemies);
         
         // Check character collisions
         this.checkCharacterCollisions();
@@ -922,6 +1033,17 @@ class GameScene extends Phaser.Scene {
             onSwitchCharacter: () => {
                 this.switchCharacter();
                 return true; // Skip other input processing during character switch
+            },
+            onWeaponUse: () => {
+                // Check if weapon can be used (cooldown, etc.)
+                if (this.weaponManager.canUseWeapon()) {
+                    // Play throwing animation
+                    this.inputManager.handleWeaponInput(this.player, this.animationManager, this.audioManager);
+                    
+                    // Fire the weapon projectile
+                    const direction = this.player.flipX ? -1 : 1; // Get player facing direction
+                    this.weaponManager.useWeapon(this.player, direction);
+                }
             }
         });
         

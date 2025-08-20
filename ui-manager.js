@@ -19,6 +19,9 @@ class UIManager {
         this.characterText = null;
         this.attackIndicator = null;
         this.attackText = null;
+        this.scoreText = null;
+        this.scoreContainer = null;
+        this.scoreMicrophone = null;
         
         console.log('🎨 UIManager initialized!');
     }
@@ -40,6 +43,9 @@ class UIManager {
         
         // Create health bar UI
         this.createHealthBar();
+        
+        // Create score display
+        this.createScoreDisplay();
     }
     
     createDebugText() {
@@ -187,6 +193,65 @@ class UIManager {
                 currentWidth,
                 this.healthBarHeight * 0.3
             );
+        }
+    }
+    
+    // ========================================
+    // SCORE DISPLAY SYSTEM
+    // ========================================
+    
+    createScoreDisplay() {
+        // Create container for score display elements
+        this.scoreContainer = this.scene.add.container(this.scene.cameras.main.width - 20, 20);
+        this.scoreContainer.setDepth(2003);
+        this.scoreContainer.setScrollFactor(0);
+        
+        // Create the score text first (positioned to the left)
+        this.scoreText = this.scene.add.text(-10, 0, '0', {
+            fontSize: '24px',
+            fill: '#FFD700',  // Golden color
+            fontFamily: 'Courier New, monospace',
+            fontWeight: 'bold',
+            stroke: '#000000',
+            strokeThickness: 2,
+            shadow: {
+                offsetX: 2,
+                offsetY: 2,
+                color: '#000000',
+                blur: 0,
+                stroke: false,
+                fill: true
+            }
+        });
+        this.scoreText.setOrigin(1, 0.5); // Right-aligned, vertically centered
+        
+        // Create the golden microphone sprite (positioned to the right of the text)
+        this.scoreMicrophone = this.scene.add.sprite(-60, 0, 'goldenMicrophone');
+        this.scoreMicrophone.setScale(0.5); // Scale down the 64x64 image to 32x32
+        this.scoreMicrophone.setOrigin(0, 0.5); // Left-aligned, vertically centered
+        
+        // Add both elements to the container
+        this.scoreContainer.add([this.scoreMicrophone, this.scoreText]);
+        
+        console.log('🎤 Score display with golden microphone created');
+    }
+    
+    updateScoreDisplay(score) {
+        if (!this.scoreText || !this.scoreContainer) return;
+        
+        // Update score text (no emoji needed since we have the actual microphone sprite)
+        this.scoreText.setText(`${score}`);
+        
+        // Create a brief pulse effect when score changes (pulse the entire container)
+        if (score > 0) {
+            this.scene.tweens.add({
+                targets: this.scoreContainer,
+                scaleX: 1.1,
+                scaleY: 1.1,
+                duration: 150,
+                yoyo: true,
+                ease: 'Power2'
+            });
         }
     }
     

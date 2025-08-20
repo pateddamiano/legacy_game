@@ -16,6 +16,7 @@ class InputManager {
             down: false,
             jump: false,
             attack: false,
+            weapon: false,
             switchCharacter: false,
             debug: false,
             clearEnemies: false,
@@ -52,6 +53,7 @@ class InputManager {
         this.keys = {
             space: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
             attack: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.X),
+            weapon: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q),
             switchCharacter: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.C),
             debug: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
             clearEnemies: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K),
@@ -83,6 +85,7 @@ class InputManager {
             // Update discrete input state (single presses) with safety checks
             this.inputState.jump = this.keys.space ? Phaser.Input.Keyboard.JustDown(this.keys.space) : false;
             this.inputState.attack = this.keys.attack ? Phaser.Input.Keyboard.JustDown(this.keys.attack) : false;
+            this.inputState.weapon = this.keys.weapon ? Phaser.Input.Keyboard.JustDown(this.keys.weapon) : false;
             this.inputState.switchCharacter = this.keys.switchCharacter ? Phaser.Input.Keyboard.JustDown(this.keys.switchCharacter) : false;
             this.inputState.debug = this.keys.debug ? Phaser.Input.Keyboard.JustDown(this.keys.debug) : false;
             this.inputState.clearEnemies = this.keys.clearEnemies ? Phaser.Input.Keyboard.JustDown(this.keys.clearEnemies) : false;
@@ -229,7 +232,8 @@ class InputManager {
             onSfxToggle,
             onClearEnemies,
             onHeal,
-            onSwitchCharacter
+            onSwitchCharacter,
+            onWeaponUse
         } = callbacks;
         
         // Handle debug toggle
@@ -259,6 +263,35 @@ class InputManager {
         if (this.inputState.switchCharacter && onSwitchCharacter) {
             onSwitchCharacter();
         }
+        
+        // Handle weapon use
+        if (this.inputState.weapon && onWeaponUse) {
+            onWeaponUse();
+        }
+    }
+    
+    // ========================================
+    // WEAPON INPUT HANDLING
+    // ========================================
+    
+    handleWeaponInput(player, animationManager, audioManager) {
+        if (!this.inputState.weapon) return false;
+        
+        const charName = player.characterConfig.name;
+        
+        // Play cross animation for throwing
+        animationManager.currentState = 'attack';
+        animationManager.animationLocked = true;
+        animationManager.lockTimer = 400; // Short animation time for throwing
+        player.anims.play(`${charName}_cross`, true);
+        
+        // Play attack sound effect (can be changed to throw sound later)
+        if (audioManager) {
+            audioManager.playPlayerAttack();
+        }
+        
+        console.log(`Weapon throw animation started for ${charName}`);
+        return true;
     }
     
     // ========================================
