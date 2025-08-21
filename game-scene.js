@@ -23,8 +23,10 @@ class GameScene extends Phaser.Scene {
             this.loadCharacterAssets(characterConfig);
         });
         
-        // Load enemy assets
-        this.loadCharacterAssets(CRACKHEAD_CONFIG);
+        // Load all enemy assets
+        ALL_ENEMY_TYPES.forEach(enemyConfig => {
+            this.loadCharacterAssets(enemyConfig);
+        });
         
         // Initialize and load weapon system
         this.weaponManager = new WeaponManager(this);
@@ -83,13 +85,20 @@ class GameScene extends Phaser.Scene {
     }
 
     loadCharacterAssets(characterConfig) {
+        console.log(`Loading assets for ${characterConfig.name}:`, characterConfig.spriteSheets);
+        
         // Load all sprite sheets for the character
         Object.entries(characterConfig.spriteSheets).forEach(([animName, path]) => {
-            this.load.spritesheet(`${characterConfig.name}_${animName}`, path, {
+            const spriteKey = `${characterConfig.name}_${animName}`;
+            console.log(`Loading spritesheet ${spriteKey} from ${path}`);
+            
+            this.load.spritesheet(spriteKey, path, {
                 frameWidth: characterConfig.frameSize.width,
                 frameHeight: characterConfig.frameSize.height
             });
         });
+        
+        console.log(`Finished loading assets for ${characterConfig.name}`);
     }
     
     loadAudioAssets() {
@@ -166,13 +175,22 @@ class GameScene extends Phaser.Scene {
 
         // Input is now handled by InputManager
 
-        // Create animations for all characters
-        ALL_CHARACTERS.forEach(characterConfig => {
-            this.createCharacterAnimations(characterConfig);
+        // Create animations for all characters and enemies with a small delay to ensure assets are loaded
+        this.time.delayedCall(100, () => {
+            console.log('Creating animations...');
+            // Create animations for all characters
+            ALL_CHARACTERS.forEach(characterConfig => {
+                this.createCharacterAnimations(characterConfig);
+            });
+            
+            // Create animations for enemies
+            ALL_ENEMY_TYPES.forEach(enemyConfig => {
+                this.createCharacterAnimations(enemyConfig);
+            });
+            
+            // Start player idle animation
+            this.player.anims.play(`${this.currentCharacterConfig.name}_idle`, true);
         });
-        
-        // Create animations for enemies
-        this.createCharacterAnimations(CRACKHEAD_CONFIG);
 
         // Initialize animation state manager
         this.animationManager = new AnimationStateManager(this.player);
@@ -185,9 +203,6 @@ class GameScene extends Phaser.Scene {
         
         // Set up animation complete listeners for current character only
         this.setupAnimationEvents(this.currentCharacterConfig);
-        
-        // Start with idle animation
-        this.player.anims.play(`${this.currentCharacterConfig.name}_idle`, true);
         
         // Initialize jump tracking
         this.isJumping = false;
@@ -232,7 +247,7 @@ class GameScene extends Phaser.Scene {
         this.player.lastGroundY = this.player.y;
         
         // Scale up the player sprite (restored from original)
-        this.player.setScale(2.5);
+        this.player.setScale(3.0);
         
         // Set player physics properties
         this.player.setBounce(0.2);
@@ -245,6 +260,8 @@ class GameScene extends Phaser.Scene {
     createCharacterAnimations(characterConfig) {
         const charName = characterConfig.name;
         
+        console.log(`Creating animations for ${charName}:`, characterConfig.animations);
+        
         // Create all animations based on character config
         Object.entries(characterConfig.animations).forEach(([animName, config]) => {
             const spriteKey = `${charName}_${animName}`;
@@ -253,13 +270,22 @@ class GameScene extends Phaser.Scene {
                 end: config.frames - 1 
             });
 
-            this.anims.create({
-                key: `${charName}_${animName}`,
-                frames: frameConfig,
-                frameRate: config.frameRate,
-                repeat: config.repeat
-            });
+            console.log(`Creating animation ${spriteKey} with ${config.frames} frames at ${config.frameRate} FPS`);
+            
+            try {
+                this.anims.create({
+                    key: `${charName}_${animName}`,
+                    frames: frameConfig,
+                    frameRate: config.frameRate,
+                    repeat: config.repeat
+                });
+                console.log(`Successfully created animation: ${spriteKey}`);
+            } catch (error) {
+                console.error(`Failed to create animation ${spriteKey}:`, error);
+            }
         });
+        
+        console.log(`Finished creating animations for ${charName}`);
     }
 
     setupAnimationEvents(characterConfig) {
@@ -636,15 +662,46 @@ class GameScene extends Phaser.Scene {
             cameraX - ENEMY_CONFIG.spawnOffscreenDistance : // Spawn off-screen to the left
             cameraX + cameraWidth + ENEMY_CONFIG.spawnOffscreenDistance; // Spawn off-screen to the right
             
-        // Random Y position within street bounds
-        const spawnY = this.streetTopLimit + Math.random() * (this.streetBottomLimit - this.streetTopLimit);
+        // Random Y position within street bounds with some variety
+        let spawnY = this.streetTopLimit + Math.random() * (this.streetBottomLimit - this.streetTopLimit);
+        
+        // Randomly select an enemy type with weighted probability FIRST
+        // Crackheads are most common (50%), Green thugs medium (30%), Black thugs rare (20%)
+        const random = Math.random();
+        let enemyConfig;
+        if (random < 0.5) {
+            enemyConfig = CRACKHEAD_CONFIG; // 50% chance - most common
+        } else if (random < 0.8) {
+            enemyConfig = GREEN_THUG_CONFIG; // 30% chance - medium difficulty
+        } else {
+            enemyConfig = BLACK_THUG_CONFIG; // 20% chance - hardest enemy
+        }
+        
+        // NOW add spawn position variety based on enemy type
+        if (enemyConfig.name === 'crackhead') {
+            // Crackheads prefer to spawn in the middle of the street
+            spawnY = this.streetTopLimit + 0.3 * (this.streetBottomLimit - this.streetTopLimit) + 
+                     Math.random() * 0.4 * (this.streetBottomLimit - this.streetTopLimit);
+        } else if (enemyConfig.name === 'green_thug') {
+            // Green thugs prefer the lower part of the street (closer to camera)
+            spawnY = this.streetTopLimit + 0.5 * (this.streetBottomLimit - this.streetTopLimit) + 
+                     Math.random() * 0.5 * (this.streetBottomLimit - this.streetTopLimit);
+        } else if (enemyConfig.name === 'black_thug') {
+            // Black thugs can spawn anywhere but prefer edges
+            if (Math.random() < 0.5) {
+                spawnY = this.streetTopLimit + Math.random() * 0.3 * (this.streetBottomLimit - this.streetTopLimit);
+            } else {
+                spawnY = this.streetTopLimit + 0.7 * (this.streetBottomLimit - this.streetTopLimit) + 
+                         Math.random() * 0.3 * (this.streetBottomLimit - this.streetTopLimit);
+            }
+        }
         
         // Create enemy
-        const enemy = new Enemy(this, spawnX, spawnY, CRACKHEAD_CONFIG);
+        const enemy = new Enemy(this, spawnX, spawnY, enemyConfig);
         enemy.setPlayer(this.player);
         this.enemies.push(enemy);
         
-        console.log(`Spawned enemy at (${spawnX}, ${spawnY}) - Total enemies: ${this.enemies.length}`);
+        console.log(`Spawned ${enemyConfig.name} enemy at (${spawnX}, ${spawnY}) - Total enemies: ${this.enemies.length}`);
     }
     
     updateEnemies(time, delta) {
@@ -652,9 +709,23 @@ class GameScene extends Phaser.Scene {
         if (!this.isLoading) {
             // Update spawn timer
             this.enemySpawnTimer += delta;
-            if (this.enemySpawnTimer >= this.enemySpawnInterval) {
+            
+            // Dynamic spawn rate based on player performance
+            let spawnInterval = this.enemySpawnInterval;
+            if (this.playerCurrentHealth > this.playerMaxHealth * 0.7) {
+                // Player doing well - spawn enemies faster
+                spawnInterval *= 0.8;
+            } else if (this.playerCurrentHealth < this.playerMaxHealth * 0.3) {
+                // Player struggling - spawn enemies slower
+                spawnInterval *= 1.5;
+            }
+            
+            if (this.enemySpawnTimer >= spawnInterval) {
                 this.spawnEnemy();
                 this.enemySpawnTimer = 0;
+                // Add some randomness to spawn interval (±20% variation)
+                const variation = 0.8 + Math.random() * 0.4; // 0.8 to 1.2
+                this.enemySpawnInterval = ENEMY_CONFIG.spawnInterval * variation;
             }
         }
         
@@ -705,8 +776,8 @@ class GameScene extends Phaser.Scene {
         this.enemies.forEach(enemy => {
             const enemyHitbox = enemy.getAttackHitbox();
             if (enemyHitbox && this.isColliding(enemyHitbox, this.player)) {
-                this.playerTakeDamage(ENEMY_CONFIG.playerDamage);
-                console.log("Enemy hit player!");
+                this.playerTakeDamage(enemy.playerDamage);
+                console.log(`${enemy.characterConfig.name} enemy hit player for ${enemy.playerDamage} damage!`);
             }
         });
     }

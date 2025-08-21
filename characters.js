@@ -76,6 +76,36 @@ const CRACKHEAD_CONFIG = new CharacterConfig(
     }
 );
 
+// Define Green Thug enemy configuration
+const GREEN_THUG_CONFIG = new CharacterConfig(
+    'green_thug',
+    {
+        walk: 'assets/characters/thug/spritesheets/green_thug_idle_4frames.png', // Using idle as walk
+        knife_hit: 'assets/characters/thug/spritesheets/green_thug_knife_hit_4frames.png',
+        idle: 'assets/characters/thug/spritesheets/green_thug_idle_4frames.png'
+    },
+    {
+        walk: { frames: 4, frameRate: 10, repeat: -1 },   // Medium speed walk (using idle animation)
+        knife_hit: { frames: 4, frameRate: 18, repeat: 0 }, // Fast knife attack
+        idle: { frames: 4, frameRate: 8, repeat: -1 }      // Medium idle animation
+    }
+);
+
+// Define Black Thug enemy configuration
+const BLACK_THUG_CONFIG = new CharacterConfig(
+    'black_thug',
+    {
+        walk: 'assets/characters/thug/spritesheets/black_thug_idle_5frames.png', // Using idle as walk
+        enemy_punch: 'assets/characters/thug/spritesheets/black_thug_enemy_punch_4frames.png',
+        idle: 'assets/characters/thug/spritesheets/black_thug_idle_5frames.png'
+    },
+    {
+        walk: { frames: 5, frameRate: 12, repeat: -1 },   // Fast walk (using idle animation)
+        enemy_punch: { frames: 4, frameRate: 16, repeat: 0 }, // Medium speed punch
+        idle: { frames: 5, frameRate: 10, repeat: -1 }    // Fast idle animation
+    }
+);
+
 // ========================================
 // HITBOX CONFIGURATION CENTER
 // ========================================
@@ -130,3 +160,20 @@ const HITBOX_CONFIG = {
 
 // Array of all available playable characters
 const ALL_CHARACTERS = [TIREEK_CONFIG, TRYSTON_CONFIG];
+
+// Array of all available enemy types
+const ALL_ENEMY_TYPES = [CRACKHEAD_CONFIG, GREEN_THUG_CONFIG, BLACK_THUG_CONFIG];
+
+// Export configurations for use in other files
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        TIREEK_CONFIG,
+        TRYSTON_CONFIG,
+        CRACKHEAD_CONFIG,
+        GREEN_THUG_CONFIG,
+        BLACK_THUG_CONFIG,
+        ALL_CHARACTERS,
+        ALL_ENEMY_TYPES,
+        HITBOX_CONFIG
+    };
+}
