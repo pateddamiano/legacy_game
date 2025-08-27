@@ -429,6 +429,26 @@ Legend:
     }
     
     // ========================================
+    // LEVEL DISPLAY METHODS
+    // ========================================
+    
+    updateLevelDisplay(levelIndex, levelName) {
+        // Create or update level display
+        if (!this.levelText) {
+            this.levelText = this.scene.add.text(10, 80, '', {
+                fontSize: '18px',
+                fill: '#00ff00',
+                backgroundColor: '#000000',
+                padding: { x: 10, y: 5 }
+            });
+            this.levelText.setDepth(2000);
+            this.levelText.setScrollFactor(0);
+        }
+        
+        this.levelText.setText(`Level ${levelIndex + 1}: ${levelName}`);
+    }
+    
+    // ========================================
     // UTILITY METHODS
     // ========================================
     

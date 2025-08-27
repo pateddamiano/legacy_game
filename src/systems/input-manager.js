@@ -32,7 +32,7 @@ class InputManager {
             airkickSpeed: 200,  // Slower speed during air kick (from original)
             jumpForce: 400,
             gravity: 1000,      // Original gravity value
-            verticalSpeed: 8    // For beat 'em up style vertical movement
+            verticalSpeed: 3    // For beat 'em up style vertical movement (reduced from 8)
         };
         
         // Initialize input systems
@@ -59,7 +59,10 @@ class InputManager {
             clearEnemies: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K),
             heal: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.H),
             musicToggle: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M),
-            sfxToggle: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.N)
+            sfxToggle: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.N),
+            // Level testing keys
+            nextLevel: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L),
+            levelStatus: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P)
         };
         
         console.log('⌨️ Keyboard controls initialized');
@@ -92,6 +95,9 @@ class InputManager {
             this.inputState.heal = this.keys.heal ? Phaser.Input.Keyboard.JustDown(this.keys.heal) : false;
             this.inputState.musicToggle = this.keys.musicToggle ? Phaser.Input.Keyboard.JustDown(this.keys.musicToggle) : false;
             this.inputState.sfxToggle = this.keys.sfxToggle ? Phaser.Input.Keyboard.JustDown(this.keys.sfxToggle) : false;
+        // Level testing input states
+        this.inputState.nextLevel = this.keys.nextLevel ? Phaser.Input.Keyboard.JustDown(this.keys.nextLevel) : false;
+        this.inputState.levelStatus = this.keys.levelStatus ? Phaser.Input.Keyboard.JustDown(this.keys.levelStatus) : false;
         } catch (error) {
             console.warn('Input update error:', error);
         }
@@ -142,13 +148,13 @@ class InputManager {
         if (!isJumping) {
             // Manual position control for beat 'em up style movement
             if (this.inputState.up && player.y > 520) { // streetTopLimit
-                player.y -= 8;
+                player.y -= this.movementConfig.verticalSpeed;
                 if (player.lastGroundY !== undefined) {
                     player.lastGroundY = player.y;
                 }
                 isMoving = true;
             } else if (this.inputState.down && player.y < 650) { // streetBottomLimit
-                player.y += 8;
+                player.y += this.movementConfig.verticalSpeed;
                 if (player.lastGroundY !== undefined) {
                     player.lastGroundY = player.y;
                 }

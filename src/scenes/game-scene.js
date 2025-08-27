@@ -158,6 +158,7 @@ class GameScene extends Phaser.Scene {
         this.uiManager = new UIManager(this);
         this.inputManager = new InputManager(this);
         this.itemPickupManager = new ItemPickupManager(this);
+        this.levelManager = new LevelManager(this);
         
         // Initialize environment (sets up world bounds and backgrounds)
         this.environmentManager.initializeWorld();
@@ -220,6 +221,9 @@ class GameScene extends Phaser.Scene {
         // Initialize health bar with full health (fix: bar wasn't showing initially)
         this.uiManager.updateHealthBar(this.playerCurrentHealth, this.playerMaxHealth);
         
+        // Remove the duplicate health bar creation since UI manager handles it
+        // this.createHealthBar(); // Commented out - UI manager handles health bar
+        
         // Initialize score display
         this.uiManager.updateScoreDisplay(this.playerScore);
         
@@ -230,6 +234,9 @@ class GameScene extends Phaser.Scene {
         
         // Initialize item pickup system
         this.itemPickupManager.createParticleEffect();
+        
+        // Initialize level system
+        this.initializeLevelSystem();
         
         // Start background music after everything is loaded and created
         this.time.delayedCall(100, () => {
@@ -399,105 +406,9 @@ class GameScene extends Phaser.Scene {
         this.attackText.setVisible(false); // Hidden by default
     }
     
-    createHealthBar() {
-        const healthBarWidth = 250;
-        const healthBarHeight = 25;
-        const healthBarX = 20;
-        const healthBarY = 20; // Top left position - mobile friendly
-        
-        // Create outer box container (darker border)
-        this.healthBarBorder = this.add.rectangle(
-            healthBarX, 
-            healthBarY, 
-            healthBarWidth + 8, 
-            healthBarHeight + 8, 
-            0x2a2a2a
-        );
-        this.healthBarBorder.setOrigin(0, 0);
-        this.healthBarBorder.setDepth(2000);
-        this.healthBarBorder.setScrollFactor(0);
-        
-        // Create inner box background (slightly lighter)
-        this.healthBarBg = this.add.rectangle(
-            healthBarX + 4, 
-            healthBarY + 4, 
-            healthBarWidth, 
-            healthBarHeight, 
-            0x404040
-        );
-        this.healthBarBg.setOrigin(0, 0);
-        this.healthBarBg.setDepth(2001);
-        this.healthBarBg.setScrollFactor(0);
-        
-        // Create health bar graphics
-        this.healthBarGraphics = this.add.graphics();
-        this.healthBarGraphics.setDepth(2002);
-        this.healthBarGraphics.setScrollFactor(0);
-        
-        // Store health bar dimensions for updates
-        this.healthBarWidth = healthBarWidth;
-        this.healthBarHeight = healthBarHeight;
-        this.healthBarX = healthBarX + 4;
-        this.healthBarY = healthBarY + 4;
-        
-        // Initial health bar update
-        this.updateHealthBar();
-    }
+    // Health bar is now handled by UIManager - removed duplicate method
     
-    updateHealthBar() {
-        // Clear previous graphics
-        this.healthBarGraphics.clear();
-        
-        // Calculate health percentage
-        const healthPercent = this.playerCurrentHealth / this.playerMaxHealth;
-        const currentWidth = this.healthBarWidth * healthPercent;
-        
-        // Orange gradient based on health percentage
-        // Full health: Bright orange (#FF8C00)
-        // Medium health: Orange (#FF7F00) 
-        // Low health: Dark orange/red (#FF4500)
-        let healthColor;
-        if (healthPercent > 0.6) {
-            // High health: Bright orange
-            healthColor = 0xFF8C00;
-        } else if (healthPercent > 0.3) {
-            // Medium health: Standard orange
-            healthColor = 0xFF7F00;
-        } else {
-            // Low health: Dark orange/red
-            healthColor = 0xFF4500;
-        }
-        
-        // Draw the health bar
-        if (currentWidth > 0) {
-            // Main health bar fill
-            this.healthBarGraphics.fillStyle(healthColor);
-            this.healthBarGraphics.fillRect(
-                this.healthBarX,
-                this.healthBarY,
-                currentWidth,
-                this.healthBarHeight
-            );
-            
-            // Add a subtle highlight on top for depth
-            this.healthBarGraphics.fillStyle(0xffffff, 0.25);
-            this.healthBarGraphics.fillRect(
-                this.healthBarX,
-                this.healthBarY,
-                currentWidth,
-                this.healthBarHeight * 0.4
-            );
-            
-            // Add a subtle shadow on bottom for depth
-            this.healthBarGraphics.fillStyle(0x000000, 0.15);
-            this.healthBarGraphics.fillRect(
-                this.healthBarX,
-                this.healthBarY + this.healthBarHeight * 0.7,
-                currentWidth,
-                this.healthBarHeight * 0.3
-            );
-        }
-    }
+    // updateHealthBar() method removed - now handled by UIManager
     
 
     
@@ -766,6 +677,11 @@ class GameScene extends Phaser.Scene {
                         if (verticalDistance <= verticalTolerance && this.isColliding(playerHitbox, enemy.sprite)) {
                             enemy.takeDamage(1);
                             console.log(`Player hit enemy with ${this.animationManager.currentState}! (Vertical dist: ${Math.round(verticalDistance)})`);
+                            
+                            // Track enemy defeat for level progression
+                            if (enemy.state === ENEMY_STATES.DEAD && this.levelManager) {
+                                this.levelManager.onEnemyDefeated();
+                            }
                         }
                     }
                 });
@@ -858,7 +774,7 @@ class GameScene extends Phaser.Scene {
         // For now, just reset health after a delay
         this.time.delayedCall(2000, () => {
             this.playerCurrentHealth = this.playerMaxHealth;
-            this.updateHealthBar();
+            this.uiManager.updateHealthBar(this.playerCurrentHealth, this.playerMaxHealth);
             console.log("Player respawned!");
         });
     }
@@ -1347,5 +1263,88 @@ class GameScene extends Phaser.Scene {
         
         // Set depth/z-index - higher Y = lower depth (behind other objects)
         this.player.setDepth(1000 - this.player.y);
+    }
+    
+    // ========================================
+    // LEVEL SYSTEM METHODS
+    // ========================================
+    
+    initializeLevelSystem() {
+        console.log('🎮 Initializing level system...');
+        
+        // Load the first level
+        this.levelManager.loadLevel(0);
+        
+        // Set up level manager callbacks
+        this.setupLevelManagerCallbacks();
+        
+        // Add level info to UI
+        this.updateLevelDisplay();
+        
+        console.log('🎮 Level system initialized!');
+    }
+    
+    setupLevelManagerCallbacks() {
+        // Handle dialogue triggers
+        this.onDialogueTriggered = (dialogue) => {
+            console.log(`💬 Dialogue triggered: ${dialogue.text}`);
+            this.showDialogue(dialogue);
+        };
+        
+        // Handle boss spawn triggers
+        this.onBossSpawnTriggered = (bossConfig) => {
+            console.log(`👹 Boss spawn triggered: ${bossConfig.type}`);
+            this.showBossWarning(bossConfig);
+        };
+    }
+    
+    showDialogue(dialogue) {
+        // Simple dialogue display for testing
+        const dialogueText = this.add.text(600, 200, dialogue.text, {
+            fontSize: '24px',
+            fill: '#ffffff',
+            backgroundColor: '#000000',
+            padding: { x: 20, y: 10 }
+        });
+        dialogueText.setOrigin(0.5);
+        dialogueText.setDepth(3000);
+        dialogueText.setScrollFactor(0);
+        
+        // Remove dialogue after duration
+        this.time.delayedCall(dialogue.duration, () => {
+            dialogueText.destroy();
+        });
+        
+        console.log(`💬 Showing dialogue: ${dialogue.text}`);
+    }
+    
+    showBossWarning(bossConfig) {
+        // Simple boss warning for testing
+        const warningText = this.add.text(600, 150, `BOSS INCOMING: ${bossConfig.type.toUpperCase()}!`, {
+            fontSize: '32px',
+            fill: '#ff0000',
+            backgroundColor: '#000000',
+            padding: { x: 20, y: 10 }
+        });
+        warningText.setOrigin(0.5);
+        warningText.setDepth(3000);
+        warningText.setScrollFactor(0);
+        
+        // Remove warning after 3 seconds
+        this.time.delayedCall(3000, () => {
+            warningText.destroy();
+        });
+        
+        console.log(`👹 Boss warning displayed: ${bossConfig.type}`);
+    }
+    
+    updateLevelDisplay() {
+        // Update level info in UI
+        if (this.uiManager) {
+            this.uiManager.updateLevelDisplay(
+                this.levelManager.currentLevel,
+                this.levelManager.getCurrentLevelConfig()?.name || 'Unknown Level'
+            );
+        }
     }
 }

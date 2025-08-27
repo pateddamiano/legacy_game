@@ -144,17 +144,22 @@
     <!-- Phaser 3 CDN -->
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
     
+    <!-- Configuration Files - Load first -->
+    <script src="src/config/game-config.js?v=1.0.0"></script>
+    <script src="src/config/level-config.js?v=1.0.0"></script>
+    
     <!-- Modular Game Scripts - Load in dependency order -->
-    <script src="characters.js?v=5.7.0"></script>
-    <script src="animation-manager.js?v=5.7.0"></script>
-    <script src="audio-manager.js?v=5.7.0"></script>
-    <script src="ui-manager.js?v=6.3.0"></script>
-    <script src="environment-manager.js?v=5.7.0"></script>
-    <script src="input-manager.js?v=5.7.0"></script>
-    <script src="weapon-system.js?v=5.7.0"></script>
-    <script src="enemy-system.js?v=5.7.0"></script>
-    <script src="item-pickup-system.js?v=6.4.0"></script>
-    <script src="game-scene.js?v=6.1.0"></script>
+    <script src="src/characters/characters.js?v=5.7.0"></script>
+    <script src="src/systems/animation-manager.js?v=5.7.0"></script>
+    <script src="src/systems/audio-manager.js?v=5.7.0"></script>
+    <script src="src/systems/ui-manager.js?v=6.3.0"></script>
+    <script src="src/systems/environment-manager.js?v=5.7.0"></script>
+    <script src="src/systems/input-manager.js?v=5.7.0"></script>
+    <script src="src/systems/weapon-system.js?v=5.7.0"></script>
+    <script src="src/systems/enemy-system.js?v=5.7.0"></script>
+    <script src="src/systems/item-pickup-system.js?v=6.4.0"></script>
+    <script src="src/systems/level-manager.js?v=1.0.0"></script>
+    <script src="src/scenes/game-scene.js?v=6.1.0"></script>
     <script src="game.js?v=6.1.0"></script>
 </body>
 </html> 

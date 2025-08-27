@@ -17,12 +17,13 @@ const WEAPON_CONFIG = {
         range: 800, // Max distance before disappearing
         cooldown: 5000, // 5 seconds in milliseconds
         size: { width: 64, height: 64 },
-        hitbox: { width: 48, height: 48 },
+        hitbox: { width: 64, height: 64 }, // Increased hitbox for easier hits
         sound: 'vinylThrow', // Sound effect when thrown
         animations: {
             spinning: { frames: 4, frameRate: 20, repeat: -1 }
         },
-        verticalTolerance: 60 // Maximum vertical distance for collision detection
+        verticalTolerance: 120, // Increased from 60 - much more forgiving vertical distance
+        collisionThreshold: 50   // Increased collision threshold for easier hits
     }
     // Add more weapons here in the future
 };
@@ -47,10 +48,15 @@ class Projectile {
         this.sprite.setScale(1.5); // Make it visible
         this.sprite.setDepth(500); // Above characters but below UI
         
-        // Set up physics
+        // Set up physics with improved hitbox
         this.sprite.body.setSize(weaponConfig.hitbox.width, weaponConfig.hitbox.height);
         this.sprite.setVelocityX(this.speed * this.direction);
         this.sprite.setVelocityY(0); // Straight horizontal throw
+        
+        // Debug: Show hitbox if debug mode is enabled
+        if (this.scene.debugMode) {
+            this.sprite.body.debugBodyColor = 0xff0000; // Red hitbox for debugging
+        }
         
         // Play spinning animation
         this.sprite.anims.play(`${weaponConfig.name.toLowerCase().replace(' ', '_')}_spinning`, true);
@@ -346,29 +352,45 @@ class WeaponManager {
                     return; // Skip collision if too far apart vertically
                 }
                 
-                // Check horizontal collision
-                const distance = Phaser.Math.Distance.Between(
-                    projectile.sprite.x, projectile.sprite.y,
-                    enemy.sprite.x, enemy.sprite.y
-                );
+                // Check horizontal collision with more generous threshold
+                const horizontalDistance = Math.abs(projectile.sprite.x - enemy.sprite.x);
+                const collisionThreshold = weaponConfig.collisionThreshold || 50;
                 
-                // If collision detected
-                if (distance < 40) { // Collision threshold
+                // If collision detected (more forgiving horizontal distance)
+                if (horizontalDistance < collisionThreshold) {
                     const damage = projectile.onHit(enemy);
                     
                     // Deal damage to enemy with red flash effect
                     if (enemy.takeDamage) {
                         enemy.takeDamage(damage);
                         
-                        // Add red flash effect (same as melee hits)
-                        enemy.sprite.setTint(0xff0000); // Red tint
-                        this.scene.time.delayedCall(150, () => {
+                        // Enhanced red flash effect for weapon hits
+                        enemy.sprite.setTint(0xff0000); // Bright red tint
+                        enemy.sprite.setAlpha(0.8); // Slightly transparent for flash effect
+                        
+                        // Flash effect with multiple pulses
+                        this.scene.time.delayedCall(100, () => {
                             if (enemy.sprite && enemy.sprite.active) {
-                                enemy.sprite.clearTint(); // Remove tint
+                                enemy.sprite.setTint(0xffffff); // White flash
+                                enemy.sprite.setAlpha(1.0);
                             }
                         });
                         
-                        console.log(`🎯 Enemy hit by weapon for ${damage} damage! (Vertical dist: ${Math.round(verticalDistance)})`);
+                        this.scene.time.delayedCall(200, () => {
+                            if (enemy.sprite && enemy.sprite.active) {
+                                enemy.sprite.setTint(0xff0000); // Red flash again
+                                enemy.sprite.setAlpha(0.8);
+                            }
+                        });
+                        
+                        this.scene.time.delayedCall(300, () => {
+                            if (enemy.sprite && enemy.sprite.active) {
+                                enemy.sprite.clearTint(); // Remove tint
+                                enemy.sprite.setAlpha(1.0); // Restore opacity
+                            }
+                        });
+                        
+                        console.log(`🎯 Enemy hit by weapon for ${damage} damage! (Vertical dist: ${Math.round(verticalDistance)}, Horizontal dist: ${Math.round(horizontalDistance)})`);
                     }
                 }
             });

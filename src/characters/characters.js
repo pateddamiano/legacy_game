@@ -106,58 +106,6 @@ const BLACK_THUG_CONFIG = new CharacterConfig(
     }
 );
 
-// ========================================
-// HITBOX CONFIGURATION CENTER
-// ========================================
-// 🎯 EASY HITBOX ADJUSTMENT PANEL 🎯
-// 
-// Modify these values to adjust combat feel and balance.
-// All measurements are in pixels.
-
-const HITBOX_CONFIG = {
-    // 👤 PLAYER HITBOXES
-    player: {
-        // Body collision (for character-to-character blocking)
-        bodyRadius: 60,                 // collision radius for character separation
-        
-        // Attack hitboxes (when player attacks enemies)
-        attackWidth: 80,               // width of player attack hitbox
-        attackHeight: 100,              // height of player attack hitbox
-        attackOffsetX: 20,              // how far in front of player the attack reaches (reduced from 120)
-        attackOffsetY: -50,             // vertical offset for attack hitbox (raised up)
-        verticalTolerance: 60,          // Maximum vertical distance for melee attacks
-        
-        // Air kick hitboxes (when player does air attacks)
-        airkickWidth: 60,              // width of air kick hitbox
-        airkickHeight: 80,              // height of air kick hitbox
-        airkickOffsetX: 50,             // how far in front of player the air kick reaches (reduced from 100)
-        airkickOffsetY: -15,            // vertical offset for air kick hitbox (raised up)
-        airkickVerticalTolerance: 80,   // Slightly more tolerance for air kicks
-    },
-    
-    // 👹 ENEMY HITBOXES  
-    enemy: {
-        // Body collision (for character-to-character blocking)
-        bodyRadius: 60,                 // collision radius for character separation
-        playerCollisionRadius: 60,      // collision radius with player specifically
-        enemyCollisionRadius: 50,       // collision radius between enemies
-        
-        // Attack hitboxes (when enemies attack player)
-        attackWidth: 90,               // width of enemy attack hitbox
-        attackHeight: 100,              // height of enemy attack hitbox
-        attackOffsetX: 20,              // how far in front of enemy the attack reaches (reduced from 120)
-        attackOffsetY: -50,             // vertical offset for attack hitbox (raised up)
-        
-    },
-    
-    // 🎨 VISUAL DEBUG SETTINGS
-    debug: {
-        bodyCollisionAlpha: 0.4,        // transparency of collision radius circles
-        attackHitboxLineWidth: 3,       // thickness of attack hitbox lines
-        bodyLineWidth: 2,               // thickness of body hitbox lines
-    }
-};
-
 // Array of all available playable characters
 const ALL_CHARACTERS = [TIREEK_CONFIG, TRYSTON_CONFIG];
 
@@ -174,6 +122,16 @@ if (typeof module !== 'undefined' && module.exports) {
         BLACK_THUG_CONFIG,
         ALL_CHARACTERS,
         ALL_ENEMY_TYPES,
-        HITBOX_CONFIG
     };
+}
+
+// Make constants available globally for browser environment
+if (typeof window !== 'undefined') {
+    window.ALL_CHARACTERS = ALL_CHARACTERS;
+    window.ALL_ENEMY_TYPES = ALL_ENEMY_TYPES;
+    window.TIREEK_CONFIG = TIREEK_CONFIG;
+    window.TRYSTON_CONFIG = TRYSTON_CONFIG;
+    window.CRACKHEAD_CONFIG = CRACKHEAD_CONFIG;
+    window.GREEN_THUG_CONFIG = GREEN_THUG_CONFIG;
+    window.BLACK_THUG_CONFIG = BLACK_THUG_CONFIG;
 }

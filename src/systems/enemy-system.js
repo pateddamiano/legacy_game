@@ -42,7 +42,7 @@ const ENEMY_CONFIG = {
     attackRange: 140,           // distance at which enemies can attack (lower = need to get closer)
     attackCooldown: 250,       // milliseconds between enemy attacks (lower = more frequent attacks)
     deadZoneHorizontal: 60,     // prevents jittering when close to player horizontally
-    deadZoneVertical: 20,       // prevents vertical jittering (smoother movement)
+    deadZoneVertical: 25,       // prevents vertical jittering (smoother movement) - balanced for responsiveness
     
     // 🎨 VISUAL & CLEANUP
     deathLingerTime: 2000,      // how long dead enemies stay on screen (ms) - dramatic effect
@@ -58,6 +58,12 @@ const ENEMY_CONFIG = {
     playerFlashTime: 200,       // player damage flash duration (ms) - visual feedback
     attackWindupDelay: 300,     // delay before attack actually hits (ms) - gives player time to react
     
+    // 🎯 VERTICAL MOVEMENT CONTROL
+    verticalMoveSpeed: 1,       // Reduced from 2 - much slower vertical movement
+    verticalResponseDelay: 200, // Reduced from 300 - enemies respond faster but still not instantly
+    verticalDeadZone: 25,       // Reduced from 40 - enemies respond to moderate vertical differences
+    ignoreJumpingPlayer: true,  // Enemies ignore vertical movements when player is jumping
+    
     // NOTE: Hitbox dimensions are now configured in HITBOX_CONFIG (characters.js)
 };
 
@@ -72,10 +78,10 @@ const ENEMY_CONFIG = {
 const ENEMY_TYPE_CONFIGS = {
     crackhead: {
         // Base stats (inherits from ENEMY_CONFIG if not specified)
-        health: 8,                    // Weak but numerous
-        speed: 150,                   // Slow, shambling movement
+        health: 10,                    // Weak but numerous
+        speed: 300,                   // Slow, shambling movement
         attackCooldown: 300,         // Slower attacks
-        playerDamage: 3,             // Less damage
+        playerDamage: 1,             // Less damage
         attackTypes: ['jab', 'bottle_attack'],
         detectionRange: 600,         // Less aggressive - shorter detection range
         description: "Weak but numerous crackhead enemies"
@@ -83,10 +89,10 @@ const ENEMY_TYPE_CONFIGS = {
     
     green_thug: {
         // Medium difficulty enemy
-        health: 12,                   // Medium health
-        speed: 200,                   // Faster than crackhead
+        health: 15,                   // Medium health
+        speed: 250,                   // Faster than crackhead
         attackCooldown: 250,         // Standard attack speed
-        playerDamage: 6,             // Medium damage
+        playerDamage: 2,             // Medium damage
         attackTypes: ['knife_hit'],
         detectionRange: 800,         // Standard detection range
         description: "Medium difficulty thug with knife attacks"
@@ -94,10 +100,10 @@ const ENEMY_TYPE_CONFIGS = {
     
     black_thug: {
         // Harder enemy type
-        health: 15,                   // Higher health
-        speed: 220,                   // Fast movement
+        health: 20,                   // Higher health
+        speed: 200,                   // Fast movement
         attackCooldown: 200,         // Faster attacks
-        playerDamage: 7,             // Higher damage
+        playerDamage: 3,             // Higher damage
         attackTypes: ['enemy_punch'],
         detectionRange: 1000,        // More aggressive - longer detection range
         description: "Harder thug with powerful punch attacks"
@@ -143,6 +149,11 @@ class Enemy {
         
         // Help calling flag
         this.hasCalledForHelp = false;
+        
+        // Vertical movement tracking
+        this.lastPlayerY = 0;
+        this.verticalMoveTimer = 0;
+        this.isPlayerJumping = false;
         
         // Spawn time for experience tracking
         this.spawnTime = scene.time.now;
@@ -225,6 +236,16 @@ class Enemy {
                     this.setState(ENEMY_STATES.WALKING);
                 }
             }
+        }
+        
+        // Track player jumping state (if available)
+        if (this.player.isJumping !== undefined) {
+            this.isPlayerJumping = this.player.isJumping;
+        }
+        
+        // Update vertical movement timer
+        if (this.verticalMoveTimer > 0) {
+            this.verticalMoveTimer -= delta;
         }
         
         // Update attack windup timer
@@ -343,6 +364,12 @@ class Enemy {
             return;
         }
         
+        // Don't track vertical movements if player is jumping
+        if (ENEMY_CONFIG.ignoreJumpingPlayer && this.isPlayerJumping) {
+            // Skip vertical movement tracking during jumps
+            return;
+        }
+        
         // Check if in attack range and ready to attack
         if (distanceToPlayer <= currentAttackRange && time - this.lastAttackTime > currentAttackCooldown) {
             this.setState(ENEMY_STATES.ATTACKING);
@@ -405,12 +432,29 @@ class Enemy {
             this.sprite.setVelocityX(0);
         }
         
-        // Vertical movement (beat 'em up style) - improved tracking
-        if (Math.abs(dy) > ENEMY_CONFIG.deadZoneVertical) {
-            if (dy > 0 && this.sprite.y < this.streetBottomLimit) {
-                this.sprite.y += verticalSpeed;
-            } else if (dy < 0 && this.sprite.y > this.streetTopLimit) {
-                this.sprite.y -= verticalSpeed;
+        // Vertical movement (beat 'em up style) - SMART tracking with delays and jump detection
+        if (Math.abs(dy) > ENEMY_CONFIG.verticalDeadZone) {
+            // Don't respond to vertical movements if player is jumping
+            if (ENEMY_CONFIG.ignoreJumpingPlayer && this.isPlayerJumping) {
+                // Ignore vertical movements during jumps
+                return;
+            }
+            
+            // Only respond to vertical movements after a delay (prevents "sticky" behavior)
+            if (this.verticalMoveTimer <= 0) {
+                // Check if player has moved significantly since last check
+                const playerYChange = Math.abs(this.player.y - this.lastPlayerY);
+                if (playerYChange > 10) { // Only respond to significant movements
+                    if (dy > 0 && this.sprite.y < this.streetBottomLimit) {
+                        this.sprite.y += ENEMY_CONFIG.verticalMoveSpeed;
+                    } else if (dy < 0 && this.sprite.y > this.streetTopLimit) {
+                        this.sprite.y -= ENEMY_CONFIG.verticalMoveSpeed;
+                    }
+                    
+                    // Set timer to prevent immediate re-response
+                    this.verticalMoveTimer = ENEMY_CONFIG.verticalResponseDelay;
+                    this.lastPlayerY = this.player.y;
+                }
             }
         }
         
@@ -434,11 +478,11 @@ class Enemy {
             this.facingLeft = false;
         }
         
-        // Move vertically away from player
+        // Move vertically away from player (slower retreat)
         if (dy > 0 && this.sprite.y > this.streetTopLimit) {
-            this.sprite.y -= ENEMY_CONFIG.verticalMoveSpeed * 0.5;
+            this.sprite.y -= ENEMY_CONFIG.verticalMoveSpeed * 0.3; // Even slower retreat
         } else if (dy < 0 && this.sprite.y < this.streetBottomLimit) {
-            this.sprite.y += ENEMY_CONFIG.verticalMoveSpeed * 0.5;
+            this.sprite.y += ENEMY_CONFIG.verticalMoveSpeed * 0.3; // Even slower retreat
         }
         
         // Enforce street boundaries
@@ -526,10 +570,10 @@ class Enemy {
         // Stop horizontal movement during attack
         this.sprite.setVelocityX(0);
         
-        // But allow vertical movement to track player during attack
-        if (this.player) {
+        // But allow vertical movement to track player during attack (with jump detection)
+        if (this.player && !this.isPlayerJumping) {
             const dy = this.player.y - this.sprite.y;
-            if (Math.abs(dy) > ENEMY_CONFIG.deadZoneVertical) {
+            if (Math.abs(dy) > ENEMY_CONFIG.verticalDeadZone) {
                 let verticalSpeed = ENEMY_CONFIG.verticalMoveSpeed * 1.5; // Slightly faster vertical movement during attack
                 
                 if (dy > 0 && this.sprite.y < this.streetBottomLimit) {
@@ -715,4 +759,11 @@ class Enemy {
             detectionRange: this.detectionRange
         };
     }
+}
+
+// Make constants available globally for browser environment
+if (typeof window !== 'undefined') {
+    window.ENEMY_CONFIG = ENEMY_CONFIG;
+    window.ENEMY_STATES = ENEMY_STATES;
+    window.Enemy = Enemy;
 }
