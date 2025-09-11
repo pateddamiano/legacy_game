@@ -29,107 +29,10 @@
             font-size: 14px;
         }
         
-        /* Loading dots animation */
-        @keyframes dotSequence {
-            0%, 100% { opacity: 1; }
-            33% { opacity: 0.3; }
-            66% { opacity: 0.6; }
-        }
     </style>
 </head>
 <body>
-    <!-- Loading Screen -->
-    <div id="loading-screen" style="
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: #0f0f23;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        z-index: 9999;
-        color: #00ff00;
-        font-family: 'Courier New', monospace;
-    ">
-                        <!-- Spinning Vinyl Record (Canvas Animation) -->
-                <div id="vinyl-loader" style="
-                    width: 120px;
-                    height: 120px;
-                    margin-bottom: 40px;
-                    position: relative;
-                ">
-                    <canvas id="vinyl-canvas" width="120" height="120" style="
-                        image-rendering: pixelated;
-                        image-rendering: -moz-crisp-edges;
-                        image-rendering: crisp-edges;
-                    "></canvas>
-                </div>
-        
-        <!-- 8-bit Loading Text -->
-        <div id="loading-text-8bit" style="
-            font-size: 2em;
-            font-weight: bold;
-            text-shadow: 2px 2px 0px #004400;
-            margin-bottom: 20px;
-            letter-spacing: 3px;
-        ">
-            LOADING<span id="loading-dots-8bit">...</span>
-        </div>
-        
-        <!-- Yellow ++ -->
-        <div id="loading-plus" style="
-            font-size: 1.5em;
-            color: #ffff00;
-            font-weight: bold;
-            text-shadow: 2px 2px 0px #666600;
-        ">
-            ++
-        </div>
-            </div>
     
-        <!-- Vinyl Animation Script -->
-        <script>
-        // Canvas-based vinyl animation using spritesheet approach
-        function initVinylAnimation() {
-            const canvas = document.getElementById('vinyl-canvas');
-            const ctx = canvas.getContext('2d');
-            const img = new Image();
-            
-            let currentFrame = 0;
-            const totalFrames = 4;
-            const frameWidth = 64;
-            const frameHeight = 64;
-            const canvasSize = 120;
-            
-            img.onload = function() {
-                // Start animation
-                setInterval(() => {
-                    // Clear canvas
-                    ctx.clearRect(0, 0, canvasSize, canvasSize);
-                    
-                    // Draw current frame
-                    ctx.drawImage(
-                        img,
-                        0, currentFrame * frameHeight, // Source x, y
-                        frameWidth, frameHeight,       // Source width, height
-                        0, 0,                          // Dest x, y
-                        canvasSize, canvasSize         // Dest width, height (scaled)
-                    );
-                    
-                    // Move to next frame
-                    currentFrame = (currentFrame + 1) % totalFrames;
-                }, 250); // 4 FPS like a proper retro game
-            };
-            
-            img.src = 'assets/weapons/spritesheets/vinyl weapon spinning.png';
-        }
-        
-        // Start animation when page loads
-        initVinylAnimation();
-        </script>
     
         <div>
             <div id="game-container"></div>
@@ -148,6 +51,10 @@
     <script src="src/config/game-config.js?v=1.0.0"></script>
     <script src="src/config/level-config.js?v=1.0.0"></script>
     
+    <!-- Core System Files - Load before other scripts -->
+    <script src="src/core/GameState.js?v=2.1.0"></script>
+    <script src="src/core/SceneManager.js?v=2.2.0"></script>
+    
     <!-- Modular Game Scripts - Load in dependency order -->
     <script src="src/characters/characters.js?v=5.7.0"></script>
     <script src="src/systems/animation-manager.js?v=5.7.0"></script>
@@ -159,7 +66,14 @@
     <script src="src/systems/enemy-system.js?v=5.7.0"></script>
     <script src="src/systems/item-pickup-system.js?v=6.4.0"></script>
     <script src="src/systems/level-manager.js?v=1.0.0"></script>
+    
+    <!-- New Scene Files - Load before game.js -->
+    <script src="src/scenes/AudioBootScene.js?v=2.8.0"></script>
+    <script src="src/scenes/MainMenuScene.js?v=4.0.0"></script>
+    <script src="src/scenes/CharacterSelectScene.js?v=4.0.0"></script>
     <script src="src/scenes/game-scene.js?v=6.1.0"></script>
-    <script src="game.js?v=6.1.0"></script>
+    
+    <!-- Main Game Entry Point - Load last -->
+    <script src="game.js?v=6.7.0"></script>
 </body>
 </html> 

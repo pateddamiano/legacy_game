@@ -10,147 +10,37 @@ class GameScene extends Phaser.Scene {
         this.currentCharacterConfig = ALL_CHARACTERS[this.currentCharacterIndex];
     }
 
-    preload() {
-        // Set up loading progress tracking
-        this.setupLoadingProgress();
+    init(data) {
+        // Receive data from scene manager (character and level info)
+        this.selectedCharacter = data?.character || 'tireek';
+        this.selectedLevelId = data?.levelId || 0;
         
-        // Load background assets
-        this.load.image('street', 'assets/backgrounds/StreetTexture.png');
-        this.load.image('cityscape', 'assets/backgrounds/Background.png');
+        console.log(`🎯 GameScene initialized with character: ${this.selectedCharacter}, level: ${this.selectedLevelId}`);
         
-        // Load all character sprite sheets
-        ALL_CHARACTERS.forEach(characterConfig => {
-            this.loadCharacterAssets(characterConfig);
-        });
+        // Set current character based on selection
+        this.currentCharacterConfig = ALL_CHARACTERS.find(char => char.name === this.selectedCharacter) || ALL_CHARACTERS[0];
+        this.currentCharacterIndex = ALL_CHARACTERS.findIndex(char => char.name === this.selectedCharacter);
         
-        // Load all enemy assets
-        ALL_ENEMY_TYPES.forEach(enemyConfig => {
-            this.loadCharacterAssets(enemyConfig);
-        });
-        
-        // Initialize and load weapon system
-        this.weaponManager = new WeaponManager(this);
-        this.weaponManager.loadWeaponAssets();
-        
-        // Load item pickup assets
-        this.loadItemPickupAssets();
-        
-        // Load audio assets
-        this.loadAudioAssets();
-    }
-    
-    setupLoadingProgress() {
-        // Start the 8-bit dot animation
-        this.startDotAnimation();
-        
-        this.load.on('complete', () => {
-            // Keep loading screen for 5 seconds total for smooth experience
-            setTimeout(() => {
-                this.hideLoadingScreen();
-            }, 5000);
-        });
-    }
-    
-    startDotAnimation() {
-        // Animate the dots in 8-bit style: . .. ... . .. ...
-        const dotsElement = document.getElementById('loading-dots-8bit');
-        if (!dotsElement) return;
-        
-        const dotPatterns = ['.', '..', '...', '.', '..', '...'];
-        let currentIndex = 0;
-        
-        this.dotInterval = setInterval(() => {
-            dotsElement.textContent = dotPatterns[currentIndex];
-            currentIndex = (currentIndex + 1) % dotPatterns.length;
-        }, 500); // Change every 500ms for retro feel
-    }
-    
-    hideLoadingScreen() {
-        // Clear the dot animation interval
-        if (this.dotInterval) {
-            clearInterval(this.dotInterval);
-        }
-        
-        const loadingScreen = document.getElementById('loading-screen');
-        if (loadingScreen) {
-            loadingScreen.style.opacity = '0';
-            loadingScreen.style.transition = 'opacity 0.5s ease';
-            setTimeout(() => {
-                loadingScreen.style.display = 'none';
-                // Enable game controls and enemy spawning after loading screen is hidden
-                this.isLoading = false;
-                console.log('🎮 Loading complete - game controls and enemy spawning enabled');
-            }, 500);
-        }
+        // Update game state
+        window.gameState.currentGame.character = this.selectedCharacter;
+        window.gameState.currentGame.levelId = this.selectedLevelId;
     }
 
-    loadCharacterAssets(characterConfig) {
-        console.log(`Loading assets for ${characterConfig.name}:`, characterConfig.spriteSheets);
+    preload() {
+        // Assets are now loaded in PreloadScene, so this is minimal
+        console.log('🎯 GameScene: Assets already loaded, initializing systems...');
         
-        // Load all sprite sheets for the character
-        Object.entries(characterConfig.spriteSheets).forEach(([animName, path]) => {
-            const spriteKey = `${characterConfig.name}_${animName}`;
-            console.log(`Loading spritesheet ${spriteKey} from ${path}`);
-            
-            this.load.spritesheet(spriteKey, path, {
-                frameWidth: characterConfig.frameSize.width,
-                frameHeight: characterConfig.frameSize.height
-            });
-        });
-        
-        console.log(`Finished loading assets for ${characterConfig.name}`);
+        // Initialize weapon system (needs scene reference)
+        this.weaponManager = new WeaponManager(this);
     }
     
-    loadAudioAssets() {
-        // 🎵 BACKGROUND MUSIC
-        // Add your music files here - place them in assets/audio/music/
-        
-        console.log('🎵 Attempting to load music files...');
-        
-        // Try loading with different formats and add more debugging
-        this.load.audio('combatMusic', [
-            './assets/audio/music/angeloimani_river_8bit_style.ogg',
-            './assets/audio/music/angeloimani_river_8bit_style.m4a'
-        ]);
-        
-        // Add comprehensive load event listeners with detailed debugging
-        this.load.on('filecomplete-audio-combatMusic', (key, type, data) => {
-            console.log('🎵 Combat music loaded successfully!', { key, type });
-            console.log('🎵 Audio cache after load:', this.cache.audio.has('combatMusic'));
-            console.log('🎵 Available audio keys after load:', Object.keys(this.cache.audio.entries.entries));
-        });
-        
-        this.load.on('loaderror', (file) => {
-            console.error('🎵 Failed to load audio file:', file.key, file.src);
-        });
-        
-        this.load.on('complete', () => {
-            console.log('🎵 All assets loading complete');
-            console.log('🎵 Final audio cache check:', this.cache.audio.has('combatMusic'));
-        });
-        
-        // 🔊 SOUND EFFECTS  
-        // Add your sound effect files here - place them in assets/audio/sfx/
-        // Uncomment the lines below when you add sound files:
-        
-        // this.load.audio('playerAttack', 'assets/audio/sfx/player_attack.wav');
-        // this.load.audio('playerHit', 'assets/audio/sfx/player_hit.wav');
-        // this.load.audio('enemyHit', 'assets/audio/sfx/enemy_hit.wav');
-        // this.load.audio('enemySpawn', 'assets/audio/sfx/enemy_spawn.wav');
-        // this.load.audio('enemyDeath', 'assets/audio/sfx/enemy_death.wav');
-        
-        console.log('🎵 Audio loading configured - add your files and uncomment the load statements!');
-    }
-    
-    loadItemPickupAssets() {
-        // Load golden microphone asset
-        this.load.image('goldenMicrophone', 'assets/pickups/GoldenMicrophone_64x64.png');
-        console.log('✨ Loading item pickup assets...');
-    }
+    // Old loading methods removed - assets now loaded in PreloadScene
 
     create() {
-        // Initialize loading state - prevents controls and enemy spawning during loading
-        this.isLoading = true;
+        console.log(`🎯 GameScene: Creating level ${this.selectedLevelId} with ${this.selectedCharacter}`);
+        
+        // No loading needed - assets already loaded in PreloadScene
+        this.isLoading = false;
         
         // Initialize managers first
         this.environmentManager = new EnvironmentManager(this);
@@ -168,8 +58,9 @@ class GameScene extends Phaser.Scene {
         this.streetTopLimit = streetBounds.top;
         this.streetBottomLimit = streetBounds.bottom;
 
-        // Create player with current character
+        // Create player with selected character
         this.createPlayer(this.currentCharacterConfig);
+        console.log(`🎯 Player created with character: ${this.currentCharacterConfig.name}`);
         
         // Set up camera using EnvironmentManager
         this.environmentManager.setupCameraForEnvironment(this.cameras.main, this.player);
@@ -238,12 +129,9 @@ class GameScene extends Phaser.Scene {
         // Initialize level system
         this.initializeLevelSystem();
         
-        // Start background music after everything is loaded and created
-        this.time.delayedCall(100, () => {
-            console.log('🎵 Attempting to start background music...');
-            console.log('🎵 Audio cache before play attempt:', this.cache.audio.has('combatMusic'));
-            this.audioManager.playBackgroundMusic('combatMusic');
-        });
+        // Start background music immediately (assets already loaded)
+        console.log('🎵 Starting background music...');
+        this.audioManager.playBackgroundMusic('combatMusic');
     }
 
     createPlayer(characterConfig) {
