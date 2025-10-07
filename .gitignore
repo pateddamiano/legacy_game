@@ -1,0 +1,23 @@
+# GIMP native format files (too large for GitHub)
+*.xcf
+
+# Other common files to ignore
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak
+*.swp
+*~
+
+# Node modules (if you add any later)
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
