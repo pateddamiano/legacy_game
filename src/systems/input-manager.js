@@ -35,10 +35,24 @@ class InputManager {
             verticalSpeed: 3    // For beat 'em up style vertical movement (reduced from 8)
         };
         
+        // Street bounds - read from centralized WORLD_CONFIG
+        this.streetTopLimit = WORLD_CONFIG.streetTopLimit;
+        this.streetBottomLimit = WORLD_CONFIG.streetBottomLimit;
+        
         // Initialize input systems
         this.setupKeyboard();
         
         console.log('🎮 InputManager initialized!');
+    }
+    
+    // ========================================
+    // CONFIGURATION
+    // ========================================
+    
+    setStreetBounds(top, bottom) {
+        this.streetTopLimit = top;
+        this.streetBottomLimit = bottom;
+        console.log(`🎮 InputManager: Street bounds set to ${top} - ${bottom}`);
     }
     
     // ========================================
@@ -76,6 +90,29 @@ class InputManager {
         // Safety check - ensure all input objects are ready
         if (!this.cursors || !this.keys) {
             return;
+        }
+        
+        // Check if dialogue is active - if so, block ALL input (DialogueManager handles SPACE)
+        const isDialogueActive = this.scene.dialogueManager && this.scene.dialogueManager.isDialogueActive();
+        
+        if (isDialogueActive) {
+            // Clear all input states when dialogue is active
+            this.inputState.left = false;
+            this.inputState.right = false;
+            this.inputState.up = false;
+            this.inputState.down = false;
+            this.inputState.jump = false;
+            this.inputState.attack = false;
+            this.inputState.weapon = false;
+            this.inputState.switchCharacter = false;
+            this.inputState.debug = false;
+            this.inputState.clearEnemies = false;
+            this.inputState.heal = false;
+            this.inputState.musicToggle = false;
+            this.inputState.sfxToggle = false;
+            this.inputState.nextLevel = false;
+            this.inputState.levelStatus = false;
+            return; // Don't process any input
         }
         
         try {
@@ -147,13 +184,13 @@ class InputManager {
         // Vertical movement (beat 'em up style) - only when not jumping
         if (!isJumping) {
             // Manual position control for beat 'em up style movement
-            if (this.inputState.up && player.y > 520) { // streetTopLimit
+            if (this.inputState.up && player.y > this.streetTopLimit) {
                 player.y -= this.movementConfig.verticalSpeed;
                 if (player.lastGroundY !== undefined) {
                     player.lastGroundY = player.y;
                 }
                 isMoving = true;
-            } else if (this.inputState.down && player.y < 650) { // streetBottomLimit
+            } else if (this.inputState.down && player.y < this.streetBottomLimit) {
                 player.y += this.movementConfig.verticalSpeed;
                 if (player.lastGroundY !== undefined) {
                     player.lastGroundY = player.y;

@@ -101,98 +101,170 @@ class UIManager {
     // ========================================
     
     createHealthBar() {
-        const healthBarWidth = 250;
-        const healthBarHeight = 25;
-        const healthBarX = 20;
-        const healthBarY = 20; // Top left position - mobile friendly
+        // OLD LARGE HEALTH BAR REMOVED - Using only dual character health bars now
         
-        // Create outer box container (darker border)
-        this.healthBarBorder = this.scene.add.rectangle(
-            healthBarX, 
-            healthBarY, 
-            healthBarWidth + 8, 
-            healthBarHeight + 8, 
+        // Create dual character health display (small bars for both characters)
+        this.createDualCharacterHealthDisplay();
+    }
+    
+    createDualCharacterHealthDisplay() {
+        const displayX = 20;
+        const displayY = 20; // Top left corner (was 60, moved up since large bar removed)
+        const barWidth = 120;
+        const barHeight = 15;
+        const spacing = 10;
+        
+        // Tireek health bar
+        this.tireekHealthBorder = this.scene.add.rectangle(
+            displayX, 
+            displayY, 
+            barWidth + 4, 
+            barHeight + 4, 
             0x2a2a2a
         );
-        this.healthBarBorder.setOrigin(0, 0);
-        this.healthBarBorder.setDepth(2000);
-        this.healthBarBorder.setScrollFactor(0);
+        this.tireekHealthBorder.setOrigin(0, 0);
+        this.tireekHealthBorder.setDepth(2000);
+        this.tireekHealthBorder.setScrollFactor(0);
         
-        // Create inner box background (slightly lighter)
-        this.healthBarBg = this.scene.add.rectangle(
-            healthBarX + 4, 
-            healthBarY + 4, 
-            healthBarWidth, 
-            healthBarHeight, 
+        this.tireekHealthBg = this.scene.add.rectangle(
+            displayX + 2, 
+            displayY + 2, 
+            barWidth, 
+            barHeight, 
             0x404040
         );
-        this.healthBarBg.setOrigin(0, 0);
-        this.healthBarBg.setDepth(2001);
-        this.healthBarBg.setScrollFactor(0);
+        this.tireekHealthBg.setOrigin(0, 0);
+        this.tireekHealthBg.setDepth(2001);
+        this.tireekHealthBg.setScrollFactor(0);
         
-        // Create health bar graphics
-        this.healthBarGraphics = this.scene.add.graphics();
-        this.healthBarGraphics.setDepth(2002);
-        this.healthBarGraphics.setScrollFactor(0);
+        this.tireekHealthGraphics = this.scene.add.graphics();
+        this.tireekHealthGraphics.setDepth(2002);
+        this.tireekHealthGraphics.setScrollFactor(0);
         
-        // Store health bar dimensions for updates
-        this.healthBarWidth = healthBarWidth;
-        this.healthBarHeight = healthBarHeight;
-        this.healthBarX = healthBarX + 4;
-        this.healthBarY = healthBarY + 4;
+        // Tryston health bar
+        this.trystonHealthBorder = this.scene.add.rectangle(
+            displayX + barWidth + spacing, 
+            displayY, 
+            barWidth + 4, 
+            barHeight + 4, 
+            0x2a2a2a
+        );
+        this.trystonHealthBorder.setOrigin(0, 0);
+        this.trystonHealthBorder.setDepth(2000);
+        this.trystonHealthBorder.setScrollFactor(0);
+        
+        this.trystonHealthBg = this.scene.add.rectangle(
+            displayX + barWidth + spacing + 2, 
+            displayY + 2, 
+            barWidth, 
+            barHeight, 
+            0x404040
+        );
+        this.trystonHealthBg.setOrigin(0, 0);
+        this.trystonHealthBg.setDepth(2001);
+        this.trystonHealthBg.setScrollFactor(0);
+        
+        this.trystonHealthGraphics = this.scene.add.graphics();
+        this.trystonHealthGraphics.setDepth(2002);
+        this.trystonHealthGraphics.setScrollFactor(0);
+        
+        // Character labels
+        this.tireekLabel = this.scene.add.text(displayX + 5, displayY - 20, 'TIREEK', {
+            fontSize: '12px',
+            fill: '#FFD700',
+            fontFamily: 'Arial',
+            fontWeight: 'bold'
+        });
+        this.tireekLabel.setDepth(2003);
+        this.tireekLabel.setScrollFactor(0);
+        
+        this.trystonLabel = this.scene.add.text(displayX + barWidth + spacing + 5, displayY - 20, 'TRYSTON', {
+            fontSize: '12px',
+            fill: '#FFD700',
+            fontFamily: 'Arial',
+            fontWeight: 'bold'
+        });
+        this.trystonLabel.setDepth(2003);
+        this.trystonLabel.setScrollFactor(0);
+        
+        // Store dimensions for updates
+        this.dualBarWidth = barWidth;
+        this.dualBarHeight = barHeight;
+        this.tireekBarX = displayX + 2;
+        this.tireekBarY = displayY + 2;
+        this.trystonBarX = displayX + barWidth + spacing + 2;
+        this.trystonBarY = displayY + 2;
     }
     
     updateHealthBar(currentHealth, maxHealth) {
-        if (!this.healthBarGraphics) return;
+        // OLD LARGE HEALTH BAR REMOVED - Using only dual character health bars now
+        // This method is kept for compatibility but does nothing
+    }
+    
+    updateDualCharacterHealth(tireekHealth, trystonHealth, activeCharacter) {
+        // Update Tireek health bar
+        this.updateCharacterHealthBar(this.tireekHealthGraphics, tireekHealth, 100, 
+            this.tireekBarX, this.tireekBarY, this.dualBarWidth, this.dualBarHeight,
+            activeCharacter === 'tireek');
+        
+        // Update Tryston health bar
+        this.updateCharacterHealthBar(this.trystonHealthGraphics, trystonHealth, 100,
+            this.trystonBarX, this.trystonBarY, this.dualBarWidth, this.dualBarHeight,
+            activeCharacter === 'tryston');
+        
+        // Update labels to show active character
+        if (activeCharacter === 'tireek') {
+            this.tireekLabel.setStyle({ fill: '#FFD700', fontWeight: 'bold' });
+            this.trystonLabel.setStyle({ fill: '#888888', fontWeight: 'normal' });
+        } else {
+            this.tireekLabel.setStyle({ fill: '#888888', fontWeight: 'normal' });
+            this.trystonLabel.setStyle({ fill: '#FFD700', fontWeight: 'bold' });
+        }
+    }
+    
+    updateCharacterHealthBar(graphics, currentHealth, maxHealth, x, y, width, height, isActive) {
+        if (!graphics) return;
         
         // Clear previous graphics
-        this.healthBarGraphics.clear();
+        graphics.clear();
         
         // Calculate health percentage
         const healthPercent = currentHealth / maxHealth;
-        const currentWidth = this.healthBarWidth * healthPercent;
+        const currentWidth = width * healthPercent;
         
-        // Orange gradient based on health percentage
+        // Color based on health and active status
         let healthColor;
-        if (healthPercent > 0.6) {
-            // High health: Bright orange
-            healthColor = 0xFF8C00;
-        } else if (healthPercent > 0.3) {
-            // Medium health: Standard orange
-            healthColor = 0xFF7F00;
+        if (isActive) {
+            // Active character - brighter colors
+            if (healthPercent > 0.6) {
+                healthColor = 0xFF8C00; // Bright orange
+            } else if (healthPercent > 0.3) {
+                healthColor = 0xFF7F00; // Standard orange
+            } else {
+                healthColor = 0xFF4500; // Dark orange/red
+            }
         } else {
-            // Low health: Dark orange/red
-            healthColor = 0xFF4500;
+            // Inactive character - dimmer colors
+            if (healthPercent > 0.6) {
+                healthColor = 0xCC7000; // Dimmed orange
+            } else if (healthPercent > 0.3) {
+                healthColor = 0xCC5F00; // Dimmed orange
+            } else {
+                healthColor = 0xCC3500; // Dimmed red
+            }
         }
         
         // Draw the health bar
         if (currentWidth > 0) {
             // Main health bar fill
-            this.healthBarGraphics.fillStyle(healthColor);
-            this.healthBarGraphics.fillRect(
-                this.healthBarX,
-                this.healthBarY,
-                currentWidth,
-                this.healthBarHeight
-            );
+            graphics.fillStyle(healthColor);
+            graphics.fillRect(x, y, currentWidth, height);
             
-            // Add a subtle highlight on top for depth
-            this.healthBarGraphics.fillStyle(0xffffff, 0.25);
-            this.healthBarGraphics.fillRect(
-                this.healthBarX,
-                this.healthBarY,
-                currentWidth,
-                this.healthBarHeight * 0.4
-            );
-            
-            // Add a subtle shadow on bottom for depth
-            this.healthBarGraphics.fillStyle(0x000000, 0.15);
-            this.healthBarGraphics.fillRect(
-                this.healthBarX,
-                this.healthBarY + this.healthBarHeight * 0.7,
-                currentWidth,
-                this.healthBarHeight * 0.3
-            );
+            // Add highlight for active character
+            if (isActive) {
+                graphics.fillStyle(0xffffff, 0.3);
+                graphics.fillRect(x, y, currentWidth, height * 0.4);
+            }
         }
     }
     
@@ -292,20 +364,24 @@ class UIManager {
             enemies, 
             maxEnemies, 
             playerX, 
-            playerY 
+            playerY,
+            tireekHealth,
+            trystonHealth
         } = debugData;
         
         this.debugText.setText(`🐛 DEBUG MODE (Press D to toggle)
-Character: ${charName}
+Active Character: ${charName}
 State: ${state} | Locked: ${locked}
 Timer: ${timer}ms | VelX: ${velX}
-Health: ${health}/${maxHealth}
+Active Health: ${Math.round(health)}/${maxHealth}
+Tireek Health: ${Math.round(tireekHealth || 0)}/100
+Tryston Health: ${Math.round(trystonHealth || 0)}/100
 Enemies: ${enemies}/${maxEnemies}
 Player: (${Math.round(playerX)}, ${Math.round(playerY)})
 
 Controls:
-K = Clear All Enemies | H = Heal Player
-M = Toggle Music | N = Toggle SFX
+C = Switch Character | K = Clear All Enemies
+H = Heal Player | M = Toggle Music | N = Toggle SFX
 
 Legend:
 🟢 Green = Player Hitbox
@@ -433,19 +509,8 @@ Legend:
     // ========================================
     
     updateLevelDisplay(levelIndex, levelName) {
-        // Create or update level display
-        if (!this.levelText) {
-            this.levelText = this.scene.add.text(10, 80, '', {
-                fontSize: '18px',
-                fill: '#00ff00',
-                backgroundColor: '#000000',
-                padding: { x: 10, y: 5 }
-            });
-            this.levelText.setDepth(2000);
-            this.levelText.setScrollFactor(0);
-        }
-        
-        this.levelText.setText(`Level ${levelIndex + 1}: ${levelName}`);
+        // LEVEL DISPLAY REMOVED - No longer showing level name on screen
+        // Players can see level info in debug mode if needed
     }
     
     // ========================================

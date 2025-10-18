@@ -5,76 +5,21 @@
 
 const LEVEL_CONFIGS = [
     // ========================================
-    // LEVEL 0: TUTORIAL
-    // ========================================
-    {
-        id: 0,
-        name: "Street Tutorial",
-        description: "Learn the basics of combat",
-        background: 'street_level_1',
-        music: 'street_ambient',
-        requirements: [], // No requirements for first level
-        
-        // Enemy configuration
-        enemies: {
-            spawnRate: 1500,        // Slower spawning for tutorial
-            maxEnemies: 3,          // Fewer enemies
-            types: ['crackhead'],   // Only basic enemies
-            difficulty: 0.8,        // Easier difficulty
-            healthMultiplier: 0.8,  // Enemies have less health
-            damageMultiplier: 0.7   // Enemies deal less damage
-        },
-        
-        // Level progression
-        progression: {
-            nextLevel: {
-                condition: 'enemies_defeated_8',  // Defeat 8 enemies to advance
-                levelId: 1
-            },
-            bossTrigger: null, // No boss in tutorial
-            checkpoint: false  // No checkpoint in tutorial
-        },
-        
-        // Dialogue and story
-        dialogue: [
-            {
-                trigger: 'level_start',
-                text: "Welcome to the streets! Time to learn how to fight.",
-                speaker: 'narrator',
-                duration: 3000
-            },
-            {
-                trigger: 'enemy_killed_3',
-                text: "Good! You're getting the hang of this.",
-                speaker: 'narrator',
-                duration: 2500
-            },
-            {
-                trigger: 'enemy_killed_6',
-                text: "Almost there! Defeat a few more to advance.",
-                speaker: 'narrator',
-                duration: 2500
-            }
-        ],
-        
-        // Rewards
-        rewards: {
-            experience: 50,
-            items: [],
-            unlockables: ['basic_combat_moves']
-        }
-    },
-    
-    // ========================================
-    // LEVEL 1: STREET CHALLENGE
+    // LEVEL 1: THE STREETS
     // ========================================
     {
         id: 1,
-        name: "Street Challenge",
-        description: "Face tougher street thugs",
-        background: 'street_level_2',
-        music: 'street_intense',
-        requirements: ['level_0_complete'],
+        name: "The Streets",
+        description: "Welcome to the concrete jungle",
+        background: 'level_1_segments',
+        music: 'street_ambient',
+        requirements: [], // First level, no requirements
+        
+        // Pre-level dialogue (shown before level starts)
+        preDialogue: [],
+        
+        // Post-level dialogue (shown after level complete)
+        postDialogue: [],
         
         // Enemy configuration
         enemies: {
@@ -86,31 +31,27 @@ const LEVEL_CONFIGS = [
             damageMultiplier: 1.0   // Normal damage
         },
         
-        // Level progression
-        progression: {
-            nextLevel: {
-                condition: 'enemies_defeated_12', // Defeat 12 enemies
-                levelId: 2
-            },
-            bossTrigger: null, // No boss yet
-            checkpoint: false  // No checkpoint yet
-        },
+        // Level progression - DISABLED (no automatic progression)
+        progression: null,
         
-        // Dialogue and story
-        dialogue: [
-            {
-                trigger: 'level_start',
-                text: "The streets are getting tougher. Watch out for thugs with knives!",
-                speaker: 'narrator',
-                duration: 3000
-            },
-            {
-                trigger: 'enemy_killed_6',
-                text: "You're handling yourself well out here.",
-                speaker: 'narrator',
-                duration: 2500
-            }
+        // Mid-level dialogue (triggered during gameplay)
+        dialogue: [],
+        
+        // Dynamic scene elements
+        sceneElements: [
+            // Example: Add a moving car in the background
+            // {
+            //     type: 'decoration',
+            //     sprite: 'car',
+            //     x: -500,
+            //     y: 500,
+            //     depth: -150,
+            //     scrollFactor: 0.8
+            // }
         ],
+        
+        // Boss configuration (none for Level 1)
+        boss: null,
         
         // Rewards
         rewards: {
@@ -141,15 +82,8 @@ const LEVEL_CONFIGS = [
             damageMultiplier: 1.1   // Enemies deal more damage
         },
         
-        // Level progression
-        progression: {
-            nextLevel: {
-                condition: 'enemies_defeated_15', // Defeat 15 enemies
-                levelId: 3
-            },
-            bossTrigger: null, // No boss yet
-            checkpoint: true   // First checkpoint!
-        },
+        // Level progression - DISABLED (no automatic progression)
+        progression: null,
         
         // Dialogue and story
         dialogue: [
@@ -210,17 +144,8 @@ const LEVEL_CONFIGS = [
         },
         
         // Level progression
-        progression: {
-            nextLevel: {
-                condition: 'boss_defeated', // Must defeat boss to advance
-                levelId: 4
-            },
-            bossTrigger: {
-                condition: 'enemies_defeated_8',
-                bossType: 'street_gang_leader'
-            },
-            checkpoint: false // No checkpoint during boss fight
-        },
+        // Level progression - DISABLED (no automatic progression)
+        progression: null,
         
         // Dialogue and story
         dialogue: [

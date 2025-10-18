@@ -123,7 +123,7 @@ class Enemy {
         
         // Create sprite
         this.sprite = scene.physics.add.sprite(x, y, `${characterConfig.name}_idle`);
-        this.sprite.setScale(2.0); // Slightly smaller than player
+        this.sprite.setScale(2.0); // Back to original scale
         this.sprite.setDepth(1000 - y);
         this.sprite.setBounce(0.2);
         this.sprite.setCollideWorldBounds(true);
@@ -168,9 +168,9 @@ class Enemy {
         this.windupTimer = 0;     // Time remaining in windup
         this.canDealDamage = false; // True when attack can actually hit
         
-        // Movement bounds (same as player)
-        this.streetTopLimit = 520;
-        this.streetBottomLimit = 650;
+        // Movement bounds - read from centralized WORLD_CONFIG
+        this.streetTopLimit = WORLD_CONFIG.streetTopLimit;
+        this.streetBottomLimit = WORLD_CONFIG.streetBottomLimit;
         
         // Store reference to player
         this.player = null;
@@ -725,16 +725,21 @@ class Enemy {
             return null;
         }
         
-        console.log(`Enemy ${this.characterConfig.name} hitbox active!`);
+        console.log(`Enemy ${this.characterConfig.name} hitbox active! Facing left: ${this.facingLeft}`);
         
-        // Return attack hitbox when attack can deal damage
-        const offsetX = this.facingLeft ? -HITBOX_CONFIG.enemy.attackOffsetX : HITBOX_CONFIG.enemy.attackOffsetX;
+        // Get scaled hitbox dimensions based on current sprite scale
+        const scaledHitbox = HitboxHelpers.getEnemyAttackHitbox(this.sprite);
+        
+        // Calculate proper offset based on facing direction (same logic as player)
+        // When facing left (facingLeft = true), attack should be to the left
+        // When facing right (facingLeft = false), attack should be to the right
+        const offsetX = this.facingLeft ? -scaledHitbox.attackOffsetX : scaledHitbox.attackOffsetX;
         
         return {
-            x: this.sprite.x + offsetX,
-            y: this.sprite.y + HITBOX_CONFIG.enemy.attackOffsetY,
-            width: HITBOX_CONFIG.enemy.attackWidth,
-            height: HITBOX_CONFIG.enemy.attackHeight
+            x: this.sprite.x + offsetX - (this.facingLeft ? scaledHitbox.attackWidth : 0),
+            y: this.sprite.y + scaledHitbox.attackOffsetY,
+            width: scaledHitbox.attackWidth,
+            height: scaledHitbox.attackHeight
         };
     }
     

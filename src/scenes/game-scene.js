@@ -8,18 +8,47 @@ class GameScene extends Phaser.Scene {
         super({ key: 'GameScene' });
         this.currentCharacterIndex = 0; // Start with first character (Tireek)
         this.currentCharacterConfig = ALL_CHARACTERS[this.currentCharacterIndex];
+        
+        // Dual character system
+        this.characters = {
+            tireek: {
+                config: TIREEK_CONFIG,
+                health: 100,
+                maxHealth: 100,
+                sprite: null,
+                isActive: true,
+                regenRate: 2.0, // Health per second when inactive (increased from 0.5)
+                lastSwitchTime: 0
+            },
+            tryston: {
+                config: TRYSTON_CONFIG,
+                health: 100,
+                maxHealth: 100,
+                sprite: null,
+                isActive: false,
+                regenRate: 2.0, // Health per second when inactive (increased from 0.5)
+                lastSwitchTime: 0
+            }
+        };
+        
+        this.autoSwitchThreshold = 25; // Auto-switch when health drops below 25%
+        this.switchCooldown = 2000; // 2 seconds cooldown between switches
     }
 
     init(data) {
         // Receive data from scene manager (character and level info)
         this.selectedCharacter = data?.character || 'tireek';
-        this.selectedLevelId = data?.levelId || 0;
+        this.selectedLevelId = data?.levelId || 1;
         
-        console.log(`🎯 GameScene initialized with character: ${this.selectedCharacter}, level: ${this.selectedLevelId}`);
+        console.log(`🎯 GameScene initialized with starting character: ${this.selectedCharacter}, level: ${this.selectedLevelId}`);
         
         // Set current character based on selection
         this.currentCharacterConfig = ALL_CHARACTERS.find(char => char.name === this.selectedCharacter) || ALL_CHARACTERS[0];
         this.currentCharacterIndex = ALL_CHARACTERS.findIndex(char => char.name === this.selectedCharacter);
+        
+        // Initialize both characters in the dual system
+        this.characters.tireek.isActive = (this.selectedCharacter === 'tireek');
+        this.characters.tryston.isActive = (this.selectedCharacter === 'tryston');
         
         // Update game state
         window.gameState.currentGame.character = this.selectedCharacter;
@@ -35,6 +64,32 @@ class GameScene extends Phaser.Scene {
     }
     
     // Old loading methods removed - assets now loaded in PreloadScene
+    
+    // ========================================
+    // MANAGER INITIALIZATION
+    // ========================================
+    
+    initializeManagers() {
+        console.log('🎮 Initializing all managers...');
+        
+        // Core managers
+        this.gameStateManager = new GameStateManager(this);
+        this.environmentManager = new EnvironmentManager(this);
+        this.audioManager = new AudioManager(this);
+        this.uiManager = new UIManager(this);
+        this.inputManager = new InputManager(this);
+        
+        // World and level management
+        this.worldManager = new WorldManager(this);
+        this.levelManager = new LevelManager(this);
+        
+        // Gameplay systems
+        this.dialogueManager = new DialogueManager(this);
+        this.sceneElementManager = new SceneElementManager(this);
+        this.itemPickupManager = new ItemPickupManager(this);
+        
+        console.log('🎮 All managers initialized');
+    }
 
     create() {
         console.log(`🎯 GameScene: Creating level ${this.selectedLevelId} with ${this.selectedCharacter}`);
@@ -42,13 +97,8 @@ class GameScene extends Phaser.Scene {
         // No loading needed - assets already loaded in PreloadScene
         this.isLoading = false;
         
-        // Initialize managers first
-        this.environmentManager = new EnvironmentManager(this);
-        this.audioManager = new AudioManager(this);
-        this.uiManager = new UIManager(this);
-        this.inputManager = new InputManager(this);
-        this.itemPickupManager = new ItemPickupManager(this);
-        this.levelManager = new LevelManager(this);
+        // Initialize all managers
+        this.initializeManagers();
         
         // Initialize environment (sets up world bounds and backgrounds)
         this.environmentManager.initializeWorld();
@@ -57,13 +107,37 @@ class GameScene extends Phaser.Scene {
         const streetBounds = this.environmentManager.getStreetBounds();
         this.streetTopLimit = streetBounds.top;
         this.streetBottomLimit = streetBounds.bottom;
-
-        // Create player with selected character
-        this.createPlayer(this.currentCharacterConfig);
-        console.log(`🎯 Player created with character: ${this.currentCharacterConfig.name}`);
         
-        // Set up camera using EnvironmentManager
-        this.environmentManager.setupCameraForEnvironment(this.cameras.main, this.player);
+        // Pass street bounds to input manager for vertical movement limits
+        this.inputManager.setStreetBounds(this.streetTopLimit, this.streetBottomLimit);
+        console.log(`🎯 GameScene: Street bounds configured: ${this.streetTopLimit} - ${this.streetBottomLimit}`);
+        
+        // Initialize level system FIRST (loads world and sets spawn point)
+        this.initializeLevelSystem();
+        
+        // Initialize Level 1 world (must be before createBothCharacters)
+        this.initializeLevel1World();
+
+        // Create both character sprites (only active one will be visible)
+        this.createBothCharacters();
+        console.log(`🎯 Both characters created, active: ${this.selectedCharacter}`);
+        
+        // Set up camera to follow player
+        console.log(`📷 📊 Setting up camera. Player position: x=${this.player.x}, y=${this.player.y}`);
+        console.log(`📷 📊 World bounds: ${this.physics.world.bounds.x}, ${this.physics.world.bounds.y}, ${this.physics.world.bounds.width}x${this.physics.world.bounds.height}`);
+        
+        // Set camera bounds to match world bounds
+        this.cameras.main.setBounds(
+            this.physics.world.bounds.x,
+            this.physics.world.bounds.y,
+            this.physics.world.bounds.width,
+            this.physics.world.bounds.height
+        );
+        
+        // Make camera follow player
+        this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+        
+        console.log(`📷 📊 Camera setup complete. Camera scroll: x=${this.cameras.main.scrollX}, y=${this.cameras.main.scrollY}`);
 
         // Input is now handled by InputManager
 
@@ -110,7 +184,14 @@ class GameScene extends Phaser.Scene {
         this.uiManager.initializeUI();
         
         // Initialize health bar with full health (fix: bar wasn't showing initially)
-        this.uiManager.updateHealthBar(this.playerCurrentHealth, this.playerMaxHealth);
+        this.uiManager.updateHealthBar(this.characters[this.selectedCharacter].health, this.characters[this.selectedCharacter].maxHealth);
+        
+        // Initialize dual character health display
+        this.uiManager.updateDualCharacterHealth(
+            this.characters.tireek.health, 
+            this.characters.tryston.health, 
+            this.selectedCharacter
+        );
         
         // Remove the duplicate health bar creation since UI manager handles it
         // this.createHealthBar(); // Commented out - UI manager handles health bar
@@ -126,30 +207,108 @@ class GameScene extends Phaser.Scene {
         // Initialize item pickup system
         this.itemPickupManager.createParticleEffect();
         
-        // Initialize level system
-        this.initializeLevelSystem();
+        // Note: Level system and Level 1 world already initialized before createBothCharacters()
         
         // Start background music immediately (assets already loaded)
         console.log('🎵 Starting background music...');
         this.audioManager.playBackgroundMusic('combatMusic');
+        
+        // Fade in from black
+        this.cameras.main.fadeIn(1000, 0, 0, 0);
+        console.log('🎬 Fading in to gameplay...');
     }
 
+    initializeLevel1World() {
+        console.log('🌍 Initializing Level 1 world...');
+        
+        // Load metadata
+        const metadata = this.cache.json.get('level_1_metadata');
+        if (!metadata) {
+            console.error('🌍 Level 1 metadata not found!');
+            return;
+        }
+        
+        console.log('🌍 📊 Metadata loaded:', metadata);
+        console.log('🌍 📊 Number of segments:', metadata.segments.length);
+        metadata.segments.forEach((seg, i) => {
+            console.log(`🌍 📊 Segment ${i}: x=${seg.x_position}, width=${seg.width}, filename=${seg.filename}`);
+        });
+        
+        // Calculate spawn point
+        const spawnX = metadata.segments[0].x_position + 100;
+        const spawnY = 600;
+        console.log(`🌍 📊 Calculated spawn point: x=${spawnX}, y=${spawnY}`);
+        
+        // Register Level 1 world configuration
+        const worldConfig = {
+            segments: metadata.segments,
+            metadataPath: 'assets/backgrounds/level_1_segments/metadata.json',
+            spawnPoint: {
+                x: spawnX,
+                y: spawnY
+            },
+            bounds: {
+                x: metadata.segments[0].x_position,
+                y: 0,
+                width: metadata.segments[metadata.segments.length - 1].x_position + 
+                      metadata.segments[metadata.segments.length - 1].width - 
+                      metadata.segments[0].x_position,
+                height: 720
+            }
+        };
+        
+        console.log('🌍 📊 World config:', worldConfig);
+        
+        // Register and create the world
+        this.worldManager.registerWorld('level_1', worldConfig);
+        this.worldManager.createWorld('level_1');
+        
+        console.log('🌍 Level 1 world initialized successfully');
+    }
+
+    createBothCharacters() {
+        console.log('👥 Creating both character sprites...');
+        
+        // Create both character sprites
+        Object.keys(this.characters).forEach(charName => {
+            const charData = this.characters[charName];
+            const spriteKey = `${charName}_idle`;
+            
+            // Get spawn point from world manager
+            const spawnPoint = this.worldManager.getSpawnPoint();
+            console.log(`👥 📊 Creating ${charName} at spawn point: x=${spawnPoint.x}, y=${spawnPoint.y}`);
+            const sprite = this.physics.add.sprite(spawnPoint.x, spawnPoint.y, spriteKey);
+            console.log(`👥 📊 ${charName} sprite created at: x=${sprite.x}, y=${sprite.y}`);
+            
+            // Initialize ground tracking for jumps
+            sprite.lastGroundY = sprite.y;
+            
+            // Scale up the player sprite (back to original)
+            sprite.setScale(3.0);
+            
+            // Set player physics properties
+            sprite.setBounce(0.2);
+            sprite.setCollideWorldBounds(true);
+            
+            // Store character config on sprite
+            sprite.characterConfig = charData.config;
+            sprite.characterName = charName;
+            
+            // Set visibility based on active state
+            sprite.setVisible(charData.isActive);
+            
+            // Store sprite reference
+            charData.sprite = sprite;
+        });
+        
+        // Set the active character as the main player reference
+        this.player = this.characters[this.selectedCharacter].sprite;
+        console.log(`👥 Active player set to: ${this.selectedCharacter}`);
+    }
+    
     createPlayer(characterConfig) {
-        // Create player sprite using the idle animation
-        this.player = this.physics.add.sprite(200, 600, `${characterConfig.name}_idle`);
-        
-        // Initialize ground tracking for jumps
-        this.player.lastGroundY = this.player.y;
-        
-        // Scale up the player sprite (restored from original)
-        this.player.setScale(3.0);
-        
-        // Set player physics properties
-        this.player.setBounce(0.2);
-        this.player.setCollideWorldBounds(true);
-        
-        // Store character config on player
-        this.player.characterConfig = characterConfig;
+        // Legacy method - now handled by createBothCharacters
+        console.log('⚠️ createPlayer called - use createBothCharacters instead');
     }
 
     createCharacterAnimations(characterConfig) {
@@ -209,30 +368,59 @@ class GameScene extends Phaser.Scene {
         });
     }
 
-    switchCharacter() {
-        // Only allow switching if not in middle of an action
-        if (this.animationManager.animationLocked || this.isJumping || 
+    switchCharacter(forceSwitch = false) {
+        // Check cooldown unless forced switch
+        const currentTime = this.time.now;
+        if (!forceSwitch && currentTime - this.characters[this.selectedCharacter].lastSwitchTime < this.switchCooldown) {
+            console.log("Character switch on cooldown");
+            return false;
+        }
+        
+        // Only allow switching if not in middle of an action (unless forced)
+        if (!forceSwitch && (this.animationManager.animationLocked || this.isJumping || 
             this.animationManager.currentState === 'attack' || 
-            this.animationManager.currentState === 'airkick') {
+            this.animationManager.currentState === 'airkick')) {
             console.log("Cannot switch characters during action");
-            return;
+            return false;
         }
 
-        // Switch to next character
-        this.currentCharacterIndex = (this.currentCharacterIndex + 1) % ALL_CHARACTERS.length;
-        this.currentCharacterConfig = ALL_CHARACTERS[this.currentCharacterIndex];
+        // Determine which character to switch to
+        const currentChar = this.selectedCharacter;
+        const newChar = currentChar === 'tireek' ? 'tryston' : 'tireek';
+        
+        // Check if the other character is available (not dead)
+        if (this.characters[newChar].health <= 0) {
+            console.log(`Cannot switch to ${newChar} - character is down`);
+            return false;
+        }
+        
+        console.log(`Switching from ${currentChar} to ${newChar}`);
         
         // Store current position and state
         const currentX = this.player.x;
         const currentY = this.player.y;
         const currentScale = this.player.scaleX;
         const currentFlipX = this.player.flipX;
+        const currentVelX = this.player.body.velocity.x;
+        const currentVelY = this.player.body.velocity.y;
         
-        // Destroy current player sprite
-        this.player.destroy();
+        // Hide current character
+        this.characters[currentChar].sprite.setVisible(false);
+        this.characters[currentChar].isActive = false;
+        this.characters[currentChar].lastSwitchTime = currentTime;
         
-        // Create new player with new character
-        this.createPlayer(this.currentCharacterConfig);
+        // Show new character
+        this.characters[newChar].sprite.setVisible(true);
+        this.characters[newChar].isActive = true;
+        this.characters[newChar].lastSwitchTime = currentTime;
+        
+        // Update references
+        this.selectedCharacter = newChar;
+        this.currentCharacterConfig = this.characters[newChar].config;
+        this.player = this.characters[newChar].sprite;
+        
+        // Clear any damage tint from previous hit
+        this.player.clearTint();
         
         // Restore position and state
         this.player.x = currentX;
@@ -240,6 +428,8 @@ class GameScene extends Phaser.Scene {
         this.player.setScale(currentScale);
         this.player.setFlipX(currentFlipX);
         this.player.lastGroundY = currentY;
+        this.player.setVelocityX(currentVelX);
+        this.player.setVelocityY(currentVelY);
         
         // Reset animation manager with new character
         this.animationManager = new AnimationStateManager(this.player);
@@ -256,7 +446,18 @@ class GameScene extends Phaser.Scene {
         // Re-setup camera follow
         this.cameras.main.startFollow(this.player, true, 0.1, 0);
         
-        console.log(`Switched to character: ${this.currentCharacterConfig.name}`);
+        // Update health bar with new character's health
+        this.uiManager.updateHealthBar(this.characters[newChar].health, this.characters[newChar].maxHealth);
+        
+        // Update dual character health display
+        this.uiManager.updateDualCharacterHealth(
+            this.characters.tireek.health, 
+            this.characters.tryston.health, 
+            this.selectedCharacter
+        );
+        
+        console.log(`✅ Switched to character: ${this.currentCharacterConfig.name}`);
+        return true;
     }
     
     createDebugUI() {
@@ -373,9 +574,10 @@ class GameScene extends Phaser.Scene {
             playerBounds.height
         );
         
-        // Draw player collision radius
+        // Draw player collision radius (scaled)
+        const playerBodyRadius = HitboxHelpers.getBodyRadius(this.player, 'player');
         this.debugGraphics.lineStyle(1, 0x00ff00, HITBOX_CONFIG.debug.bodyCollisionAlpha); // Light green for collision radius
-        this.debugGraphics.strokeCircle(this.player.x, this.player.y, HITBOX_CONFIG.player.bodyRadius);
+        this.debugGraphics.strokeCircle(this.player.x, this.player.y, playerBodyRadius);
         
         // Draw player attack hitbox if attacking
         const playerHitbox = this.getPlayerAttackHitbox();
@@ -403,9 +605,10 @@ class GameScene extends Phaser.Scene {
                 enemyBounds.height
             );
             
-            // Enemy collision radius
+            // Enemy collision radius (scaled)
+            const enemyBodyRadius = HitboxHelpers.getBodyRadius(enemy.sprite, 'enemy');
             this.debugGraphics.lineStyle(1, 0xff8800, HITBOX_CONFIG.debug.bodyCollisionAlpha); // Light orange for collision radius
-            this.debugGraphics.strokeCircle(enemy.sprite.x, enemy.sprite.y, HITBOX_CONFIG.enemy.bodyRadius);
+            this.debugGraphics.strokeCircle(enemy.sprite.x, enemy.sprite.y, enemyBodyRadius);
             
             // Enemy detection range
             this.debugGraphics.lineStyle(1, 0x888888, 0.3); // Gray, semi-transparent
@@ -451,16 +654,49 @@ class GameScene extends Phaser.Scene {
     spawnEnemy() {
         if (this.enemies.length >= this.maxEnemies) return;
         
-        // Get camera bounds for spawning
+        // Get camera and player bounds for spawning
         const cameraX = this.cameras.main.scrollX;
         const cameraWidth = this.cameras.main.width;
+        const playerX = this.player.x;
         
-        // Favor spawning from the right side (70% right, 30% left)
-        const spawnOnLeft = Math.random() < 0.3;
+        // Determine if player is in first segment (near level start)
+        const worldBounds = this.physics.world.bounds;
+        const firstSegmentEnd = worldBounds.x + 1200; // First segment is 1200px wide
+        const isPlayerInFirstSegment = playerX < firstSegmentEnd;
+        
+        // If player is in first segment, only spawn from right
+        // Otherwise, favor spawning from the right side (70% right, 30% left)
+        let spawnOnLeft = false;
+        if (!isPlayerInFirstSegment) {
+            spawnOnLeft = Math.random() < 0.3;
+        }
+        
         const spawnX = spawnOnLeft ? 
             cameraX - ENEMY_CONFIG.spawnOffscreenDistance : // Spawn off-screen to the left
             cameraX + cameraWidth + ENEMY_CONFIG.spawnOffscreenDistance; // Spawn off-screen to the right
-            
+        
+        // Check if spawn position is too close to player
+        const minDistanceFromPlayer = 400; // Minimum safe distance
+        const distanceToPlayer = Math.abs(spawnX - playerX);
+        
+        if (distanceToPlayer < minDistanceFromPlayer) {
+            console.log(`⚠️ Spawn too close to player (${distanceToPlayer}px), skipping...`);
+            return; // Skip this spawn
+        }
+        
+        // Check if spawn position collides with existing enemies
+        const minDistanceFromEnemies = 300; // Minimum safe distance from other enemies
+        const tooCloseToEnemy = this.enemies.some(enemy => {
+            if (!enemy.sprite) return false;
+            const distanceToEnemy = Math.abs(spawnX - enemy.sprite.x);
+            return distanceToEnemy < minDistanceFromEnemies;
+        });
+        
+        if (tooCloseToEnemy) {
+            console.log(`⚠️ Spawn too close to existing enemy, skipping...`);
+            return; // Skip this spawn
+        }
+        
         // Random Y position within street bounds with some variety
         let spawnY = this.streetTopLimit + Math.random() * (this.streetBottomLimit - this.streetTopLimit);
         
@@ -500,7 +736,9 @@ class GameScene extends Phaser.Scene {
         enemy.setPlayer(this.player);
         this.enemies.push(enemy);
         
-        console.log(`Spawned ${enemyConfig.name} enemy at (${spawnX}, ${spawnY}) - Total enemies: ${this.enemies.length}`);
+        const spawnDirection = spawnOnLeft ? 'LEFT' : 'RIGHT';
+        const distFromPlayer = Math.abs(spawnX - playerX);
+        console.log(`✅ Spawned ${enemyConfig.name} from ${spawnDirection} at x=${Math.round(spawnX)} (${Math.round(distFromPlayer)}px from player) - Total: ${this.enemies.length}`);
     }
     
     updateEnemies(time, delta) {
@@ -553,22 +791,29 @@ class GameScene extends Phaser.Scene {
         if ((this.animationManager.currentState === 'attack' || this.animationManager.currentState === 'airkick') && this.animationManager.animationLocked) {
             const playerHitbox = this.getPlayerAttackHitbox();
             if (playerHitbox) {
+                // Get scaled hitbox for vertical tolerance
+                const scaledHitbox = HitboxHelpers.getPlayerAttackHitbox(this.player);
+                const isAirKick = this.animationManager.currentState === 'airkick';
+                const verticalTolerance = isAirKick ? 
+                    scaledHitbox.airkickVerticalTolerance : 
+                    scaledHitbox.verticalTolerance;
+                
                 this.enemies.forEach(enemy => {
                     if (enemy.state !== ENEMY_STATES.DEAD) {
                         // Check vertical distance first (street-level tolerance)
                         const verticalDistance = Math.abs(this.player.y - enemy.sprite.y);
-                        const isAirKick = this.animationManager.currentState === 'airkick';
-                        const verticalTolerance = isAirKick ? 
-                            HITBOX_CONFIG.player.airkickVerticalTolerance : 
-                            HITBOX_CONFIG.player.verticalTolerance;
                         
                         if (verticalDistance <= verticalTolerance && this.isColliding(playerHitbox, enemy.sprite)) {
-                            enemy.takeDamage(1);
-                            console.log(`Player hit enemy with ${this.animationManager.currentState}! (Vertical dist: ${Math.round(verticalDistance)})`);
-                            
-                            // Track enemy defeat for level progression
-                            if (enemy.state === ENEMY_STATES.DEAD && this.levelManager) {
-                                this.levelManager.onEnemyDefeated();
+                            // Only deal damage if this enemy hasn't been hit by this attack yet
+                            if (!enemy.hitByCurrentAttack) {
+                                enemy.takeDamage(10); // Deal 10 damage per hit (same as enemy health)
+                                enemy.hitByCurrentAttack = true; // Mark as hit by this attack
+                                console.log(`Player hit enemy with ${this.animationManager.currentState}! (Vertical dist: ${Math.round(verticalDistance)})`);
+                                
+                                // Track enemy defeat for level progression
+                                if (enemy.state === ENEMY_STATES.DEAD && this.levelManager) {
+                                    this.levelManager.onEnemyDefeated();
+                                }
                             }
                         }
                     }
@@ -591,18 +836,21 @@ class GameScene extends Phaser.Scene {
             return null;
         }
         
+        // Get scaled hitbox dimensions based on current sprite scale
+        const scaledHitbox = HitboxHelpers.getPlayerAttackHitbox(this.player);
+        
         // Use different hitbox config for air kicks vs ground attacks
         const isAirKick = this.animationManager.currentState === 'airkick';
         const config = isAirKick ? {
-            width: HITBOX_CONFIG.player.airkickWidth,
-            height: HITBOX_CONFIG.player.airkickHeight,
-            offsetX: HITBOX_CONFIG.player.airkickOffsetX,
-            offsetY: HITBOX_CONFIG.player.airkickOffsetY
+            width: scaledHitbox.airkickWidth,
+            height: scaledHitbox.airkickHeight,
+            offsetX: scaledHitbox.airkickOffsetX,
+            offsetY: scaledHitbox.airkickOffsetY
         } : {
-            width: HITBOX_CONFIG.player.attackWidth,
-            height: HITBOX_CONFIG.player.attackHeight,
-            offsetX: HITBOX_CONFIG.player.attackOffsetX,
-            offsetY: HITBOX_CONFIG.player.attackOffsetY
+            width: scaledHitbox.attackWidth,
+            height: scaledHitbox.attackHeight,
+            offsetX: scaledHitbox.attackOffsetX,
+            offsetY: scaledHitbox.attackOffsetY
         };
         
         // Calculate proper offset based on facing direction
@@ -633,11 +881,19 @@ class GameScene extends Phaser.Scene {
     }
     
     playerTakeDamage(damage) {
-        // Reduce player health
-        this.playerCurrentHealth = Math.max(0, this.playerCurrentHealth - damage);
+        // Reduce active character's health
+        const activeChar = this.characters[this.selectedCharacter];
+        activeChar.health = Math.max(0, activeChar.health - damage);
         
         // Update health bar
-        this.uiManager.updateHealthBar(this.playerCurrentHealth, this.playerMaxHealth);
+        this.uiManager.updateHealthBar(activeChar.health, activeChar.maxHealth);
+        
+        // Update dual character health display
+        this.uiManager.updateDualCharacterHealth(
+            this.characters.tireek.health, 
+            this.characters.tryston.health, 
+            this.selectedCharacter
+        );
         
         // Play player hit sound effect
         this.audioManager.playPlayerHit();
@@ -648,23 +904,60 @@ class GameScene extends Phaser.Scene {
             this.player.setTint(0xffffff);
         });
         
-        console.log(`Player takes ${damage} damage! Health: ${this.playerCurrentHealth}/${this.playerMaxHealth}`);
+        console.log(`${this.selectedCharacter} takes ${damage} damage! Health: ${activeChar.health}/${activeChar.maxHealth}`);
         
-        // Check for game over
-        if (this.playerCurrentHealth <= 0) {
-            this.handlePlayerDeath();
+        // Check for auto-switch when health is low
+        const healthPercent = (activeChar.health / activeChar.maxHealth) * 100;
+        if (healthPercent <= this.autoSwitchThreshold) {
+            console.log(`Auto-switching due to low health: ${healthPercent}%`);
+            this.switchCharacter(true); // Force switch
+        }
+        
+        // Check for game over (both characters dead)
+        if (activeChar.health <= 0) {
+            this.handleCharacterDown();
         }
     }
     
-    handlePlayerDeath() {
-        console.log("Player died!");
-        // Add death effects here later if needed
-        // For now, just reset health after a delay
-        this.time.delayedCall(2000, () => {
-            this.playerCurrentHealth = this.playerMaxHealth;
-            this.uiManager.updateHealthBar(this.playerCurrentHealth, this.playerMaxHealth);
-            console.log("Player respawned!");
+    handleCharacterDown() {
+        const activeChar = this.characters[this.selectedCharacter];
+        console.log(`${this.selectedCharacter} is down!`);
+        
+        // Check if both characters are down
+        const bothDown = this.characters.tireek.health <= 0 && this.characters.tryston.health <= 0;
+        
+        if (bothDown) {
+            console.log("Both characters are down! Game Over!");
+            this.handleGameOver();
+        } else {
+            // Try to switch to the other character
+            const otherChar = this.selectedCharacter === 'tireek' ? 'tryston' : 'tireek';
+            if (this.characters[otherChar].health > 0) {
+                console.log(`Switching to ${otherChar}...`);
+                this.switchCharacter(true);
+            } else {
+                console.log("Both characters are down!");
+                this.handleGameOver();
+            }
+        }
+    }
+    
+    handleGameOver() {
+        console.log("Game Over! Both characters are down!");
+        // Add game over effects here later
+        // For now, just reset both characters after a delay
+        this.time.delayedCall(3000, () => {
+            this.characters.tireek.health = this.characters.tireek.maxHealth;
+            this.characters.tryston.health = this.characters.tryston.maxHealth;
+            this.uiManager.updateHealthBar(this.characters[this.selectedCharacter].health, this.characters[this.selectedCharacter].maxHealth);
+            console.log("Both characters respawned!");
         });
+    }
+    
+    handlePlayerDeath() {
+        // Legacy method - now handled by handleCharacterDown
+        console.log("⚠️ handlePlayerDeath called - use handleCharacterDown instead");
+        this.handleCharacterDown();
     }
     
     checkCharacterCollisions() {
@@ -677,8 +970,10 @@ class GameScene extends Phaser.Scene {
             const deltaY = enemy.sprite.y - this.player.y;
             const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
             
-            // Collision radius (characters can't get closer than this)
-            const collisionRadius = HITBOX_CONFIG.enemy.playerCollisionRadius;
+            // Collision radius (characters can't get closer than this) - use scaled radius
+            const playerRadius = HitboxHelpers.getBodyRadius(this.player, 'player');
+            const enemyRadius = HitboxHelpers.getBodyRadius(enemy.sprite, 'enemy');
+            const collisionRadius = (playerRadius + enemyRadius) / 2; // Average of both radii
             
             if (distance < collisionRadius && distance > 0) {
                 // Calculate how much overlap there is
@@ -747,7 +1042,10 @@ class GameScene extends Phaser.Scene {
                 const deltaY = enemy2.sprite.y - enemy1.sprite.y;
                 const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
                 
-                const collisionRadius = HITBOX_CONFIG.enemy.enemyCollisionRadius;
+                // Use scaled collision radius for enemy-to-enemy
+                const enemy1Radius = HitboxHelpers.getBodyRadius(enemy1.sprite, 'enemy');
+                const enemy2Radius = HitboxHelpers.getBodyRadius(enemy2.sprite, 'enemy');
+                const collisionRadius = (enemy1Radius + enemy2Radius) / 2; // Average of both radii
                 
                 if (distance < collisionRadius && distance > 0) {
                     // Calculate how much overlap there is
@@ -802,6 +1100,14 @@ class GameScene extends Phaser.Scene {
     }
 
     update(time, delta) {
+        // Update health regeneration for inactive character
+        this.updateHealthRegeneration(delta);
+        
+        // Update world manager
+        if (this.worldManager && this.player) {
+            this.worldManager.updateWorld(this.player.x);
+        }
+        
         // Update animation state manager
         this.animationManager.update(delta);
 
@@ -839,6 +1145,11 @@ class GameScene extends Phaser.Scene {
             this.itemPickupManager.update(time, delta, this.player);
         }
         
+        // Update scene element manager
+        if (this.sceneElementManager) {
+            this.sceneElementManager.update(time, delta);
+        }
+        
         // Check combat interactions
         this.checkCombat();
         
@@ -852,22 +1163,49 @@ class GameScene extends Phaser.Scene {
         this.updateUIAndDebugVisuals();
     }
     
+    updateHealthRegeneration(delta) {
+        // Regenerate health for inactive character
+        let didRegenerate = false;
+        
+        Object.keys(this.characters).forEach(charName => {
+            const charData = this.characters[charName];
+            if (!charData.isActive && charData.health < charData.maxHealth && charData.health > 0) {
+                // Regenerate health over time
+                const regenAmount = (charData.regenRate * delta) / 1000; // Convert to per-second
+                charData.health = Math.min(charData.maxHealth, charData.health + regenAmount);
+                didRegenerate = true;
+            }
+        });
+        
+        // Update dual character health bars if any regeneration occurred
+        if (didRegenerate && this.uiManager) {
+            this.uiManager.updateDualCharacterHealth(
+                this.characters.tireek.health,
+                this.characters.tryston.health,
+                this.selectedCharacter
+            );
+        }
+    }
+    
     updateUIAndDebugVisuals() {
         // Update debug display if in debug mode
         if (this.uiManager.debugMode) {
             // Prepare debug data
+            const activeChar = this.characters[this.selectedCharacter];
             const debugData = {
                 state: this.animationManager.currentState,
                 locked: this.animationManager.animationLocked,
                 timer: Math.round(this.animationManager.lockTimer),
                 velX: Math.round(this.player.body.velocity.x),
                 charName: this.currentCharacterConfig.name,
-                health: this.playerCurrentHealth,
-                maxHealth: this.playerMaxHealth,
+                health: activeChar.health,
+                maxHealth: activeChar.maxHealth,
                 enemies: this.enemies.length,
                 maxEnemies: this.maxEnemies,
                 playerX: this.player.x,
-                playerY: this.player.y
+                playerY: this.player.y,
+                tireekHealth: this.characters.tireek.health,
+                trystonHealth: this.characters.tryston.health
             };
             
             // Update debug display using UIManager
@@ -901,9 +1239,18 @@ class GameScene extends Phaser.Scene {
             onSfxToggle: () => this.audioManager.toggleSoundEffects(),
             onClearEnemies: () => this.clearAllEnemies(),
             onHeal: () => {
-                this.playerCurrentHealth = this.playerMaxHealth;
-                this.uiManager.updateHealthBar(this.playerCurrentHealth, this.playerMaxHealth);
-                console.log("Player healed to full health!");
+                // Heal both characters to full health
+                this.characters.tireek.health = this.characters.tireek.maxHealth;
+                this.characters.tryston.health = this.characters.tryston.maxHealth;
+                
+                // Update UI
+                this.uiManager.updateHealthBar(this.characters[this.selectedCharacter].health, this.characters[this.selectedCharacter].maxHealth);
+                this.uiManager.updateDualCharacterHealth(
+                    this.characters.tireek.health, 
+                    this.characters.tryston.health, 
+                    this.selectedCharacter
+                );
+                console.log("Both characters healed to full health!");
             },
             onSwitchCharacter: () => {
                 this.switchCharacter();
@@ -923,12 +1270,19 @@ class GameScene extends Phaser.Scene {
         });
         
         // Handle attack input using InputManager
-        this.inputManager.handleAttackInput(
+        const attackStarted = this.inputManager.handleAttackInput(
             this.player, 
             this.animationManager, 
             this.isJumping, 
             this.audioManager
         );
+        
+        // Reset hit detection for all enemies when a new attack starts
+        if (attackStarted) {
+            this.enemies.forEach(enemy => {
+                enemy.hitByCurrentAttack = false;
+            });
+        }
         
         // Handle jump input using InputManager (restored original logic)
         if (!this.isJumping) {
@@ -1075,69 +1429,6 @@ class GameScene extends Phaser.Scene {
         console.log(`${reason} - Landed at Y: ${landingY}`);
     }
 
-    createParallaxBackgrounds() {
-        // Create groups for different background layers
-        this.backgroundLayers = {
-            cityscape: this.add.group(),
-            street: this.add.group()
-        };
-        
-        // Create far background cityscape (slower parallax)
-        this.createCityscapeLayer();
-        
-        // Create street layer (normal scrolling speed)
-        this.createStreetLayer();
-    }
-
-    createCityscapeLayer() {
-        // Get cityscape texture dimensions
-        const cityscapeTexture = this.textures.get('cityscape');
-        const textureWidth = cityscapeTexture.source[0].width;
-        const textureHeight = cityscapeTexture.source[0].height;
-        
-        // Scale to fit game height (720px)
-        const scale = 720 / textureHeight;
-        const scaledWidth = textureWidth * scale;
-        
-        // Create enough copies for parallax scrolling
-        const numCopies = Math.ceil(3600 / scaledWidth) + 2;
-        
-        for (let i = 0; i < numCopies; i++) {
-            const bg = this.add.image(i * scaledWidth, 150, 'cityscape');
-            bg.setOrigin(0.5, 0.5);
-            bg.setScale(scale);
-            bg.setDepth(-200);
-            bg.setScrollFactor(0.3);
-            this.backgroundLayers.cityscape.add(bg);
-        }
-        
-        console.log(`Cityscape: ${textureWidth}x${textureHeight}, Scale: ${scale}, Scaled width: ${scaledWidth}`);
-    }
-
-    createStreetLayer() {
-        // Get street texture dimensions
-        const streetTexture = this.textures.get('street');
-        const textureWidth = streetTexture.source[0].width;
-        const textureHeight = streetTexture.source[0].height;
-        
-        // Scale to fit game height (720px)
-        const scale = 720 / textureHeight;
-        const scaledWidth = textureWidth * scale;
-        
-        // Create enough copies for seamless scrolling
-        const numCopies = Math.ceil(3600 / scaledWidth) + 1;
-        
-        for (let i = 0; i < numCopies; i++) {
-            const bg = this.add.image(i * scaledWidth, 360, 'street');
-            bg.setOrigin(0.5, 0.5);
-            bg.setScale(scale);
-            bg.setDepth(-100);
-            bg.setScrollFactor(1.0);
-            this.backgroundLayers.street.add(bg);
-        }
-        
-        console.log(`Street: ${textureWidth}x${textureHeight}, Scale: ${scale}, Scaled width: ${scaledWidth}`);
-    }
 
     updatePerspective() {
         // Calculate scale based on Y position (perspective effect)
@@ -1160,8 +1451,15 @@ class GameScene extends Phaser.Scene {
     initializeLevelSystem() {
         console.log('🎮 Initializing level system...');
         
-        // Load the first level
-        this.levelManager.loadLevel(0);
+        // Load level by ID (find the level with id:1, which should be index 0)
+        const levelIndex = LEVEL_CONFIGS.findIndex(l => l.id === this.selectedLevelId);
+        console.log(`🎮 📊 Loading level with id=${this.selectedLevelId}, found at index=${levelIndex}`);
+        
+        if (levelIndex >= 0) {
+            this.levelManager.loadLevel(levelIndex);
+        } else {
+            console.error(`🎮 Level with id ${this.selectedLevelId} not found!`);
+        }
         
         // Set up level manager callbacks
         this.setupLevelManagerCallbacks();
@@ -1234,5 +1532,96 @@ class GameScene extends Phaser.Scene {
                 this.levelManager.getCurrentLevelConfig()?.name || 'Unknown Level'
             );
         }
+    }
+    
+    // ========================================
+    // LEVEL LIFECYCLE METHODS
+    // ========================================
+    
+    onLevelCleanup() {
+        console.log('🎮 GameScene: Cleaning up level...');
+        
+        // Destroy all enemies
+        this.destroyAllEnemies();
+        
+        // Clear all projectiles
+        if (this.weaponManager) {
+            this.weaponManager.clearAllProjectiles();
+        }
+        
+        // Clear item pickups
+        if (this.itemPickupManager) {
+            this.itemPickupManager.clearAllPickups();
+        }
+        
+        // Stop enemy spawning
+        this.isLoading = true; // Stops enemy spawning in update loop
+    }
+    
+    destroyAllEnemies() {
+        if (!this.enemies) return;
+        
+        console.log(`🎮 Destroying ${this.enemies.length} enemies...`);
+        
+        this.enemies.forEach(enemy => {
+            if (enemy.sprite) {
+                enemy.sprite.destroy();
+            }
+        });
+        
+        this.enemies = [];
+    }
+    
+    resetPlayerState() {
+        console.log('🎮 Resetting player state...');
+        
+        // Get spawn point from world manager
+        const spawnPoint = this.worldManager.getSpawnPoint();
+        
+        // Reset both character sprites
+        Object.values(this.characters).forEach(charData => {
+            if (charData.sprite) {
+                charData.sprite.setPosition(spawnPoint.x, spawnPoint.y);
+                charData.sprite.setVelocity(0, 0);
+                charData.sprite.body.reset(spawnPoint.x, spawnPoint.y);
+            }
+        });
+        
+        // Reset player reference
+        this.player.setPosition(spawnPoint.x, spawnPoint.y);
+        this.player.setVelocity(0, 0);
+        this.player.body.reset(spawnPoint.x, spawnPoint.y);
+        
+        // Reset player state
+        this.isJumping = false;
+        this.canDoubleJump = true;
+        this.doubleJumpUsed = false;
+        this.isFacingRight = true;
+        
+        // Partially restore health (75% of max)
+        Object.keys(this.characters).forEach(charName => {
+            const charData = this.characters[charName];
+            charData.health = Math.min(charData.maxHealth, charData.health + (charData.maxHealth * 0.75));
+        });
+        
+        // Update UI
+        if (this.uiManager) {
+            const activeChar = this.characters[this.getActiveCharacterName()];
+            this.uiManager.updateHealthBar(activeChar.health, activeChar.maxHealth);
+            this.uiManager.updateDualCharacterHealth(
+                this.characters.tireek.health,
+                this.characters.tryston.health,
+                this.getActiveCharacterName()
+            );
+        }
+        
+        // Resume gameplay
+        this.isLoading = false;
+        
+        console.log('🎮 Player state reset complete');
+    }
+    
+    getActiveCharacterName() {
+        return Object.keys(this.characters).find(name => this.characters[name].isActive) || 'tireek';
     }
 }

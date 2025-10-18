@@ -13,13 +13,22 @@ class AudioBootScene extends Phaser.Scene {
     }
 
     preload() {
-        console.log('📦 AudioBootScene: Loading only essential UI assets first...');
+        console.log('📦 AudioBootScene: Loading essential assets...');
         
-        // Only load the title card and background in preload - needed for UI creation
+        // Load essential UI assets
         this.load.image('titleCard', 'assets/title/TitleCard.png');
         this.load.image('menuBackground', 'assets/title/MenuBackground.png');
         
-        console.log('📦 AudioBootScene: Essential UI assets loading configured...');
+        // Load character assets immediately - needed for GameScene
+        this.loadAllCharacterAssets();
+        
+        // Load environment assets
+        this.loadAllEnvironmentAssets();
+        
+        // Load weapon and pickup assets
+        this.loadAllGameplayAssets();
+        
+        console.log('📦 AudioBootScene: Essential assets loading configured...');
     }
 
     create() {
@@ -158,23 +167,31 @@ class AudioBootScene extends Phaser.Scene {
         // Check if characters config exists
         if (typeof ALL_CHARACTERS !== 'undefined') {
             ALL_CHARACTERS.forEach(character => {
-                if (character.spritesheets) {
-                    Object.entries(character.spritesheets).forEach(([animKey, path]) => {
+                if (character.spriteSheets) {
+                    Object.entries(character.spriteSheets).forEach(([animKey, path]) => {
                         const spriteKey = `${character.name}_${animKey}`;
-                        this.load.spritesheet(spriteKey, path, character.spriteConfig);
+                        this.load.spritesheet(spriteKey, path, {
+                            frameWidth: character.frameSize.width,
+                            frameHeight: character.frameSize.height
+                        });
                         console.log(`👥 Loading ${spriteKey} from ${path}`);
                     });
                 }
             });
+        } else {
+            console.log('👥 ALL_CHARACTERS is undefined!');
         }
         
         // Also load enemy assets
         if (typeof ALL_ENEMY_TYPES !== 'undefined') {
             ALL_ENEMY_TYPES.forEach(enemy => {
-                if (enemy.spritesheets) {
-                    Object.entries(enemy.spritesheets).forEach(([animKey, path]) => {
+                if (enemy.spriteSheets) {
+                    Object.entries(enemy.spriteSheets).forEach(([animKey, path]) => {
                         const spriteKey = `${enemy.name}_${animKey}`;
-                        this.load.spritesheet(spriteKey, path, enemy.spriteConfig);
+                        this.load.spritesheet(spriteKey, path, {
+                            frameWidth: enemy.frameSize.width,
+                            frameHeight: enemy.frameSize.height
+                        });
                         console.log(`🦹 Loading ${spriteKey} from ${path}`);
                     });
                 }
@@ -187,11 +204,25 @@ class AudioBootScene extends Phaser.Scene {
     loadAllEnvironmentAssets() {
         console.log('🌍 Loading ALL environment assets...');
         
-        // Background assets
-        this.load.image('streetBackground', 'assets/backgrounds/Background.png');
-        this.load.image('streetTexture', 'assets/backgrounds/StreetTexture.png');
+        // Load level 1 background segments
+        this.loadLevel1Background();
         
         console.log('🌍 All environment assets configured for loading');
+    }
+
+    loadLevel1Background() {
+        console.log('🌍 Loading Level 1 background segments...');
+        
+        // Load each segment
+        for (let i = 0; i < 5; i++) {
+            const segmentKey = `level_1_segment_${i.toString().padStart(3, '0')}`;
+            const segmentPath = `assets/backgrounds/level_1_segments/segment_${i.toString().padStart(3, '0')}.png`;
+            this.load.image(segmentKey, segmentPath);
+            console.log(`🌍 Loading segment: ${segmentKey} from ${segmentPath}`);
+        }
+        
+        // Load metadata
+        this.load.json('level_1_metadata', 'assets/backgrounds/level_1_segments/metadata.json');
     }
 
     loadAllGameplayAssets() {
@@ -199,7 +230,10 @@ class AudioBootScene extends Phaser.Scene {
         
         // Weapon assets
         this.load.image('vinylWeapon', 'assets/weapons/spritesheets/vinyl weapon.png');
-        this.load.image('vinylWeaponSpinning', 'assets/weapons/spritesheets/vinyl weapon spinning.png');
+        this.load.spritesheet('vinylWeaponSpinning', 'assets/weapons/spritesheets/vinyl weapon spinning.png', {
+            frameWidth: 64,
+            frameHeight: 64
+        });
         
         // Pickup assets
         this.load.image('goldenMicrophone', 'assets/pickups/GoldenMicrophone_64x64.png');
@@ -346,14 +380,8 @@ class AudioBootScene extends Phaser.Scene {
         // Load ALL audio assets for client-side caching
         this.loadAllAudioAssets();
         
-        // Load ALL character assets for client-side caching
-        this.loadAllCharacterAssets();
-        
-        // Load ALL environment assets
-        this.loadAllEnvironmentAssets();
-        
-        // Load ALL weapon and pickup assets
-        this.loadAllGameplayAssets();
+        // Note: Character, environment, and gameplay assets already loaded in preload()
+        console.log('📦 Character, environment, and gameplay assets already loaded in preload()');
         
         // Start the actual loading
         console.log('📦 Starting asset loading with visible progress...');

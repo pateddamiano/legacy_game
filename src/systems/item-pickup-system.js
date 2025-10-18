@@ -234,16 +234,39 @@ class ItemPickup {
     
     applyItemEffect() {
         if (this.typeName === 'HEALTH') {
-            // Heal the player
-            const healedAmount = Math.min(
-                this.itemType.healAmount,
-                this.scene.playerMaxHealth - this.scene.playerCurrentHealth
-            );
-            
-            if (healedAmount > 0) {
-                this.scene.playerCurrentHealth += healedAmount;
-                this.scene.uiManager.updateHealthBar(this.scene.playerCurrentHealth, this.scene.playerMaxHealth);
-                console.log(`💚 Player healed for ${healedAmount} HP! Current: ${this.scene.playerCurrentHealth}/${this.scene.playerMaxHealth}`);
+            // Heal both characters (dual character system)
+            if (this.scene.characters) {
+                // Heal Tireek
+                const tireekHealAmount = Math.min(
+                    this.itemType.healAmount,
+                    this.scene.characters.tireek.maxHealth - this.scene.characters.tireek.health
+                );
+                if (tireekHealAmount > 0) {
+                    this.scene.characters.tireek.health += tireekHealAmount;
+                }
+                
+                // Heal Tryston
+                const trystonHealAmount = Math.min(
+                    this.itemType.healAmount,
+                    this.scene.characters.tryston.maxHealth - this.scene.characters.tryston.health
+                );
+                if (trystonHealAmount > 0) {
+                    this.scene.characters.tryston.health += trystonHealAmount;
+                }
+                
+                // Update UI
+                const activeChar = this.scene.selectedCharacter;
+                this.scene.uiManager.updateHealthBar(
+                    this.scene.characters[activeChar].health, 
+                    this.scene.characters[activeChar].maxHealth
+                );
+                this.scene.uiManager.updateDualCharacterHealth(
+                    this.scene.characters.tireek.health,
+                    this.scene.characters.tryston.health,
+                    activeChar
+                );
+                
+                console.log(`💚 Both characters healed! Tireek: ${this.scene.characters.tireek.health}/100, Tryston: ${this.scene.characters.tryston.health}/100`);
             }
         } else if (this.typeName === 'MICROPHONE') {
             // Award points
@@ -371,9 +394,14 @@ class ItemPickupManager {
         
         // Special logic for health items
         if (itemType === 'HEALTH') {
-            // Don't spawn health if player is at full health
-            if (!config.spawnWhenPlayerHealthFull && this.scene.playerCurrentHealth >= this.scene.playerMaxHealth) {
-                return false;
+            // Don't spawn health if BOTH characters are at full health (dual character system)
+            if (!config.spawnWhenPlayerHealthFull && this.scene.characters) {
+                const tireekFull = this.scene.characters.tireek.health >= this.scene.characters.tireek.maxHealth;
+                const trystonFull = this.scene.characters.tryston.health >= this.scene.characters.tryston.maxHealth;
+                
+                if (tireekFull && trystonFull) {
+                    return false; // Both at full health, no need for pickup
+                }
             }
         }
         
@@ -417,8 +445,8 @@ class ItemPickupManager {
             
             // Random Y position within street bounds (but off-screen vertically if possible)
             let y;
-            const streetTop = 520;
-            const streetBottom = 650;
+            const streetTop = WORLD_CONFIG.streetTopLimit;
+            const streetBottom = WORLD_CONFIG.streetBottomLimit;
             
             // Try to spawn off-screen vertically first, fall back to street bounds
             if (Math.random() < 0.7) {

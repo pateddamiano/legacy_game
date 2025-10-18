@@ -39,8 +39,9 @@
         <div class="controls">
             <strong>Movement:</strong> Arrow keys ← → ↑ ↓ | <strong>Jump:</strong> SPACEBAR<br>
             <strong>Combat:</strong> X = attack combo (jab → cross → kick) | Q = throw vinyl weapon<br>
-            <strong>Character:</strong> C = switch character | H = heal<br>
-            <strong>System:</strong> D = debug mode | K = clear enemies | M = music | N = SFX
+            <strong>Character:</strong> C = switch character | H = heal both characters<br>
+            <strong>System:</strong> D = debug mode | K = clear enemies | M = music | N = SFX<br>
+            <strong>Auto-Switch:</strong> Characters switch automatically when health drops below 25%
         </div>
     </div>
     
@@ -48,32 +49,37 @@
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
     
     <!-- Configuration Files - Load first -->
-    <script src="src/config/game-config.js?v=1.0.0"></script>
-    <script src="src/config/level-config.js?v=1.0.0"></script>
+    <script src="src/config/game-config.js?v=2.1.0"></script>
+    <script src="src/config/level-config.js?v=2.0.0"></script>
     
-    <!-- Core System Files - Load before other scripts -->
-    <script src="src/core/GameState.js?v=2.1.0"></script>
-    <script src="src/core/SceneManager.js?v=2.2.0"></script>
+            <!-- Core System Files - Load before other scripts -->
+            <script src="src/core/GameState.js?v=2.1.0"></script>
+            <script src="src/core/GameStateManager.js?v=1.0.0"></script>
+            <script src="src/core/SceneManager.js?v=2.2.0"></script>
     
     <!-- Modular Game Scripts - Load in dependency order -->
     <script src="src/characters/characters.js?v=5.7.0"></script>
     <script src="src/systems/animation-manager.js?v=5.7.0"></script>
     <script src="src/systems/audio-manager.js?v=5.7.0"></script>
-    <script src="src/systems/ui-manager.js?v=6.3.0"></script>
-    <script src="src/systems/environment-manager.js?v=5.7.0"></script>
-    <script src="src/systems/input-manager.js?v=5.7.0"></script>
+    <script src="src/systems/ui-manager.js?v=7.0.0"></script>
+    <script src="src/systems/environment-manager.js?v=6.2.0"></script>
+    <script src="src/systems/world-manager.js?v=1.0.0"></script>
+    <script src="src/systems/dialogue-manager.js?v=1.0.0"></script>
+    <script src="src/systems/scene-element-manager.js?v=1.0.0"></script>
+    <script src="src/systems/input-manager.js?v=6.3.0"></script>
     <script src="src/systems/weapon-system.js?v=5.7.0"></script>
-    <script src="src/systems/enemy-system.js?v=5.7.0"></script>
-    <script src="src/systems/item-pickup-system.js?v=6.4.0"></script>
-    <script src="src/systems/level-manager.js?v=1.0.0"></script>
+    <script src="src/systems/enemy-system.js?v=6.3.0"></script>
+    <script src="src/systems/item-pickup-system.js?v=6.6.0"></script>
+    <script src="src/systems/level-manager.js?v=2.0.0"></script>
     
     <!-- New Scene Files - Load before game.js -->
     <script src="src/scenes/AudioBootScene.js?v=2.8.0"></script>
-    <script src="src/scenes/MainMenuScene.js?v=4.0.0"></script>
+    <script src="src/scenes/MainMenuScene.js?v=4.1.0"></script>
+    <script src="src/scenes/IntroDialogueScene.js?v=1.0.0"></script>
     <script src="src/scenes/CharacterSelectScene.js?v=4.0.0"></script>
-    <script src="src/scenes/game-scene.js?v=6.1.0"></script>
+    <script src="src/scenes/game-scene.js?v=6.7.0"></script>
     
     <!-- Main Game Entry Point - Load last -->
-    <script src="game.js?v=6.7.0"></script>
+    <script src="game.js?v=6.8.0"></script>
 </body>
 </html> 

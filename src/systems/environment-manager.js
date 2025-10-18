@@ -12,15 +12,15 @@ class EnvironmentManager {
         this.cityscapeLayer = null;
         this.streetLayer = null;
         
-        // World configuration
-        this.worldWidth = 3600;
-        this.worldHeight = 720;
+        // World configuration - read from centralized WORLD_CONFIG
+        this.worldWidth = WORLD_CONFIG.width;
+        this.worldHeight = WORLD_CONFIG.height;
         
-        // Street/movement boundaries for beat 'em up style
-        this.streetTopLimit = 520;
-        this.streetBottomLimit = 650;
+        // Street/movement boundaries - read from centralized WORLD_CONFIG
+        this.streetTopLimit = WORLD_CONFIG.streetTopLimit;
+        this.streetBottomLimit = WORLD_CONFIG.streetBottomLimit;
         
-        // Perspective settings (restored from original)
+        // Perspective settings (back to original scale)
         this.perspectiveConfig = {
             minScale: 2.2,      // Scale at top of street (buildings)
             maxScale: 2.8,      // Scale at bottom of street (camera)

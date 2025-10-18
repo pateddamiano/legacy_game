@@ -19,12 +19,12 @@ const config = {
     },
     // New scene order for proper game flow - Start with audio activation
     scene: [
-        AudioBootScene,     // Audio activation and essential asset loading
-        MainMenuScene,      // Main menu navigation
-        CharacterSelectScene, // Character selection
-        GameScene           // Actual gameplay (will be refactored)
+        AudioBootScene,      // Audio activation and essential asset loading
+        MainMenuScene,       // Main menu navigation
+        IntroDialogueScene,  // Story intro before gameplay
+        GameScene            // Actual gameplay with dynamic character switching
         // TODO: Add more scenes as we build them:
-        // GameIntroScene, VictoryScene, GameOverScene, etc.
+        // VictoryScene, GameOverScene, etc.
     ]
 };
 

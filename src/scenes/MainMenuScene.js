@@ -617,22 +617,33 @@ class MainMenuScene extends Phaser.Scene {
     // ========================================
     
     startGame() {
-        console.log('🎮 Starting new game...');
+        console.log('🎮 Starting new game with dynamic character switching...');
         
-        // Keep menu music playing during character selection
-        // (Don't stop it - let it continue playing)
+        // Stop menu music before transitioning
+        this.stopBackgroundMusic();
         
-        // Go to character selection - use direct scene transition for reliability
-        console.log('🎮 Transitioning directly to CharacterSelectScene');
-        try {
-            this.scene.start('CharacterSelectScene');
-            console.log('🎮 ✅ Direct transition to CharacterSelectScene initiated');
-        } catch (error) {
-            console.error('🎮 ❌ Direct transition failed, trying SceneManager:', error);
-            // Fallback to scene manager
-            window.sceneManager.currentScene = 'MainMenuScene'; // Fix tracking
-            window.sceneManager.goToCharacterSelect();
-        }
+        // Fade to black
+        console.log('🎮 Fading to black...');
+        this.cameras.main.fadeOut(1000, 0, 0, 0);
+        
+        // After fade completes, go to intro dialogue
+        this.cameras.main.once('camerafadeoutcomplete', () => {
+            console.log('🎮 Fade complete, transitioning to IntroDialogueScene');
+            try {
+                this.scene.start('IntroDialogueScene', { 
+                    character: 'tireek', // Start with Tireek as default
+                    levelId: 1 
+                });
+                console.log('🎮 ✅ Transition to IntroDialogueScene initiated');
+            } catch (error) {
+                console.error('🎮 ❌ Transition failed:', error);
+                // Fallback - go directly to game
+                this.scene.start('GameScene', { 
+                    character: 'tireek',
+                    levelId: 1 
+                });
+            }
+        });
     }
     
     continueGame() {
@@ -731,13 +742,13 @@ class MainMenuScene extends Phaser.Scene {
             }
         ).setOrigin(0.5);
         
-        // Music volume control
+        // Music volume control - much better spacing
         const musicVolumeText = this.add.text(
-            this.cameras.main.centerX - 150,
+            this.cameras.main.centerX - 160,
             this.cameras.main.centerY - 60,
             'Music Volume:',
             {
-                fontSize: '24px',
+                fontSize: '18px',
                 fill: '#FFD700',
                 fontFamily: 'Arial',
                 fontWeight: 'bold'
@@ -747,25 +758,13 @@ class MainMenuScene extends Phaser.Scene {
         // Current music volume (get from global music if it exists)
         const currentVolume = window.menuMusic ? Math.round(window.menuMusic.volume * 100) : 100;
         
-        const volumeText = this.add.text(
-            this.cameras.main.centerX + 80,
-            this.cameras.main.centerY - 60,
-            `${currentVolume}%`,
-            {
-                fontSize: '24px',
-                fill: '#FF6B35',
-                fontFamily: 'Arial',
-                fontWeight: 'bold'
-            }
-        ).setOrigin(0.5);
-        
         // Volume decrease button
         const volumeDownBtn = this.add.text(
-            this.cameras.main.centerX - 20,
+            this.cameras.main.centerX + 2,
             this.cameras.main.centerY - 60,
             '◀',
             {
-                fontSize: '32px',
+                fontSize: '24px',
                 fill: '#FFD700',
                 fontFamily: 'Arial'
             }
@@ -780,13 +779,26 @@ class MainMenuScene extends Phaser.Scene {
              }
          });
         
+        // Volume percentage text - centered
+        const volumeText = this.add.text(
+            this.cameras.main.centerX + 80, 
+            this.cameras.main.centerY - 60,
+            `${currentVolume}%`,
+            {
+                fontSize: '18px',
+                fill: '#FF6B35',
+                fontFamily: 'Arial',
+                fontWeight: 'bold'
+            }
+        ).setOrigin(0.5);
+        
         // Volume increase button
         const volumeUpBtn = this.add.text(
-            this.cameras.main.centerX + 140,
+            this.cameras.main.centerX + 160,
             this.cameras.main.centerY - 60,
             '▶',
             {
-                fontSize: '32px',
+                fontSize: '24px',
                 fill: '#FFD700',
                 fontFamily: 'Arial'
             }

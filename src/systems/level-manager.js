@@ -58,6 +58,9 @@ class LevelManager {
         this.levelStartTime = this.scene.time.now;
         this.enemiesDefeated = 0;
         
+        // Load world for this level
+        this.loadLevelWorld(levelConfig);
+        
         // Apply level configuration
         this.applyLevelConfiguration(levelConfig);
         
@@ -68,6 +71,106 @@ class LevelManager {
         this.startLevelMusic(levelConfig.music);
         
         return true;
+    }
+    
+    loadLevelWorld(levelConfig) {
+        console.log(`🌍 Loading world for level: ${levelConfig.name}`);
+        
+        // Get world manager from scene
+        const worldManager = this.scene.worldManager;
+        if (!worldManager) {
+            console.error('🌍 World manager not found in scene!');
+            return;
+        }
+        
+        // Create world configuration based on level config
+        const worldId = `level_${levelConfig.id}`;
+        
+        // Check if world is already loaded
+        if (worldManager.isWorldLoaded(worldId)) {
+            console.log(`🌍 World ${worldId} already loaded, switching to it`);
+            worldManager.switchWorld(worldId);
+            return;
+        }
+        
+        // Load world assets if needed
+        if (levelConfig.background && levelConfig.background.includes('segments')) {
+            // Load segmented background world
+            this.loadSegmentedWorld(worldId, levelConfig);
+        } else {
+            // Load simple background world
+            this.loadSimpleWorld(worldId, levelConfig);
+        }
+    }
+    
+    loadSegmentedWorld(worldId, levelConfig) {
+        console.log(`🌍 Loading segmented world: ${worldId}`);
+        
+        const worldManager = this.scene.worldManager;
+        
+        // Load metadata
+        const metadataPath = `assets/backgrounds/${levelConfig.background}/metadata.json`;
+        this.scene.load.json(`${worldId}_metadata`, metadataPath);
+        
+        // Wait for metadata to load
+        this.scene.load.once('filecomplete-json-' + `${worldId}_metadata`, (key, type, data) => {
+            console.log(`🌍 Metadata loaded for ${worldId}:`, data);
+            
+            // Create world configuration
+            const worldConfig = {
+                segments: data.segments,
+                metadataPath: metadataPath,
+                spawnPoint: {
+                    x: data.segments[0].x_position + 100,
+                    y: 600
+                },
+                bounds: {
+                    x: data.segments[0].x_position,
+                    y: 0,
+                    width: data.segments[data.segments.length - 1].x_position + 
+                          data.segments[data.segments.length - 1].width - 
+                          data.segments[0].x_position,
+                    height: 720
+                }
+            };
+            
+            // Register and create the world
+            worldManager.registerWorld(worldId, worldConfig);
+            worldManager.createWorld(worldId);
+            
+            console.log(`🌍 Segmented world ${worldId} created successfully`);
+        });
+    }
+    
+    loadSimpleWorld(worldId, levelConfig) {
+        console.log(`🌍 Loading simple world: ${worldId}`);
+        
+        const worldManager = this.scene.worldManager;
+        
+        // Create simple world configuration
+        const worldConfig = {
+            bounds: {
+                x: 0,
+                y: 0,
+                width: 3600, // Default width
+                height: 720
+            },
+            spawnPoint: {
+                x: 200,
+                y: 600
+            },
+            assets: levelConfig.background ? [{
+                type: 'image',
+                key: levelConfig.background,
+                path: `assets/backgrounds/${levelConfig.background}.png`
+            }] : []
+        };
+        
+        // Register and create the world
+        worldManager.registerWorld(worldId, worldConfig);
+        worldManager.createWorld(worldId);
+        
+        console.log(`🌍 Simple world ${worldId} created successfully`);
     }
     
     applyLevelConfiguration(levelConfig) {
@@ -100,18 +203,10 @@ class LevelManager {
     // ========================================
     
     checkLevelConditions() {
-        const currentLevelConfig = this.levels[this.currentLevel];
-        if (!currentLevelConfig) return;
-        
-        // Check if ready for next level
-        if (this.isReadyForNextLevel(currentLevelConfig)) {
-            this.advanceLevel();
-        }
-        
-        // Check if boss should spawn
-        if (this.shouldSpawnBoss(currentLevelConfig)) {
-            this.triggerBossSpawn(currentLevelConfig);
-        }
+        // OLD TUTORIAL CODE DISABLED
+        // No automatic level progression or boss spawning
+        // This prevents the game from changing levels after killing enemies
+        return;
     }
     
     isReadyForNextLevel(levelConfig) {
@@ -161,13 +256,157 @@ class LevelManager {
     }
     
     transitionToLevel(levelId) {
-        // Fade out current level
+        console.log(`🎮 Transitioning to level ${levelId}...`);
+        
+        const fromLevel = this.currentLevel;
+        const toLevelConfig = this.levels.find(l => l.id === levelId);
+        
+        if (!toLevelConfig) {
+            console.error(`🎮 Level ${levelId} not found!`);
+            return;
+        }
+        
+        // Update game state
+        if (this.scene.gameStateManager) {
+            this.scene.gameStateManager.startTransition(fromLevel, levelId);
+        }
+        
+        // Phase 1: Show post-level dialogue (if any)
+        const currentLevelConfig = this.levels[this.currentLevel];
+        if (currentLevelConfig && currentLevelConfig.postDialogue) {
+            console.log('🎮 Showing post-level dialogue...');
+            this.showPostDialogue(currentLevelConfig, () => {
+                this.continueTransition(levelId, toLevelConfig);
+            });
+        } else {
+            this.continueTransition(levelId, toLevelConfig);
+        }
+    }
+    
+    continueTransition(levelId, toLevelConfig) {
+        // Phase 2: Award rewards
+        const currentLevelConfig = this.levels[this.currentLevel];
+        if (currentLevelConfig && currentLevelConfig.rewards) {
+            this.awardRewards(currentLevelConfig.rewards);
+        }
+        
+        // Phase 3: Fade out
+        if (this.scene.gameStateManager) {
+            this.scene.gameStateManager.setTransitionPhase('fadeOut');
+        }
+        
         this.scene.cameras.main.fadeOut(1000, 0, 0, 0);
         
-        // Wait for fade out, then load new level
+        // Phase 4: Cleanup and load
         this.scene.time.delayedCall(1000, () => {
-            this.loadLevel(levelId);
-            this.scene.cameras.main.fadeIn(1000, 0, 0, 0);
+            this.cleanupLevel();
+            this.loadNewLevel(levelId, toLevelConfig);
+        });
+    }
+    
+    cleanupLevel() {
+        console.log('🎮 Cleaning up current level...');
+        
+        if (this.scene.gameStateManager) {
+            this.scene.gameStateManager.setTransitionPhase('cleanup');
+        }
+        
+        // Call scene cleanup
+        if (this.scene.onLevelCleanup) {
+            this.scene.onLevelCleanup();
+        }
+        
+        // Destroy all enemies
+        if (this.scene.destroyAllEnemies) {
+            this.scene.destroyAllEnemies();
+        }
+        
+        // Clear projectiles
+        if (this.scene.weaponManager) {
+            this.scene.weaponManager.clearAllProjectiles();
+        }
+        
+        // Hide current world
+        if (this.scene.worldManager) {
+            const currentWorldId = `level_${this.levels[this.currentLevel].id}`;
+            this.scene.worldManager.hideWorld(currentWorldId);
+        }
+        
+        // Clear scene elements
+        if (this.scene.sceneElementManager) {
+            this.scene.sceneElementManager.clearAll();
+        }
+    }
+    
+    loadNewLevel(levelId, levelConfig) {
+        console.log('🎮 Loading new level...');
+        
+        if (this.scene.gameStateManager) {
+            this.scene.gameStateManager.setTransitionPhase('load');
+        }
+        
+        // Find level index
+        const levelIndex = this.levels.findIndex(l => l.id === levelId);
+        
+        // Load world for new level
+        this.loadLevelWorld(levelConfig);
+        
+        // Wait a bit for world to initialize
+        this.scene.time.delayedCall(500, () => {
+            // Update current level
+            this.currentLevel = levelIndex;
+            this.levelStartTime = this.scene.time.now;
+            this.enemiesDefeated = 0;
+            
+            // Apply level configuration
+            this.applyLevelConfiguration(levelConfig);
+            
+            // Reset player position
+            if (this.scene.resetPlayerState) {
+                this.scene.resetPlayerState();
+            }
+            
+            // Show pre-level dialogue
+            if (levelConfig.preDialogue) {
+                this.showPreDialogue(levelConfig, () => {
+                    this.completeTransition(levelConfig);
+                });
+            } else {
+                this.completeTransition(levelConfig);
+            }
+        });
+    }
+    
+    completeTransition(levelConfig) {
+        console.log('🎮 Completing transition...');
+        
+        // Phase 5: Fade in
+        if (this.scene.gameStateManager) {
+            this.scene.gameStateManager.setTransitionPhase('fadeIn');
+        }
+        
+        this.scene.cameras.main.fadeIn(1000, 0, 0, 0);
+        
+        // Phase 6: Start gameplay
+        this.scene.time.delayedCall(1000, () => {
+            // Trigger level start dialogue
+            this.triggerDialogue('level_start');
+            
+            // Start level-specific music
+            this.startLevelMusic(levelConfig.music);
+            
+            // Create scene elements
+            if (levelConfig.sceneElements && this.scene.sceneElementManager) {
+                this.scene.sceneElementManager.createElementsFromConfig(levelConfig.sceneElements);
+            }
+            
+            // End transition state
+            if (this.scene.gameStateManager) {
+                this.scene.gameStateManager.endTransition();
+                this.scene.gameStateManager.setCurrentLevel(levelConfig.id, levelConfig);
+            }
+            
+            console.log('🎮 Transition complete!');
         });
     }
     
@@ -177,29 +416,17 @@ class LevelManager {
     
     onEnemyDefeated() {
         this.enemiesDefeated++;
-        
-        // Check for dialogue triggers
-        this.checkDialogueTriggers();
-        
-        // Check level progression
-        this.checkLevelConditions();
-        
         console.log(`🎮 Enemy defeated! Total: ${this.enemiesDefeated}`);
+        
+        // OLD TUTORIAL CODE DISABLED - No automatic level progression
+        // Players stay on current level and fight continuously
+        // Level changes must be triggered manually or through other game events
     }
     
     checkDialogueTriggers() {
-        const currentLevelConfig = this.levels[this.currentLevel];
-        if (!currentLevelConfig) return;
-        
-        // Check for enemy kill count triggers
-        currentLevelConfig.dialogue.forEach(dialogue => {
-            if (dialogue.trigger.startsWith('enemy_killed_')) {
-                const requiredKills = parseInt(dialogue.trigger.split('_')[2]);
-                if (this.enemiesDefeated === requiredKills) {
-                    this.triggerDialogue(dialogue.trigger);
-                }
-            }
-        });
+        // OLD TUTORIAL CODE DISABLED
+        // No automatic dialogue based on enemy kill counts
+        return;
     }
     
     // ========================================
@@ -247,10 +474,84 @@ class LevelManager {
         
         console.log(`💬 Triggering dialogue: ${dialogue.text}`);
         
-        // Signal to game scene that dialogue should be shown
-        if (this.scene.onDialogueTriggered) {
+        // Use dialogue manager if available
+        if (this.scene.dialogueManager) {
+            this.scene.dialogueManager.showDialogue(dialogue);
+        } else if (this.scene.onDialogueTriggered) {
+            // Fallback to legacy method
             this.scene.onDialogueTriggered(dialogue);
         }
+    }
+    
+    showPreDialogue(levelConfig, callback) {
+        if (!levelConfig.preDialogue || levelConfig.preDialogue.length === 0) {
+            if (callback) callback();
+            return;
+        }
+        
+        console.log('💬 Showing pre-level dialogue...');
+        
+        if (this.scene.dialogueManager) {
+            // Queue all pre-dialogue
+            levelConfig.preDialogue.forEach((dialogue, index) => {
+                if (index === levelConfig.preDialogue.length - 1) {
+                    // Last dialogue should call callback
+                    this.scene.dialogueManager.showDialogue(dialogue, callback);
+                } else {
+                    this.scene.dialogueManager.queueDialogue(dialogue);
+                }
+            });
+        } else if (callback) {
+            callback();
+        }
+    }
+    
+    showPostDialogue(levelConfig, callback) {
+        if (!levelConfig.postDialogue || levelConfig.postDialogue.length === 0) {
+            if (callback) callback();
+            return;
+        }
+        
+        console.log('💬 Showing post-level dialogue...');
+        
+        if (this.scene.dialogueManager) {
+            // Queue all post-dialogue
+            levelConfig.postDialogue.forEach((dialogue, index) => {
+                if (index === levelConfig.postDialogue.length - 1) {
+                    // Last dialogue should call callback
+                    this.scene.dialogueManager.showDialogue(dialogue, callback);
+                } else {
+                    this.scene.dialogueManager.queueDialogue(dialogue);
+                }
+            });
+        } else if (callback) {
+            callback();
+        }
+    }
+    
+    awardRewards(rewards) {
+        console.log('🎮 Awarding rewards:', rewards);
+        
+        // Award experience
+        if (rewards.experience && this.scene.gameStateManager) {
+            this.scene.gameStateManager.addExperience(rewards.experience);
+        }
+        
+        // Award items
+        if (rewards.items && this.scene.gameStateManager) {
+            rewards.items.forEach(item => {
+                this.scene.gameStateManager.addItem(item);
+            });
+        }
+        
+        // Award unlockables
+        if (rewards.unlockables && this.scene.gameStateManager) {
+            rewards.unlockables.forEach(unlock => {
+                this.scene.gameStateManager.addUnlock(unlock);
+            });
+        }
+        
+        // TODO: Show rewards UI
     }
     
     // ========================================
