@@ -213,16 +213,16 @@ class AudioBootScene extends Phaser.Scene {
     loadLevel1Background() {
         console.log('🌍 Loading Level 1 background segments...');
         
-        // Load each segment
-        for (let i = 0; i < 5; i++) {
+        // Load metadata first to get the number of segments dynamically
+        this.load.json('level_1_metadata', 'assets/backgrounds/level_1_segments/metadata.json');
+        
+        // For now, load all 8 segments (updated from 5 to handle new wider background)
+        for (let i = 0; i < 8; i++) {
             const segmentKey = `level_1_segment_${i.toString().padStart(3, '0')}`;
             const segmentPath = `assets/backgrounds/level_1_segments/segment_${i.toString().padStart(3, '0')}.png`;
             this.load.image(segmentKey, segmentPath);
             console.log(`🌍 Loading segment: ${segmentKey} from ${segmentPath}`);
         }
-        
-        // Load metadata
-        this.load.json('level_1_metadata', 'assets/backgrounds/level_1_segments/metadata.json');
     }
 
     loadAllGameplayAssets() {

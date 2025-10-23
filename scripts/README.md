@@ -49,10 +49,10 @@ this.backgroundLoader.updateBackground(cameraX);
 ## Level 1 Implementation
 
 ### Current Setup
-- **Background**: `level1_background_street.png` (18432x2400px)
-- **Scaled**: 5529x720px (fits game height)
-- **Segments**: 5 segments (4 full + 1 partial)
-- **World Bounds**: 5529px wide
+- **Background**: `level1_background_street.png` (30965x2400px)
+- **Scaled**: 9289x720px (fits game height)
+- **Segments**: 8 segments (7 full + 1 partial)
+- **World Bounds**: 9289px wide
 
 ### Integration
 - Loaded in `AudioBootScene.loadAllEnvironmentAssets()`
@@ -126,6 +126,9 @@ assets/
 │       ├── segment_002.png
 │       ├── segment_003.png
 │       ├── segment_004.png
+│       ├── segment_005.png
+│       ├── segment_006.png
+│       ├── segment_007.png
 │       └── metadata.json
 scripts/
 ├── background_segmenter.py
