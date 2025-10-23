@@ -18,7 +18,6 @@ const WEAPON_CONFIG = {
         cooldown: 5000, // 5 seconds in milliseconds
         size: { width: 64, height: 64 },
         hitbox: { width: 64, height: 64 }, // Increased hitbox for easier hits
-        sound: 'vinylThrow', // Sound effect when thrown
         animations: {
             spinning: { frames: 4, frameRate: 20, repeat: -1 }
         },
@@ -42,6 +41,7 @@ class Projectile {
         this.speed = weaponConfig.speed;
         this.range = weaponConfig.range;
         this.active = true;
+        this.throwSound = null; // Store reference to the sound
         
         // Create projectile sprite
         this.sprite = scene.physics.add.sprite(x, y, weaponConfig.spinningKey);
@@ -60,6 +60,15 @@ class Projectile {
         
         // Play spinning animation
         this.sprite.anims.play(`${weaponConfig.name.toLowerCase().replace(' ', '_')}_spinning`, true);
+        
+        // Play throw sound and keep it playing until hit/disappear
+        if (this.scene.sound && this.scene.cache.audio.has('weaponRecordThrow')) {
+            this.throwSound = this.scene.sound.add('weaponRecordThrow', {
+                volume: 0.3,
+                loop: false
+            });
+            this.throwSound.play();
+        }
         
         console.log(`🎯 ${weaponConfig.name} projectile created at (${x}, ${y}) going ${direction > 0 ? 'right' : 'left'}`);
     }
@@ -82,16 +91,28 @@ class Projectile {
     }
     
     destroy() {
+        // Stop the throw sound if it's still playing
+        if (this.throwSound && this.throwSound.isPlaying) {
+            this.throwSound.stop();
+        }
+        
         if (this.sprite && this.sprite.active) {
             this.sprite.destroy();
         }
         this.active = false;
+        
         console.log(`🎯 Projectile destroyed`);
     }
     
     // Called when projectile hits an enemy
     onHit(enemy) {
         console.log(`🎯 Projectile hit enemy for ${this.damage} damage!`);
+        
+        // Stop the throw sound immediately on hit
+        if (this.throwSound && this.throwSound.isPlaying) {
+            this.throwSound.stop();
+        }
+        
         this.destroy();
         return this.damage;
     }
@@ -162,24 +183,24 @@ class WeaponManager {
     
     createWeaponUI() {
         const uiX = 20;
-        const uiY = 120; // Below health bar
-        const centerX = uiX + 30;
-        const centerY = uiY + 30;
-        const radius = 35;
+        const uiY = 130; // Below health bar (adjusted for larger health bars)
+        const centerX = uiX + 40; // Adjusted for larger icon
+        const centerY = uiY + 40; // Adjusted for larger icon
+        const radius = 45; // Increased from 35
         
         // Weapon icon background
         this.weaponUI = this.scene.add.group();
         
         // Background circle for weapon icon
         const bg = this.scene.add.circle(centerX, centerY, radius, 0x333333);
-        bg.setStrokeStyle(3, 0x666666);
+        bg.setStrokeStyle(4, 0x666666); // Increased stroke from 3 to 4
         bg.setScrollFactor(0);
         bg.setDepth(1000);
         this.weaponUI.add(bg);
         
         // Weapon icon (static vinyl)
         this.weaponIcon = this.scene.add.image(centerX, centerY, 'vinylWeapon');
-        this.weaponIcon.setScale(0.8);
+        this.weaponIcon.setScale(1.2); // Increased from 0.8
         this.weaponIcon.setScrollFactor(0);
         this.weaponIcon.setDepth(1001);
         this.weaponUI.add(this.weaponIcon);
@@ -248,11 +269,6 @@ class WeaponManager {
         
         // Start cooldown
         this.weaponCooldowns[this.currentWeapon] = this.scene.time.now + weaponConfig.cooldown;
-        
-        // Play sound effect (if audio manager available)
-        if (this.scene.audioManager && weaponConfig.sound) {
-            this.scene.audioManager.playSoundEffect(weaponConfig.sound);
-        }
         
         console.log(`🎯 ${weaponConfig.name} thrown! Cooldown: ${weaponConfig.cooldown}ms`);
         return true;

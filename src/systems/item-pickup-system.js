@@ -23,7 +23,6 @@ const ITEM_TYPES = {
         bobSpeed: 2000,
         spawnWhenPlayerHealthFull: false,
         points: 0,                  // No points for health
-        sound: 'healthPickup',
         renderType: 'graphics',     // Use graphics rendering
         // Graphics rendering function
         createGraphics: function(scene, container) {
@@ -65,7 +64,6 @@ const ITEM_TYPES = {
         bobSpeed: 1500,             // Faster bobbing
         spawnWhenPlayerHealthFull: true, // Always spawn regardless of health
         points: 1,                // Points awarded when collected
-        sound: 'microphonePickup',
         renderType: 'sprite',       // Use sprite rendering
         spriteKey: 'goldenMicrophone',
         spriteScale: 1,          // Scale down the 1024x1024 image
@@ -215,13 +213,8 @@ class ItemPickup {
         
         this.active = false;
         
-        // Handle different item type effects
+        // Handle different item type effects (includes sound effects)
         this.applyItemEffect();
-        
-        // Play pickup sound effect
-        if (this.scene.audioManager && this.itemType.sound) {
-            this.scene.audioManager.playSoundEffect(this.itemType.sound);
-        }
         
         // Create pickup effect
         this.createPickupEffect();
@@ -266,12 +259,23 @@ class ItemPickup {
                     activeChar
                 );
                 
+                // Play health pickup sound
+                if (this.scene.audioManager) {
+                    this.scene.audioManager.playHealthPickup();
+                }
+                
                 console.log(`💚 Both characters healed! Tireek: ${this.scene.characters.tireek.health}/100, Tryston: ${this.scene.characters.tryston.health}/100`);
             }
         } else if (this.typeName === 'MICROPHONE') {
             // Award points
             this.scene.playerScore += this.itemType.points;
             this.scene.uiManager.updateScoreDisplay(this.scene.playerScore);
+            
+            // Play microphone pickup sound
+            if (this.scene.audioManager) {
+                this.scene.audioManager.playMicrophonePickup();
+            }
+            
             console.log(`🎤 Player earned ${this.itemType.points} points! Total: ${this.scene.playerScore}`);
         }
     }

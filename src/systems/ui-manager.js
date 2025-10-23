@@ -110,8 +110,8 @@ class UIManager {
     createDualCharacterHealthDisplay() {
         const displayX = 20;
         const displayY = 20; // Top left corner (was 60, moved up since large bar removed)
-        const barWidth = 120;
-        const barHeight = 15;
+        const barWidth = 160; // Increased from 120
+        const barHeight = 20; // Increased from 15
         const spacing = 10;
         
         // Tireek health bar
@@ -169,8 +169,8 @@ class UIManager {
         this.trystonHealthGraphics.setScrollFactor(0);
         
         // Character labels
-        this.tireekLabel = this.scene.add.text(displayX + 5, displayY - 20, 'TIREEK', {
-            fontSize: '12px',
+        this.tireekLabel = this.scene.add.text(displayX + 5, displayY - 25, 'TIREEK', {
+            fontSize: '14px', // Increased from 12px
             fill: '#FFD700',
             fontFamily: 'Arial',
             fontWeight: 'bold'
@@ -178,8 +178,8 @@ class UIManager {
         this.tireekLabel.setDepth(2003);
         this.tireekLabel.setScrollFactor(0);
         
-        this.trystonLabel = this.scene.add.text(displayX + barWidth + spacing + 5, displayY - 20, 'TRYSTON', {
-            fontSize: '12px',
+        this.trystonLabel = this.scene.add.text(displayX + barWidth + spacing + 5, displayY - 25, 'TRYSTON', {
+            fontSize: '14px', // Increased from 12px
             fill: '#FFD700',
             fontFamily: 'Arial',
             fontWeight: 'bold'
@@ -280,12 +280,12 @@ class UIManager {
         
         // Create the score text first (positioned to the left)
         this.scoreText = this.scene.add.text(-10, 0, '0', {
-            fontSize: '24px',
+            fontSize: '32px', // Increased from 24px
             fill: '#FFD700',  // Golden color
             fontFamily: 'Courier New, monospace',
             fontWeight: 'bold',
             stroke: '#000000',
-            strokeThickness: 2,
+            strokeThickness: 3, // Increased from 2
             shadow: {
                 offsetX: 2,
                 offsetY: 2,
@@ -298,8 +298,8 @@ class UIManager {
         this.scoreText.setOrigin(1, 0.5); // Right-aligned, vertically centered
         
         // Create the golden microphone sprite (positioned to the right of the text)
-        this.scoreMicrophone = this.scene.add.sprite(-60, 0, 'goldenMicrophone');
-        this.scoreMicrophone.setScale(0.5); // Scale down the 64x64 image to 32x32
+        this.scoreMicrophone = this.scene.add.sprite(-75, 0, 'goldenMicrophone');
+        this.scoreMicrophone.setScale(0.8); // Increased from 0.5 (64x64 image to ~51x51)
         this.scoreMicrophone.setOrigin(0, 0.5); // Left-aligned, vertically centered
         
         // Add both elements to the container

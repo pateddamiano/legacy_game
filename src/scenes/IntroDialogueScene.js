@@ -19,25 +19,49 @@ class IntroDialogueScene extends Phaser.Scene {
         console.log(`💬 IntroDialogueScene: Init with character=${this.selectedCharacter}, level=${this.selectedLevelId}`);
     }
 
+    preload() {
+        console.log('💬 IntroDialogueScene: Loading dialogue assets...');
+        
+        // Load character portraits
+        this.load.image('dialogueTireek', 'assets/dialogue_objects/characters/tireek.png');
+        this.load.image('dialogueTryston', 'assets/dialogue_objects/characters/tryston.png');
+        
+        // Load music studio background
+        this.load.image('musicStudio', 'assets/dialogue_objects/backgrounds/music_studio.png');
+    }
+
     create() {
         console.log('💬 IntroDialogueScene: Creating intro dialogue...');
 
-        // Black background
-        this.cameras.main.setBackgroundColor('#000000');
+        const centerX = this.cameras.main.width / 2;
+        const centerY = this.cameras.main.height / 2;
 
-        // Placeholder dialogue lines
+        // Add music studio background
+        this.add.image(centerX, centerY, 'musicStudio').setOrigin(0.5, 0.5).setDepth(0);
+
+        // Add character portraits
+        this.createCharacterPortraits();
+        
+        // Add cinematic black bars (letterbox)
+        this.createCinematicBars();
+
+        // Dialogue lines
         this.dialogueLines = [
             {
-                speaker: 'NARRATOR',
-                text: '[Placeholder] The streets have taken everything from you...'
-            },
-            {
-                speaker: 'NARRATOR',
-                text: '[Placeholder] Time to take it back. One block at a time.'
+                speaker: 'TRYSTON',
+                text: 'Yo… someone jacked the drive with the album!'
             },
             {
                 speaker: 'TIREEK',
-                text: '[Placeholder] Let\'s do this.'
+                text: 'Nah, that\'s not just a leaker — this feels intentional.'
+            },
+            {
+                speaker: 'TRYSTON',
+                text: 'Without that album, we\'re ghosts. Our voice, our story — gone.'
+            },
+            {
+                speaker: 'TIREEK',
+                text: 'Then we get it back. Every track. Every bar. One fight at a time.'
             }
         ];
 
@@ -61,31 +85,87 @@ class IntroDialogueScene extends Phaser.Scene {
                 fontSize: '20px',
                 color: '#888888'
             }
-        ).setOrigin(0.5);
+        ).setOrigin(0.5).setDepth(11);
+
+        // Start background music - 'fade' music
+        console.log('🎵 Starting fade music for dialogue scene...');
+        // Get the audio manager from the game scene (it's shared across scenes)
+        const gameScene = this.scene.get('GameScene');
+        if (gameScene && gameScene.audioManager) {
+            gameScene.audioManager.playBackgroundMusic('fadeMusic');
+        } else {
+            // If GameScene isn't available, create a temporary audio manager
+            const tempAudioManager = new AudioManager(this);
+            tempAudioManager.playBackgroundMusic('fadeMusic');
+        }
 
         // Fade in from black
         this.cameras.main.fadeIn(1000, 0, 0, 0);
+    }
+
+    createCharacterPortraits() {
+        const screenWidth = this.cameras.main.width;
+        const screenHeight = this.cameras.main.height;
+        const centerX = screenWidth / 2;
+        
+        // Tireek on the left (closer to center, moved down)
+        this.tireekPortrait = this.add.image(centerX - 300, screenHeight / 2 + 50, 'dialogueTireek');
+        this.tireekPortrait.setOrigin(0.5, 0.5);
+        // Scale to fit nicely (adjust as needed based on image size)
+        const tireekScale = Math.min(screenHeight * 0.7 / this.tireekPortrait.height, 450 / this.tireekPortrait.width);
+        this.tireekPortrait.setScale(tireekScale);
+        this.tireekPortrait.setDepth(1);
+        
+        // Avery/Tryston on the right (flipped horizontally, closer to center, moved down)
+        this.trystonPortrait = this.add.image(centerX + 300, screenHeight / 2 + 50, 'dialogueTryston');
+        this.trystonPortrait.setOrigin(0.5, 0.5);
+        this.trystonPortrait.setFlipX(true); // Flip horizontally
+        // Scale to fit nicely (adjust as needed based on image size)
+        const trystonScale = Math.min(screenHeight * 0.7 / this.trystonPortrait.height, 450 / this.trystonPortrait.width);
+        this.trystonPortrait.setScale(trystonScale);
+        this.trystonPortrait.setDepth(1);
+        
+        console.log('💬 Character portraits created: Tireek (left), Avery (right, flipped)');
+    }
+    
+    createCinematicBars() {
+        const screenWidth = this.cameras.main.width;
+        const screenHeight = this.cameras.main.height;
+        const barHeight = 100; // Height of each black bar
+        
+        // Top black bar
+        this.topBar = this.add.rectangle(0, 0, screenWidth, barHeight, 0x000000);
+        this.topBar.setOrigin(0, 0);
+        this.topBar.setDepth(5);
+        
+        // Bottom black bar
+        this.bottomBar = this.add.rectangle(0, screenHeight - barHeight, screenWidth, barHeight, 0x000000);
+        this.bottomBar.setOrigin(0, 0);
+        this.bottomBar.setDepth(5);
+        
+        console.log('💬 Cinematic black bars added');
     }
 
     createDialogueUI() {
         const centerX = this.cameras.main.width / 2;
         const centerY = this.cameras.main.height / 2;
 
-        // Dialogue box background (centered, large)
+        // Dialogue box background (centered, smaller horizontally, moved down further) - set depth above characters and bars
         this.dialogueBox = this.add.rectangle(
             centerX,
-            centerY + 150,
-            1000,
+            centerY + 230,
+            700,
             200,
             0x000000,
-            0.8
+            0.9
         );
         this.dialogueBox.setStrokeStyle(3, 0xFFD700);
+        this.dialogueBox.setDepth(10);
 
-        // Speaker name
+        // Speaker name - above dialogue box (moved down further)
         this.speakerText = this.add.text(
-            centerX - 480,
-            centerY + 60,
+            centerX - 330,
+            centerY + 140,
             '',
             {
                 fontFamily: 'Arial',
@@ -94,19 +174,21 @@ class IntroDialogueScene extends Phaser.Scene {
                 fontStyle: 'bold'
             }
         );
+        this.speakerText.setDepth(11);
 
-        // Dialogue text
+        // Dialogue text (moved down further)
         this.messageText = this.add.text(
-            centerX - 480,
-            centerY + 100,
+            centerX - 330,
+            centerY + 180,
             '',
             {
                 fontFamily: 'Arial',
-                fontSize: '28px',
+                fontSize: '26px',
                 color: '#FFFFFF',
-                wordWrap: { width: 950 }
+                wordWrap: { width: 650 }
             }
         );
+        this.messageText.setDepth(11);
     }
 
     showNextLine() {

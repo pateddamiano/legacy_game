@@ -174,7 +174,7 @@ class WorldManager {
      * @param {Object} layer - Layer configuration
      */
     createLayer(worldId, layer) {
-        console.log(`🌍 Creating layer: ${layer.name} for ${worldId}`);
+        console.log(`🌍 Creating layer: ${layer.name} for ${worldId}, type: ${layer.type}`);
         
         const layerGroup = this.scene.add.group();
         
@@ -187,6 +187,7 @@ class WorldManager {
         }
         
         this.activeLayers.set(`${worldId}_${layer.name}`, layerGroup);
+        console.log(`🌍 Layer ${layer.name} created with ${layerGroup.getChildren().length} elements`);
     }
 
     /**
@@ -196,25 +197,54 @@ class WorldManager {
      * @param {Phaser.GameObjects.Group} layerGroup - Layer group
      */
     createParallaxLayer(worldId, layer, layerGroup) {
+        console.log(`🌍 Creating parallax layer: ${layer.name} with texture: ${layer.texture}`);
+        
+        // Check if texture exists
+        if (!this.scene.textures.exists(layer.texture)) {
+            console.error(`🌍 Texture ${layer.texture} not found! Available textures:`, Object.keys(this.scene.textures.list));
+            return;
+        }
+        
         const texture = this.scene.textures.get(layer.texture);
         const textureWidth = texture.source[0].width;
         const textureHeight = texture.source[0].height;
         
+        console.log(`🌍 Texture dimensions: ${textureWidth}x${textureHeight}`);
+        
         const scale = this.gameHeight / textureHeight;
         const scaledWidth = textureWidth * scale;
         
-        const numCopies = Math.ceil(3600 / scaledWidth) + 2;
+        console.log(`🌍 Scaled dimensions: ${scaledWidth}x${this.gameHeight} (scale: ${scale})`);
+        
+        // Get world width from config or default to 3600
+        const world = this.worlds.get(worldId);
+        const worldWidth = world?.config?.bounds?.width || 3600;
+        
+        console.log(`🌍 World width: ${worldWidth}px`);
+        
+        // Calculate number of copies needed to cover the world width
+        const numCopies = Math.ceil(worldWidth / scaledWidth) + 4; // Extra copies for smooth scrolling
+        
+        console.log(`🌍 Creating ${numCopies} copies of background`);
         
         for (let i = 0; i < numCopies; i++) {
-            const bg = this.scene.add.image(i * scaledWidth, layer.y || 150, layer.texture);
-            bg.setOrigin(0.5, 0.5);
+            const bg = this.scene.add.image(i * scaledWidth, layer.y || 360, layer.texture);
+            bg.setOrigin(0, 0.5); // Left origin for seamless tiling
             bg.setScale(scale);
             bg.setDepth(layer.depth || -200);
             bg.setScrollFactor(layer.scrollFactor || 0.3);
+            
+            // Add alpha blending for smooth transitions
+            if (layer.blendAlpha !== undefined) {
+                bg.setAlpha(layer.blendAlpha);
+            }
+            
             layerGroup.add(bg);
+            
+            console.log(`🌍 Created background tile ${i} at x: ${i * scaledWidth}, depth: ${layer.depth || -200}`);
         }
         
-        console.log(`🌍 Created parallax layer: ${layer.name} with ${numCopies} copies`);
+        console.log(`🌍 Created parallax layer: ${layer.name} with ${numCopies} copies, width: ${scaledWidth}px`);
     }
 
     /**

@@ -28,7 +28,7 @@ const ENEMY_STATES = {
 
 const ENEMY_CONFIG = {
     // 👹 SPAWNING BEHAVIOR
-    spawnInterval: 1200,        // milliseconds between enemy spawns (lower = more frequent)
+    spawnInterval: 800,         // milliseconds between enemy spawns (lower = more frequent) - INCREASED from 1200
     maxEnemiesOnScreen: 5,      // maximum enemies allowed at once (higher = more chaos)
     spawnOffscreenDistance: 50, // how far offscreen enemies spawn (higher = more spawn time)
     
@@ -38,7 +38,7 @@ const ENEMY_CONFIG = {
     verticalMoveSpeed: 2,       // speed for up/down movement (beat 'em up style)
     
     // 🧠 AI BEHAVIOR
-    detectionRange: 800,        // distance at which enemies notice player (higher = more aggressive)
+    detectionRange: 1200,       // distance at which enemies notice player (higher = more aggressive) - INCREASED from 800
     attackRange: 140,           // distance at which enemies can attack (lower = need to get closer)
     attackCooldown: 250,       // milliseconds between enemy attacks (lower = more frequent attacks)
     deadZoneHorizontal: 60,     // prevents jittering when close to player horizontally
@@ -50,11 +50,11 @@ const ENEMY_CONFIG = {
     damageFlashTime: 100,       // duration of damage flash effect (ms) - visual feedback
     
     // 📏 SCALING & SIZE
-    minScale: 2.0,              // enemy scale at top of street (perspective effect)
-    maxScale: 2.5,              // enemy scale at bottom of street (closer to camera)
+    minScale: 2.904,            // enemy scale at top of street (perspective effect) - 45% bigger (was 2.0)
+    maxScale: 3.63,             // enemy scale at bottom of street (closer to camera) - 45% bigger (was 2.5)
     
     // ⚔️ COMBAT
-    playerDamage: 5,           // damage enemies deal to player (higher = more punishing)
+    playerDamage: 10,          // damage enemies deal to player (DOUBLED from 5 - more punishing!)
     playerFlashTime: 200,       // player damage flash duration (ms) - visual feedback
     attackWindupDelay: 300,     // delay before attack actually hits (ms) - gives player time to react
     
@@ -81,9 +81,9 @@ const ENEMY_TYPE_CONFIGS = {
         health: 10,                    // Weak but numerous
         speed: 300,                   // Slow, shambling movement
         attackCooldown: 300,         // Slower attacks
-        playerDamage: 1,             // Less damage
+        playerDamage: 2,             // Less damage (DOUBLED from 1)
         attackTypes: ['jab', 'bottle_attack'],
-        detectionRange: 600,         // Less aggressive - shorter detection range
+        detectionRange: 900,         // Less aggressive - shorter detection range (increased from 600)
         description: "Weak but numerous crackhead enemies"
     },
     
@@ -92,9 +92,9 @@ const ENEMY_TYPE_CONFIGS = {
         health: 15,                   // Medium health
         speed: 250,                   // Faster than crackhead
         attackCooldown: 250,         // Standard attack speed
-        playerDamage: 2,             // Medium damage
+        playerDamage: 4,             // Medium damage (DOUBLED from 2)
         attackTypes: ['knife_hit'],
-        detectionRange: 800,         // Standard detection range
+        detectionRange: 1200,        // Standard detection range (increased from 800)
         description: "Medium difficulty thug with knife attacks"
     },
     
@@ -103,9 +103,9 @@ const ENEMY_TYPE_CONFIGS = {
         health: 20,                   // Higher health
         speed: 200,                   // Fast movement
         attackCooldown: 200,         // Faster attacks
-        playerDamage: 3,             // Higher damage
+        playerDamage: 6,             // Higher damage (DOUBLED from 3)
         attackTypes: ['enemy_punch'],
-        detectionRange: 1000,        // More aggressive - longer detection range
+        detectionRange: 1500,        // More aggressive - longer detection range (increased from 1000)
         description: "Harder thug with powerful punch attacks"
     }
 };
@@ -123,7 +123,7 @@ class Enemy {
         
         // Create sprite
         this.sprite = scene.physics.add.sprite(x, y, `${characterConfig.name}_idle`);
-        this.sprite.setScale(2.0); // Back to original scale
+        this.sprite.setScale(2.904); // 45% bigger than original (2.42 * 1.2)
         this.sprite.setDepth(1000 - y);
         this.sprite.setBounce(0.2);
         this.sprite.setCollideWorldBounds(true);
@@ -149,6 +149,9 @@ class Enemy {
         
         // Help calling flag
         this.hasCalledForHelp = false;
+        
+        // Attack hit tracking
+        this.hasHitPlayer = false; // Track if current attack has hit player
         
         // Vertical movement tracking
         this.lastPlayerY = 0;
@@ -255,12 +258,6 @@ class Enemy {
                 // Windup complete, now the attack can deal damage
                 this.isWindingUp = false;
                 this.canDealDamage = true;
-                console.log(`Enemy ${this.characterConfig.name} windup complete - attack is now active:`, {
-                    isWindingUp: this.isWindingUp,
-                    canDealDamage: this.canDealDamage,
-                    state: this.state,
-                    animationLocked: this.animationLocked
-                });
             }
         }
         
@@ -660,6 +657,14 @@ class Enemy {
         // Update last attack time
         this.lastAttackTime = this.scene.time.now;
         
+        // Reset hit flag for new attack
+        this.hasHitPlayer = false;
+        
+        // Play enemy attack sound effect (type-specific)
+        if (this.scene.audioManager) {
+            this.scene.audioManager.playEnemyAttack(this.characterConfig.name);
+        }
+        
         console.log(`Enemy ${this.characterConfig.name} starts ${attackType} attack (${windupDelay}ms windup)`);
     }
     
@@ -679,6 +684,11 @@ class Enemy {
         
         if (this.health <= 0) {
             this.setState(ENEMY_STATES.DEAD);
+            
+            // Play enemy death sound effect
+            if (this.scene.audioManager) {
+                this.scene.audioManager.playEnemyDeath();
+            }
             
             // Different death effects based on enemy type
             if (this.characterConfig.name === 'crackhead') {
@@ -706,26 +716,10 @@ class Enemy {
     }
     
     getAttackHitbox() {
-        // Debug logging to see what's happening
-        console.log(`Enemy ${this.characterConfig.name} getAttackHitbox check:`, {
-            state: this.state,
-            animationLocked: this.animationLocked,
-            canDealDamage: this.canDealDamage,
-            isWindingUp: this.isWindingUp,
-            windupTimer: this.windupTimer
-        });
-        
         // Only return hitbox if attacking, animation is locked, AND windup is complete
         if (this.state !== ENEMY_STATES.ATTACKING || !this.animationLocked || !this.canDealDamage) {
-            console.log(`Enemy ${this.characterConfig.name} hitbox rejected:`, {
-                stateCheck: this.state !== ENEMY_STATES.ATTACKING,
-                animationCheck: !this.animationLocked,
-                damageCheck: !this.canDealDamage
-            });
             return null;
         }
-        
-        console.log(`Enemy ${this.characterConfig.name} hitbox active! Facing left: ${this.facingLeft}`);
         
         // Get scaled hitbox dimensions based on current sprite scale
         const scaledHitbox = HitboxHelpers.getEnemyAttackHitbox(this.sprite);

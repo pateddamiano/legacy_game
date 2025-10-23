@@ -233,8 +233,8 @@ class InputManager {
             animationManager.lockTimer = 400; // Shorter than ground attacks
             player.anims.play(`${charName}_airkick`, true);
             
-            // Play attack sound effect
-            audioManager.playPlayerAttack();
+            // Play kick sound effect for air kicks
+            audioManager.playPlayerKick();
             
             console.log(`Air kick performed by ${charName}`);
         } else {
@@ -254,8 +254,12 @@ class InputManager {
                 animationManager.lockTimer = animationDuration;
                 player.anims.play(`${charName}_${attackType}`, true);
                 
-                // Play attack sound effect
-                audioManager.playPlayerAttack();
+                // Play appropriate attack sound based on attack type
+                if (attackType.toLowerCase().includes('kick')) {
+                    audioManager.playPlayerKick();
+                } else {
+                    audioManager.playPlayerPunch();
+                }
                 
                 console.log(`Attack started - ${attackType} by ${charName}`);
             }

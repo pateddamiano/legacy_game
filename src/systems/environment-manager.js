@@ -52,6 +52,11 @@ class EnvironmentManager {
     // ========================================
     
     createParallaxBackgrounds() {
+        // DISABLED: Background layers are now created in GameScene
+        // This prevents duplicate background systems from interfering
+        console.log('🎨 Parallax backgrounds creation skipped (handled by GameScene)');
+        return;
+        
         // Create background layers in order (back to front)
         this.createCityscapeLayer();
         this.createStreetLayer();

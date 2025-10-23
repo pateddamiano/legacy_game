@@ -17,6 +17,10 @@ class AudioManager {
         this.musicMuted = false;
         this.sfxMuted = false;
         
+        // Looping SFX (like running sound and ambient sounds)
+        this.runningSoundEffect = null;
+        this.ambianceSoundEffect = null;
+        
         console.log('🎵 AudioManager initialized!');
     }
     
@@ -55,7 +59,22 @@ class AudioManager {
     // ========================================
     
     playBackgroundMusic(musicKey, fadeIn = true) {
-        // Stop current music if playing
+        // Check if the same music is already playing in the global sound manager - if so, don't restart it
+        const existingSound = this.scene.sound.sounds.find(sound => sound.key === musicKey && sound.isPlaying);
+        if (existingSound) {
+            console.log(`🎵 Music '${musicKey}' is already playing globally, continuing...`);
+            // Store reference to existing sound
+            this.currentBackgroundMusic = existingSound;
+            return;
+        }
+        
+        // Check if our local reference is playing
+        if (this.currentBackgroundMusic && this.currentBackgroundMusic.isPlaying && this.currentBackgroundMusic.key === musicKey) {
+            console.log(`🎵 Music '${musicKey}' is already playing, continuing...`);
+            return;
+        }
+        
+        // Stop current music if playing different music
         if (this.currentBackgroundMusic && this.currentBackgroundMusic.isPlaying) {
             this.stopBackgroundMusic(false); // Don't fade out immediately
         }
@@ -156,9 +175,9 @@ class AudioManager {
             return;
         }
         
-        // Check if sound exists
-        if (!this.sound.get(sfxKey)) {
-            console.warn(`🔊 Sound effect not found: ${sfxKey}. Make sure to load it in preload().`);
+        // Check if sound exists in cache
+        if (!this.scene.cache.audio.has(sfxKey)) {
+            console.warn(`🔊 Sound effect not found in cache: ${sfxKey}. Make sure to load it in preload().`);
             return;
         }
         
@@ -259,6 +278,12 @@ class AudioManager {
             this.currentBackgroundMusic = null;
         }
         
+        // Stop running sound effect
+        this.stopPlayerRunning();
+        
+        // Stop ambiance sound effect
+        this.stopAmbiance();
+        
         console.log('🗑️ AudioManager destroyed');
     }
     
@@ -267,30 +292,157 @@ class AudioManager {
     // ========================================
     
     // Convenient methods for common game events
+    
+    // Player Attack Sounds
+    playPlayerPunch() {
+        // Randomly pick between two punch sounds
+        this.playRandomSoundEffect(['mainPunch', 'mainPunch2'], 0.25);
+    }
+    
+    playPlayerKick() {
+        this.playSoundEffect('mainKick', 0.25);
+    }
+    
     playPlayerAttack() {
-        this.playSoundEffect('playerAttack');
+        // Generic attack - use punch sound
+        this.playPlayerPunch();
+    }
+    
+    // Player Damage Sounds
+    playPlayerDamage() {
+        // Randomly pick from 4 damage sounds (reduced volume - was too loud)
+        this.playRandomSoundEffect(['mainDamage1', 'mainDamage2', 'mainDamage3', 'mainDamage4'], 0.2);
     }
     
     playPlayerHit() {
-        this.playSoundEffect('playerHit');
+        // Alias for damage
+        this.playPlayerDamage();
+    }
+    
+    // Player Jump Sound
+    playPlayerJump() {
+        this.playSoundEffect('mainJump', 0.2);
+    }
+    
+    // Player Running Sound (looping)
+    startPlayerRunning() {
+        // Don't start if already running or if SFX is muted
+        if (this.runningSoundEffect || this.sfxMuted || !this.config.soundEffects.enabled) {
+            return;
+        }
+        
+        // Check if sound exists in cache
+        if (!this.scene.cache.audio.has('playerRunning')) {
+            return;
+        }
+        
+        // Create and play looping running sound
+        this.runningSoundEffect = this.sound.add('playerRunning', {
+            volume: 0.15,
+            loop: true
+        });
+        this.runningSoundEffect.play();
+    }
+    
+    stopPlayerRunning() {
+        if (this.runningSoundEffect) {
+            this.runningSoundEffect.stop();
+            this.runningSoundEffect.destroy();
+            this.runningSoundEffect = null;
+        }
+    }
+    
+    // Ambient Sound (looping background ambiance)
+    startAmbiance(ambianceKey, volume = 0.2) {
+        // Stop any existing ambiance
+        this.stopAmbiance();
+        
+        // Don't start if SFX is muted
+        if (this.sfxMuted || !this.config.soundEffects.enabled) {
+            return;
+        }
+        
+        // Check if sound exists in cache
+        if (!this.scene.cache.audio.has(ambianceKey)) {
+            console.warn(`🔊 Ambiance sound not found: ${ambianceKey}`);
+            return;
+        }
+        
+        // Create and play looping ambiance sound
+        this.ambianceSoundEffect = this.sound.add(ambianceKey, {
+            volume: volume,
+            loop: true
+        });
+        this.ambianceSoundEffect.play();
+        console.log(`🔊 Started ambiance: ${ambianceKey}`);
+    }
+    
+    stopAmbiance() {
+        if (this.ambianceSoundEffect) {
+            this.ambianceSoundEffect.stop();
+            this.ambianceSoundEffect.destroy();
+            this.ambianceSoundEffect = null;
+            console.log('🔊 Stopped ambiance');
+        }
+    }
+    
+    // Enemy Attack Sounds (type-specific)
+    playEnemyAttack(enemyType) {
+        let soundKey = null;
+        
+        // Map enemy type to sound
+        switch(enemyType) {
+            case 'crackhead':
+                soundKey = 'enemyCrackheadAttack';
+                break;
+            case 'green_thug':
+                soundKey = 'enemyGreenThugAttack';
+                break;
+            case 'black_thug':
+                soundKey = 'enemyBlackThugAttack';
+                break;
+            default:
+                console.warn(`🔊 Unknown enemy type: ${enemyType}, using crackhead sound`);
+                soundKey = 'enemyCrackheadAttack';
+        }
+        
+        this.playSoundEffect(soundKey, 0.25);
+    }
+    
+    // Enemy Death Sounds
+    playEnemyDeath() {
+        // Randomly pick from 3 death sounds
+        this.playRandomSoundEffect(['enemyDeath1', 'enemyDeath2', 'enemyDeath3'], 0.2);
     }
     
     playEnemyHit() {
-        this.playSoundEffect('enemyHit');
+        // Could add enemy hit sounds later, for now silent
     }
     
     playEnemySpawn() {
-        this.playSoundEffect('enemySpawn');
+        // Could add enemy spawn sounds later, for now silent
     }
     
-    playEnemyDeath() {
-        this.playSoundEffect('enemyDeath');
+    // Weapon Sounds
+    playWeaponThrow() {
+        this.playSoundEffect('weaponRecordThrow', 0.3);
     }
     
-    playPlayerJump() {
-        this.playSoundEffect('playerJump');
+    playWeaponHit() {
+        // Play when weapon hits enemy
+        this.playSoundEffect('weaponRecordThrow', 0.3);
     }
     
+    // Item Pickup Sounds
+    playHealthPickup() {
+        this.playSoundEffect('healthPickup', 0.4);
+    }
+    
+    playMicrophonePickup() {
+        this.playSoundEffect('microphonePickup', 0.4);
+    }
+    
+    // Other game events
     playComboSound() {
         this.playSoundEffect('combo');
     }

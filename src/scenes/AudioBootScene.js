@@ -158,6 +158,42 @@ class AudioBootScene extends Phaser.Scene {
         this.load.audio('fallbackMusic', 'assets/audio/music/angeloimani_fallback_8bit_style.m4a');
         this.load.audio('fadeMusic', 'assets/audio/music/angeloimani_fade_8bit_style.m4a');
         
+        // Load Sound Effects
+        console.log('🔊 Loading sound effects...');
+        
+        // Ambient sounds
+        this.load.audio('streetAmbiance', 'assets/audio/sfx/street_ambiance.mp3');
+        
+        // Player attack sounds
+        this.load.audio('mainPunch', 'assets/audio/sfx/main_punch.mp3');
+        this.load.audio('mainPunch2', 'assets/audio/sfx/main_punch_2.mp3');
+        this.load.audio('mainKick', 'assets/audio/sfx/main_kick.mp3');
+        this.load.audio('mainJump', 'assets/audio/sfx/main_jump.mp3');
+        this.load.audio('playerRunning', 'assets/audio/sfx/player_running.mp3');
+        
+        // Player damage sounds (4 variations)
+        this.load.audio('mainDamage1', 'assets/audio/sfx/main_damage_1.mp3');
+        this.load.audio('mainDamage2', 'assets/audio/sfx/main_damage_2.mp3');
+        this.load.audio('mainDamage3', 'assets/audio/sfx/main_damage_3.mp3');
+        this.load.audio('mainDamage4', 'assets/audio/sfx/main_damage_4.mp3');
+        
+        // Enemy attack sounds (type-specific)
+        this.load.audio('enemyCrackheadAttack', 'assets/audio/sfx/enemy_crackhead_attack.mp3');
+        this.load.audio('enemyGreenThugAttack', 'assets/audio/sfx/enemy_green_thug_attack.mp3');
+        this.load.audio('enemyBlackThugAttack', 'assets/audio/sfx/enemy_black_thug_attack.mp3');
+        
+        // Enemy death sounds (3 variations)
+        this.load.audio('enemyDeath1', 'assets/audio/sfx/enemy_death_sound_1.mp3');
+        this.load.audio('enemyDeath2', 'assets/audio/sfx/enemy_death_sound_2.mp3');
+        this.load.audio('enemyDeath3', 'assets/audio/sfx/enemy_death_sound_3.mp3');
+        
+        // Weapon sounds
+        this.load.audio('weaponRecordThrow', 'assets/audio/sfx/weapon_record_throw.mp3');
+        
+        // Item pickup sounds
+        this.load.audio('healthPickup', 'assets/audio/sfx/item_health_item_pickup.mp3');
+        this.load.audio('microphonePickup', 'assets/audio/sfx/item_golden_microphone_pickup.mp3');
+        
         console.log('🎵 All audio assets configured for loading');
     }
 
@@ -203,6 +239,10 @@ class AudioBootScene extends Phaser.Scene {
 
     loadAllEnvironmentAssets() {
         console.log('🌍 Loading ALL environment assets...');
+        
+        // Load parallax background texture (will be tiled)
+        this.load.image('parallax_background', 'assets/level_1_pieces/Background.png');
+        console.log('🌍 Loading parallax background: assets/level_1_pieces/Background.png');
         
         // Load level 1 background segments
         this.loadLevel1Background();
@@ -269,6 +309,13 @@ class AudioBootScene extends Phaser.Scene {
         this.load.on('filecomplete', (key, type, data) => {
             this.loadedFiles++;
             console.log(`✅ Loaded: ${key} (${type})`);
+            if (key === 'parallax_background') {
+                console.log('🎨 Parallax background texture loaded successfully!');
+            }
+        });
+        
+        this.load.on('loaderror', (file) => {
+            console.error(`❌ Failed to load: ${file.key} from ${file.src}`);
         });
         
         this.load.on('complete', () => {

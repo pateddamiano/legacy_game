@@ -117,7 +117,13 @@ class GameScene extends Phaser.Scene {
         
         // Initialize Level 1 world (must be before createBothCharacters)
         this.initializeLevel1World();
+        
+        // Create parallax background AFTER world is initialized (so we have correct bounds)
+        this.createParallaxBackground();
 
+        // Set camera background to transparent so parallax shows through
+        this.cameras.main.setBackgroundColor('rgba(0, 0, 0, 0)');
+        
         // Create both character sprites (only active one will be visible)
         this.createBothCharacters();
         console.log(`🎯 Both characters created, active: ${this.selectedCharacter}`);
@@ -210,8 +216,13 @@ class GameScene extends Phaser.Scene {
         // Note: Level system and Level 1 world already initialized before createBothCharacters()
         
         // Start background music immediately (assets already loaded)
+        // Using 'fade' music for level 1 (continues from dialogue scene)
         console.log('🎵 Starting background music...');
-        this.audioManager.playBackgroundMusic('combatMusic');
+        this.audioManager.playBackgroundMusic('fadeMusic');
+        
+        // Start street ambiance for level 1
+        console.log('🔊 Starting street ambiance...');
+        this.audioManager.startAmbiance('streetAmbiance', 0.15);
         
         // Fade in from black
         this.cameras.main.fadeIn(1000, 0, 0, 0);
@@ -265,6 +276,58 @@ class GameScene extends Phaser.Scene {
         
         console.log('🌍 Level 1 world initialized successfully');
     }
+    
+    createParallaxBackground() {
+        console.log('🌍 Creating parallax background...');
+        
+        // Check if texture exists
+        if (!this.textures.exists('parallax_background')) {
+            console.error('🌍 Parallax background texture not found!');
+            console.log('🌍 Available textures:', Object.keys(this.textures.list).slice(0, 20));
+            return;
+        }
+        
+        const texture = this.textures.get('parallax_background');
+        const textureWidth = texture.source[0].width;
+        const textureHeight = texture.source[0].height;
+        
+        console.log(`🌍 Parallax texture dimensions: ${textureWidth}x${textureHeight}`);
+        
+        // Get world width from world bounds
+        const worldWidth = this.physics.world.bounds.width;
+        console.log(`🌍 World width: ${worldWidth}px`);
+        
+        // Create a tileSprite that will repeat the texture
+        const tileSprite = this.add.tileSprite(
+            0,                    // x
+            -360,                 // y (raised up by 50% of 720 = 360px)
+            worldWidth * 2,       // width (make it wider than world)
+            720,                  // height
+            'parallax_background' // texture key
+        );
+        
+        tileSprite.setOrigin(0, 0);
+        tileSprite.setDepth(-200); // Behind segments (-100)
+        tileSprite.setScrollFactor(0.2);
+        tileSprite.setAlpha(0.8); // Slight transparency for blending
+        
+        console.log(`🌍 TileSprite properties:`, {
+            x: tileSprite.x,
+            y: tileSprite.y,
+            width: tileSprite.width,
+            height: tileSprite.height,
+            depth: tileSprite.depth,
+            visible: tileSprite.visible,
+            alpha: tileSprite.alpha,
+            scrollFactorX: tileSprite.scrollFactorX,
+            scrollFactorY: tileSprite.scrollFactorY
+        });
+        
+        // Store reference for potential animation
+        this.parallaxBackground = tileSprite;
+        
+        console.log('🌍 Parallax tileSprite created successfully!');
+    }
 
     createBothCharacters() {
         console.log('👥 Creating both character sprites...');
@@ -283,8 +346,9 @@ class GameScene extends Phaser.Scene {
             // Initialize ground tracking for jumps
             sprite.lastGroundY = sprite.y;
             
-            // Scale up the player sprite (back to original)
-            sprite.setScale(3.0);
+            // Scale up the player sprite (20% bigger again - Tireek still largest)
+            const baseScale = charName === 'tireek' ? 4.554 : 4.356; // Tireek: 3.795 * 1.2, Others: 3.63 * 1.2
+            sprite.setScale(baseScale);
             
             // Set player physics properties
             sprite.setBounce(0.2);
@@ -825,8 +889,12 @@ class GameScene extends Phaser.Scene {
         this.enemies.forEach(enemy => {
             const enemyHitbox = enemy.getAttackHitbox();
             if (enemyHitbox && this.isColliding(enemyHitbox, this.player)) {
-                this.playerTakeDamage(enemy.playerDamage);
-                console.log(`${enemy.characterConfig.name} enemy hit player for ${enemy.playerDamage} damage!`);
+                // Only deal damage if this enemy hasn't hit the player with this attack yet
+                if (!enemy.hasHitPlayer) {
+                    this.playerTakeDamage(enemy.playerDamage);
+                    enemy.hasHitPlayer = true; // Mark that this attack has hit
+                    console.log(`${enemy.characterConfig.name} enemy hit player for ${enemy.playerDamage} damage!`);
+                }
             }
         });
     }
@@ -895,8 +963,10 @@ class GameScene extends Phaser.Scene {
             this.selectedCharacter
         );
         
-        // Play player hit sound effect
-        this.audioManager.playPlayerHit();
+        // Play player damage sound effect
+        if (this.audioManager) {
+            this.audioManager.playPlayerDamage();
+        }
         
         // Flash effect for player
         this.player.setTint(0xff0000);
@@ -1373,16 +1443,26 @@ class GameScene extends Phaser.Scene {
         // Don't override locked animations
         if (this.animationManager.animationLocked) return;
 
-        // Handle movement animations
+        // Handle movement animations and running sound
         if (this.player.body.velocity.x !== 0 && !this.isJumping) {
             // Running
             if (this.animationManager.setState('run')) {
                 this.player.anims.play(`${charName}_run`, true);
             }
+            
+            // Start running sound effect
+            if (this.audioManager) {
+                this.audioManager.startPlayerRunning();
+            }
         } else if (this.player.body.velocity.x === 0 && !this.isJumping && this.animationManager.currentState !== 'attack') {
             // Idle
             if (this.animationManager.setState('idle')) {
                 this.player.anims.play(`${charName}_idle`, true);
+            }
+            
+            // Stop running sound effect when not moving
+            if (this.audioManager) {
+                this.audioManager.stopPlayerRunning();
             }
         }
     }
@@ -1403,6 +1483,11 @@ class GameScene extends Phaser.Scene {
         // Play jump animation
         if (this.animationManager.setState('jump')) {
             this.player.anims.play(`${charName}_jump`, true);
+        }
+        
+        // Play jump sound effect
+        if (this.audioManager) {
+            this.audioManager.playPlayerJump();
         }
         
         console.log("Jump started from Y:", this.player.y, "Will land at:", this.player.lastGroundY);
@@ -1431,9 +1516,11 @@ class GameScene extends Phaser.Scene {
 
 
     updatePerspective() {
-        // Calculate scale based on Y position (perspective effect)
-        const minScale = 2.2;  // Scale when at top (buildings)
-        const maxScale = 2.8;  // Scale when at bottom (camera)
+        // Calculate scale based on Y position (perspective effect) - 20% bigger again
+        // Tireek is still largest
+        const isTireek = this.player.characterConfig.name === 'tireek';
+        const minScale = isTireek ? 3.3396 : 3.1944;  // Tireek: 2.783 * 1.2, Others: 2.662 * 1.2
+        const maxScale = isTireek ? 4.2504 : 4.0656;  // Tireek: 3.542 * 1.2, Others: 3.388 * 1.2
         
         const normalizedY = (this.player.y - this.streetTopLimit) / (this.streetBottomLimit - this.streetTopLimit);
         const scale = minScale + (maxScale - minScale) * normalizedY;
