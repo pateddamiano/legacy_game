@@ -34,6 +34,14 @@ class AudioBootScene extends Phaser.Scene {
     create() {
         console.log('🎵 ===== AUDIO BOOT SCENE CREATED =====');
         
+        // Check for debug mode FIRST - skip everything if test level requested
+        if (window.DIRECT_LEVEL_LOAD && window.TEST_LEVEL_ID === 'test') {
+            console.log('%c🧪 DEBUG MODE: Skipping all loading, going directly to test level', 'color: #00ff00; font-weight: bold;');
+            // Still need to load assets, but skip UI and go straight to game
+            this.setupMinimalLoading();
+            return;
+        }
+        
         // Initialize core systems
         this.initializeCoreServices();
         
@@ -66,6 +74,53 @@ class AudioBootScene extends Phaser.Scene {
         console.log('🎵 ✅ AudioBootScene UI created and ready for progress updates');
     }
 
+    setupMinimalLoading() {
+        console.log('🧪 Setting up minimal loading for test level...');
+        
+        // Create simple loading text
+        const centerX = this.cameras.main.centerX;
+        const centerY = this.cameras.main.centerY;
+        
+        this.add.text(centerX, centerY, 'Loading Test Level...', {
+            fontSize: '24px',
+            fill: '#00ff00',
+            fontFamily: 'Arial',
+            fontStyle: 'bold'
+        }).setOrigin(0.5);
+        
+        // Initialize core services
+        this.initializeCoreServices();
+        
+        // Set up progress tracking
+        this.setupProgressTracking();
+        
+        // Skip audio activation in test mode
+        this.audioActivated = true;
+        
+        // Check if assets are already loaded
+        if (this.load.isLoading()) {
+            // Assets are still loading, wait for completion
+            this.load.once('complete', () => {
+                console.log('🧪 Assets loaded, transitioning to test level...');
+                this.transitioned = true;
+                this.scene.start('GameScene', {
+                    character: 'tireek',
+                    levelId: 'test'
+                });
+            });
+        } else {
+            // Assets already loaded, go immediately
+            console.log('🧪 Assets already loaded, going to test level immediately...');
+            this.transitioned = true;
+            this.time.delayedCall(500, () => {
+                this.scene.start('GameScene', {
+                    character: 'tireek',
+                    levelId: 'test'
+                });
+            });
+        }
+    }
+    
     initializeCoreServices() {
         console.log('🎵 AudioBootScene: Initializing core services...');
         
@@ -230,6 +285,16 @@ class AudioBootScene extends Phaser.Scene {
                         });
                         console.log(`🦹 Loading ${spriteKey} from ${path}`);
                     });
+                }
+            });
+        }
+        
+        // Load static extras (non-animated) so they are available for events
+        if (typeof EXTRAS_REGISTRY !== 'undefined' && EXTRAS_REGISTRY) {
+            Object.values(EXTRAS_REGISTRY).forEach(extra => {
+                if (extra && extra.key && extra.path) {
+                    this.load.image(extra.key, extra.path);
+                    console.log(`🎭 Loading extra image ${extra.key} from ${extra.path}`);
                 }
             });
         }
@@ -510,7 +575,33 @@ class AudioBootScene extends Phaser.Scene {
             return;
         }
         
+        // Check for debug mode - skip menu and go directly to test level
+        if (window.DIRECT_LEVEL_LOAD && window.TEST_LEVEL_ID === 'test') {
+            console.log('%c🧪 DEBUG MODE: Skipping menu, going directly to test level', 'color: #00ff00; font-weight: bold;');
+            this.updateUIToShowCompletion();
+            this.time.delayedCall(500, () => {
+                this.transitioned = true;
+                this.scene.start('GameScene', {
+                    character: 'tireek',
+                    levelId: 'test'
+                });
+            });
+            return;
+        }
+        
         // Update UI to show completion (with safety checks)
+        this.updateUIToShowCompletion();
+        
+        // Prepare audio if needed
+        this.prepareAudio();
+        
+        // Transition after a brief pause
+        this.time.delayedCall(500, () => {
+            this.forceTransition();
+        });
+    }
+    
+    updateUIToShowCompletion() {
         if (this.loadingText) {
             this.loadingText.setText('COMPLETE!');
         }
@@ -524,14 +615,6 @@ class AudioBootScene extends Phaser.Scene {
             });
             this.percentText.setText('100%');
         }
-        
-        // Prepare audio if needed
-        this.prepareAudio();
-        
-        // Transition after a brief pause
-        this.time.delayedCall(500, () => {
-            this.forceTransition();
-        });
     }
 
     prepareAudio() {

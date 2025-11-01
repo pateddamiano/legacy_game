@@ -45,7 +45,7 @@ class AnimationStateManager {
             if (this.lockTimer <= 0) {
                 console.log("Animation lock timer expired, unlocking");
                 this.animationLocked = false;
-                if (this.currentState === 'attack') {
+                if (this.currentState === 'attack' || this.currentState === 'airkick') {
                     console.log("Resetting attack state to idle after lock timer");
                     this.currentState = 'idle';
                 }

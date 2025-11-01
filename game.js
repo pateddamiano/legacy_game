@@ -3,6 +3,32 @@
 // ========================================
 // This file initializes Phaser and starts the game with the new scene flow
 
+// ========================================
+// DEBUG MODE DETECTION
+// ========================================
+const urlParams = new URLSearchParams(window.location.search);
+window.DEBUG_MODE = urlParams.get('debug') === 'true' || urlParams.get('test') === 'true';
+window.TEST_LEVEL_ID = urlParams.get('level') || null;
+window.DIRECT_LEVEL_LOAD = window.DEBUG_MODE && window.TEST_LEVEL_ID;
+
+// Debug logging
+console.log('🔍 URL Parameters:', {
+    debug: urlParams.get('debug'),
+    test: urlParams.get('test'),
+    level: urlParams.get('level'),
+    allParams: Object.fromEntries(urlParams)
+});
+
+if (window.DEBUG_MODE) {
+    console.log('%c🧪 DEBUG MODE ENABLED', 'color: #00ff00; font-weight: bold; font-size: 16px;');
+    console.log('Debug mode:', window.DEBUG_MODE);
+    console.log('Test level ID:', window.TEST_LEVEL_ID);
+    console.log('Direct level load:', window.DIRECT_LEVEL_LOAD);
+    console.log('Full URL:', window.location.href);
+} else {
+    console.log('🧪 Debug mode: OFF');
+}
+
 // Game configuration
 const config = {
     type: Phaser.AUTO,

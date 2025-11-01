@@ -36,9 +36,17 @@ class GameScene extends Phaser.Scene {
     }
 
     init(data) {
-        // Receive data from scene manager (character and level info)
-        this.selectedCharacter = data?.character || 'tireek';
-        this.selectedLevelId = data?.levelId || 1;
+        // Check for debug mode and direct level loading
+        if (window.DIRECT_LEVEL_LOAD && window.TEST_LEVEL_ID === 'test') {
+            // Load test level directly
+            this.selectedCharacter = data?.character || 'tireek';
+            this.selectedLevelId = 'test';
+            console.log('%c🧪 TEST MODE: Loading test level directly', 'color: #00ff00; font-weight: bold;');
+        } else {
+            // Receive data from scene manager (character and level info)
+            this.selectedCharacter = data?.character || 'tireek';
+            this.selectedLevelId = data?.levelId || 1;
+        }
         
         console.log(`🎯 GameScene initialized with starting character: ${this.selectedCharacter}, level: ${this.selectedLevelId}`);
         
@@ -53,6 +61,12 @@ class GameScene extends Phaser.Scene {
         // Update game state
         window.gameState.currentGame.character = this.selectedCharacter;
         window.gameState.currentGame.levelId = this.selectedLevelId;
+        
+        // Initialize debug/testing mode
+        this.isTestMode = window.DEBUG_MODE || this.selectedLevelId === 'test';
+        this.coordinateRecordingEnabled = this.isTestMode || window.DEBUG_MODE;
+        this.debugOverlayVisible = this.isTestMode;
+        this.recordedPositions = [];
     }
 
     preload() {
@@ -87,6 +101,8 @@ class GameScene extends Phaser.Scene {
         this.dialogueManager = new DialogueManager(this);
         this.sceneElementManager = new SceneElementManager(this);
         this.itemPickupManager = new ItemPickupManager(this);
+        this.eventManager = new EventManager(this);
+        this.extrasManager = new ExtrasManager(this);
         
         console.log('🎮 All managers initialized');
     }
@@ -142,6 +158,8 @@ class GameScene extends Phaser.Scene {
         
         // Make camera follow player
         this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+        // Round pixels to reduce sub-pixel sampling blur
+        this.cameras.main.roundPixels = true;
         
         console.log(`📷 📊 Camera setup complete. Camera scroll: x=${this.cameras.main.scrollX}, y=${this.cameras.main.scrollY}`);
 
@@ -188,6 +206,12 @@ class GameScene extends Phaser.Scene {
         
         // Initialize UI system  
         this.uiManager.initializeUI();
+        
+        // Initialize debug overlay if in test mode or debug mode
+        if (this.isTestMode || window.DEBUG_MODE) {
+            this.createDebugOverlay();
+            this.setupCoordinateRecording();
+        }
         
         // Initialize health bar with full health (fix: bar wasn't showing initially)
         this.uiManager.updateHealthBar(this.characters[this.selectedCharacter].health, this.characters[this.selectedCharacter].maxHealth);
@@ -245,9 +269,9 @@ class GameScene extends Phaser.Scene {
             console.log(`🌍 📊 Segment ${i}: x=${seg.x_position}, width=${seg.width}, filename=${seg.filename}`);
         });
         
-        // Calculate spawn point
-        const spawnX = metadata.segments[0].x_position + 100;
-        const spawnY = 600;
+        // Calculate spawn point (customized for Level 1 intro scene)
+        const spawnX = 185;
+        const spawnY = 512;
         console.log(`🌍 📊 Calculated spawn point: x=${spawnX}, y=${spawnY}`);
         
         // Register Level 1 world configuration
@@ -340,14 +364,28 @@ class GameScene extends Phaser.Scene {
             // Get spawn point from world manager
             const spawnPoint = this.worldManager.getSpawnPoint();
             console.log(`👥 📊 Creating ${charName} at spawn point: x=${spawnPoint.x}, y=${spawnPoint.y}`);
-            const sprite = this.physics.add.sprite(spawnPoint.x, spawnPoint.y, spriteKey);
+            // Ensure pixel-art crispness for all animations of this character
+            if (charData.config && charData.config.spriteSheets) {
+                try {
+                    Object.keys(charData.config.spriteSheets).forEach(animKey => {
+                        const texKey = `${charName}_${animKey}`;
+                        if (this.textures.exists(texKey)) {
+                            const tex = this.textures.get(texKey);
+                            if (tex && tex.setFilter) {
+                                tex.setFilter(Phaser.Textures.FilterMode.NEAREST);
+                            }
+                        }
+                    });
+                } catch (e) {}
+            }
+            const sprite = this.physics.add.sprite(Math.round(spawnPoint.x), Math.round(spawnPoint.y), spriteKey);
             console.log(`👥 📊 ${charName} sprite created at: x=${sprite.x}, y=${sprite.y}`);
             
             // Initialize ground tracking for jumps
             sprite.lastGroundY = sprite.y;
             
-            // Scale up the player sprite (20% bigger again - Tireek still largest)
-            const baseScale = charName === 'tireek' ? 4.554 : 4.356; // Tireek: 3.795 * 1.2, Others: 3.63 * 1.2
+            // Scale up the player sprite further for more presence
+            const baseScale = charName === 'tireek' ? 6.8322 : 6.534; // previous values * 1.25
             sprite.setScale(baseScale);
             
             // Set player physics properties
@@ -419,13 +457,18 @@ class GameScene extends Phaser.Scene {
             // Check if it's an attack animation that just finished for current character
             if (animKey === `${charName}_jab` || 
                 animKey === `${charName}_cross` || 
-                animKey === `${charName}_kick`) {
+                animKey === `${charName}_kick` ||
+                animKey === `${charName}_airkick`) {
                 
                 // Force reset animation state and return to idle
                 this.animationManager.currentState = 'idle';
                 this.animationManager.animationLocked = false;
                 this.animationManager.lockTimer = 0;
-                this.player.anims.play(`${charName}_idle`, true);
+                
+                // Play idle animation (only if not jumping - airkick can complete while still in air)
+                if (!this.isJumping) {
+                    this.player.anims.play(`${charName}_idle`, true);
+                }
                 
                 console.log(`Attack animation ${animKey} completed, returning to idle`);
             }
@@ -507,8 +550,10 @@ class GameScene extends Phaser.Scene {
         // Update character text through UIManager
         this.uiManager.updateCharacterDisplay(this.currentCharacterConfig);
         
-        // Re-setup camera follow
-        this.cameras.main.startFollow(this.player, true, 0.1, 0);
+        // Re-setup camera follow ONLY if camera is not locked by event system
+        if (!this.eventCameraLocked) {
+            this.cameras.main.startFollow(this.player, true, 0.1, 0);
+        }
         
         // Update health bar with new character's health
         this.uiManager.updateHealthBar(this.characters[newChar].health, this.characters[newChar].maxHealth);
@@ -716,6 +761,11 @@ class GameScene extends Phaser.Scene {
     }
     
     spawnEnemy() {
+        // Don't spawn enemies if disabled
+        if (this.maxEnemies === 0 || this.isTestMode) {
+            return;
+        }
+        
         if (this.enemies.length >= this.maxEnemies) return;
         
         // Get camera and player bounds for spawning
@@ -723,24 +773,38 @@ class GameScene extends Phaser.Scene {
         const cameraWidth = this.cameras.main.width;
         const playerX = this.player.x;
         
-        // Determine if player is in first segment (near level start)
+		// Determine if player is in first segment (near level start)
         const worldBounds = this.physics.world.bounds;
         const firstSegmentEnd = worldBounds.x + 1200; // First segment is 1200px wide
         const isPlayerInFirstSegment = playerX < firstSegmentEnd;
         
-        // If player is in first segment, only spawn from right
-        // Otherwise, favor spawning from the right side (70% right, 30% left)
-        let spawnOnLeft = false;
-        if (!isPlayerInFirstSegment) {
-            spawnOnLeft = Math.random() < 0.3;
-        }
-        
-        const spawnX = spawnOnLeft ? 
-            cameraX - ENEMY_CONFIG.spawnOffscreenDistance : // Spawn off-screen to the left
-            cameraX + cameraWidth + ENEMY_CONFIG.spawnOffscreenDistance; // Spawn off-screen to the right
+        // Check if camera is locked (event system fight sequence)
+        const isCameraLocked = this.eventCameraLocked || false;
+		
+		// Compute offscreen spawn positions relative to camera
+		const cameraLeft = cameraX;
+		const cameraRight = cameraX + cameraWidth;
+		const worldMinX = worldBounds.x;
+		const worldMaxX = worldBounds.x + worldBounds.width;
+		
+		// Larger margin to keep large sprites fully offscreen
+		const offscreenMargin = Math.max(ENEMY_CONFIG.spawnOffscreenDistance || 0, 220);
+		
+		// Decide side to spawn from
+		let spawnOnLeft = false;
+		if (isCameraLocked) {
+			// During locked camera fights, always allow either side (ignore world bounds)
+			spawnOnLeft = Math.random() < 0.5;
+		} else {
+			// Normal roaming: slight left bias when not near start
+			spawnOnLeft = !isPlayerInFirstSegment && Math.random() < 0.3;
+		}
+		
+		// Pick an offscreen X, not clamped to world bounds (so we can spawn out-of-world)
+		let spawnX = spawnOnLeft ? (cameraLeft - offscreenMargin) : (cameraRight + offscreenMargin);
         
         // Check if spawn position is too close to player
-        const minDistanceFromPlayer = 400; // Minimum safe distance
+		const minDistanceFromPlayer = 400; // Minimum safe distance
         const distanceToPlayer = Math.abs(spawnX - playerX);
         
         if (distanceToPlayer < minDistanceFromPlayer) {
@@ -795,10 +859,19 @@ class GameScene extends Phaser.Scene {
             }
         }
         
-        // Create enemy
-        const enemy = new Enemy(this, spawnX, spawnY, enemyConfig);
+		// Create enemy
+		const enemy = new Enemy(this, spawnX, spawnY, enemyConfig);
         enemy.setPlayer(this.player);
         this.enemies.push(enemy);
+		
+		// If spawned beyond the physics world horizontally, temporarily disable world-bound collisions
+		if (spawnX < worldMinX || spawnX > worldMaxX) {
+			if (enemy.sprite && typeof enemy.sprite.setCollideWorldBounds === 'function') {
+				enemy.sprite.setCollideWorldBounds(false);
+			}
+			// Mark for re-enabling once inside
+			enemy.reenableWorldBoundsOnEntry = true;
+		}
         
         const spawnDirection = spawnOnLeft ? 'LEFT' : 'RIGHT';
         const distFromPlayer = Math.abs(spawnX - playerX);
@@ -806,6 +879,23 @@ class GameScene extends Phaser.Scene {
     }
     
     updateEnemies(time, delta) {
+        // Skip enemy spawning if disabled (test mode or maxEnemies is 0)
+        if (this.maxEnemies === 0 || this.isTestMode) {
+            // Still update existing enemies if any (for event system)
+            if (this.enemies && this.enemies.length > 0) {
+                this.enemies.forEach((enemy, index) => {
+                    if (enemy && enemy.update) {
+                        enemy.update(time, delta);
+                    }
+                    // Remove destroyed enemies
+                    if (!enemy.sprite || !enemy.sprite.active) {
+                        this.enemies.splice(index, 1);
+                    }
+                });
+            }
+            return;
+        }
+        
         // Don't spawn enemies while loading
         if (!this.isLoading) {
             // Update spawn timer
@@ -1220,6 +1310,50 @@ class GameScene extends Phaser.Scene {
             this.sceneElementManager.update(time, delta);
         }
         
+        // Update event manager (check for triggers)
+        if (this.eventManager && this.player) {
+            const worldBounds = this.physics.world.bounds;
+            this.eventManager.update(this.player.x, {
+                x: worldBounds.x,
+                width: worldBounds.width
+            }, this.cameras.main);
+        }
+        
+        // Enforce player bounds if set by event system
+        if (this.eventPlayerBounds && this.player) {
+            const bounds = this.eventPlayerBounds;
+            const playerX = this.player.x;
+            const playerY = this.player.y;
+            
+            // Clamp X position
+            if (bounds.minX !== null && playerX < bounds.minX) {
+                this.player.x = bounds.minX;
+                if (this.player.body) {
+                    this.player.body.setVelocityX(0);
+                }
+            }
+            if (bounds.maxX !== null && playerX > bounds.maxX) {
+                this.player.x = bounds.maxX;
+                if (this.player.body) {
+                    this.player.body.setVelocityX(0);
+                }
+            }
+            
+            // Clamp Y position
+            if (bounds.minY !== null && playerY < bounds.minY) {
+                this.player.y = bounds.minY;
+                if (this.player.body) {
+                    this.player.body.setVelocityY(0);
+                }
+            }
+            if (bounds.maxY !== null && playerY > bounds.maxY) {
+                this.player.y = bounds.maxY;
+                if (this.player.body) {
+                    this.player.body.setVelocityY(0);
+                }
+            }
+        }
+        
         // Check combat interactions
         this.checkCombat();
         
@@ -1231,6 +1365,12 @@ class GameScene extends Phaser.Scene {
         
         // Update UI and debug visuals using UIManager
         this.updateUIAndDebugVisuals();
+        
+        // Update test mode features
+        if (this.isTestMode || window.DEBUG_MODE) {
+            this.updateCoordinateRecording();
+            this.updateDebugOverlay();
+        }
     }
     
     updateHealthRegeneration(delta) {
@@ -1538,6 +1678,21 @@ class GameScene extends Phaser.Scene {
     initializeLevelSystem() {
         console.log('🎮 Initializing level system...');
         
+        // Handle test level
+        if (this.selectedLevelId === 'test') {
+            console.log('%c🧪 Loading TEST LEVEL', 'color: #00ff00; font-weight: bold;');
+            // Use test level config directly
+            if (typeof TEST_LEVEL_CONFIG !== 'undefined') {
+                // Manually set up test level without using LevelManager
+                this.setupTestLevel();
+                return;
+            } else {
+                console.error('🧪 TEST_LEVEL_CONFIG not defined!');
+                // Fallback to level 1
+                this.selectedLevelId = 1;
+            }
+        }
+        
         // Load level by ID (find the level with id:1, which should be index 0)
         const levelIndex = LEVEL_CONFIGS.findIndex(l => l.id === this.selectedLevelId);
         console.log(`🎮 📊 Loading level with id=${this.selectedLevelId}, found at index=${levelIndex}`);
@@ -1551,10 +1706,58 @@ class GameScene extends Phaser.Scene {
         // Set up level manager callbacks
         this.setupLevelManagerCallbacks();
         
+        // Register events from level config
+        const currentLevelConfig = this.levelManager.getCurrentLevelConfig();
+        if (currentLevelConfig && currentLevelConfig.events && this.eventManager) {
+            this.eventManager.registerEvents(currentLevelConfig.events);
+        }
+        
         // Add level info to UI
         this.updateLevelDisplay();
         
         console.log('🎮 Level system initialized!');
+    }
+    
+    setupTestLevel() {
+        console.log('🧪 Setting up test level...');
+        
+        // Load test level world (same as level 1)
+        this.initializeLevel1World();
+        
+        // Disable enemy spawning completely
+        this.maxEnemies = 0;
+        this.enemySpawnInterval = 999999;
+        this.enemySpawnTimer = 999999; // Set timer high so it won't trigger
+        
+        // Clear any existing enemies
+        if (this.enemies && this.enemies.length > 0) {
+            console.log('🧪 Clearing existing enemies...');
+            this.enemies.forEach(enemy => {
+                if (enemy.sprite) {
+                    enemy.sprite.destroy();
+                }
+            });
+            this.enemies = [];
+        }
+        
+        // Register events from test level config
+        if (typeof TEST_LEVEL_CONFIG !== 'undefined' && TEST_LEVEL_CONFIG.events && this.eventManager) {
+            console.log('🧪 Registering test level events...');
+            this.eventManager.registerEvents(TEST_LEVEL_CONFIG.events);
+        }
+        
+        // Initialize debug overlay
+        this.createDebugOverlay();
+        
+        // Set up coordinate recording
+        this.setupCoordinateRecording();
+        
+        console.log('🧪 Test level setup complete!');
+        console.log('🧪 Controls:');
+        console.log('  - R: Record current position');
+        console.log('  - D: Toggle debug overlay');
+        console.log('  - G: Toggle grid overlay');
+        console.log('🧪 Event: Move to x=8081 to trigger the critic event');
     }
     
     setupLevelManagerCallbacks() {
@@ -1627,6 +1830,11 @@ class GameScene extends Phaser.Scene {
     
     onLevelCleanup() {
         console.log('🎮 GameScene: Cleaning up level...');
+        
+        // Clear events
+        if (this.eventManager) {
+            this.eventManager.clearEvents();
+        }
         
         // Destroy all enemies
         this.destroyAllEnemies();
@@ -1710,5 +1918,289 @@ class GameScene extends Phaser.Scene {
     
     getActiveCharacterName() {
         return Object.keys(this.characters).find(name => this.characters[name].isActive) || 'tireek';
+    }
+    
+    // ========================================
+    // TEST MODE / DEBUG FEATURES
+    // ========================================
+    
+    setupCoordinateRecording() {
+        console.log('🧪 Setting up coordinate recording...');
+        
+        // Create hotkey for recording coordinates
+        this.recordKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
+        this.recordKeyCooldown = 0;
+        
+        console.log('🧪 Coordinate recording ready! Press R to record position.');
+    }
+    
+    updateCoordinateRecording() {
+        if ((!this.isTestMode && !window.DEBUG_MODE) || !this.player) return;
+        
+        // Initialize if not already done
+        if (!this.recordKey && (this.isTestMode || window.DEBUG_MODE)) {
+            this.setupCoordinateRecording();
+        }
+        
+        if (!this.coordinateRecordingEnabled || !this.recordKey) return;
+        
+        // Update cooldown
+        if (this.recordKeyCooldown > 0) {
+            this.recordKeyCooldown -= 16; // Assume ~60fps
+        }
+        
+        // Check if R key is pressed
+        if (Phaser.Input.Keyboard.JustDown(this.recordKey) && this.recordKeyCooldown <= 0) {
+            this.recordPosition();
+            this.recordKeyCooldown = 250; // 250ms cooldown
+        }
+    }
+    
+    recordPosition() {
+        if (!this.player) return;
+        
+        const worldBounds = this.physics.world.bounds;
+        const camera = this.cameras.main;
+        
+        const coords = {
+            player: { 
+                x: Math.round(this.player.x), 
+                y: Math.round(this.player.y) 
+            },
+            camera: { 
+                x: Math.round(camera.scrollX), 
+                y: Math.round(camera.scrollY),
+                rightEdge: Math.round(camera.scrollX + camera.width),
+                width: camera.width
+            },
+            world: { 
+                x: worldBounds.x,
+                width: worldBounds.width,
+                left: worldBounds.x,
+                right: worldBounds.x + worldBounds.width
+            },
+            percentage: ((this.player.x - worldBounds.x) / worldBounds.width * 100).toFixed(2)
+        };
+        
+        // Store recorded position
+        this.recordedPositions.push({
+            ...coords,
+            timestamp: Date.now()
+        });
+        
+        // Output to console with formatting
+        console.log('%c📍 Position Recorded:', 'color: #00ff00; font-weight: bold; font-size: 14px;');
+        console.log(JSON.stringify(coords, null, 2));
+        console.log('%c📋 Copy-paste format:', 'color: #00ffff; font-weight: bold;');
+        console.log(`{ x: ${coords.player.x}, y: ${coords.player.y} }`);
+        console.log(`Percentage: ${coords.percentage}%`);
+        console.log(`Camera right edge: ${coords.camera.rightEdge} (world end: ${coords.world.right})`);
+        
+        // Visual feedback
+        this.showPositionMarker(coords.player.x, coords.player.y);
+    }
+    
+    showPositionMarker(x, y) {
+        // Create a visual marker at the recorded position
+        const marker = this.add.circle(x, y, 10, 0xff0000, 0.8);
+        marker.setDepth(10000);
+        marker.setStrokeStyle(2, 0xffffff);
+        
+        // Add text label
+        const label = this.add.text(x, y - 20, `${this.recordedPositions.length}`, {
+            fontSize: '16px',
+            fill: '#ffffff',
+            fontFamily: 'Arial',
+            fontStyle: 'bold',
+            backgroundColor: '#ff0000',
+            padding: { x: 4, y: 2 }
+        });
+        label.setOrigin(0.5);
+        label.setDepth(10001);
+        
+        // Fade out after 3 seconds
+        this.tweens.add({
+            targets: [marker, label],
+            alpha: 0,
+            duration: 3000,
+            onComplete: () => {
+                marker.destroy();
+                label.destroy();
+            }
+        });
+    }
+    
+    createDebugOverlay() {
+        console.log('🧪 Creating debug overlay...');
+        
+        // Don't create if already exists
+        if (this.debugOverlayContainer) {
+            return;
+        }
+        
+        // Create container for debug overlay
+        this.debugOverlayContainer = this.add.container(0, 0);
+        this.debugOverlayContainer.setDepth(20000);
+        this.debugOverlayContainer.setScrollFactor(0); // Fixed to screen
+        
+        // Position display (top-left)
+        this.debugPositionText = this.add.text(10, 10, '', {
+            fontSize: '14px',
+            fill: '#00ff00',
+            fontFamily: 'Arial',
+            backgroundColor: '#000000',
+            padding: { x: 8, y: 4 }
+        });
+        this.debugPositionText.setOrigin(0, 0);
+        this.debugPositionText.setScrollFactor(0);
+        this.debugPositionText.setDepth(20001);
+        
+        // Camera info (top-right)
+        this.debugCameraText = this.add.text(1190, 10, '', {
+            fontSize: '14px',
+            fill: '#00ffff',
+            fontFamily: 'Arial',
+            backgroundColor: '#000000',
+            padding: { x: 8, y: 4 }
+        });
+        this.debugCameraText.setOrigin(1, 0);
+        this.debugCameraText.setScrollFactor(0);
+        this.debugCameraText.setDepth(20001);
+        
+        // Instructions (bottom-left)
+        this.debugInstructionsText = this.add.text(10, 710, 'R: Record | D: Toggle Overlay | G: Grid', {
+            fontSize: '12px',
+            fill: '#ffffff',
+            fontFamily: 'Arial',
+            backgroundColor: '#000000',
+            padding: { x: 8, y: 4 }
+        });
+        this.debugInstructionsText.setOrigin(0, 1);
+        this.debugInstructionsText.setScrollFactor(0);
+        this.debugInstructionsText.setDepth(20001);
+        
+        // Grid overlay (initially hidden)
+        this.gridOverlayVisible = false;
+        this.gridGraphics = this.add.graphics();
+        this.gridGraphics.setDepth(19999);
+        this.gridGraphics.setScrollFactor(1);
+        
+        // Set up toggle keys (only if not already set)
+        if (!this.debugToggleKey) {
+            this.debugToggleKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+        }
+        if (!this.gridToggleKey) {
+            this.gridToggleKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.G);
+        }
+        
+        // Add overlay elements to container
+        this.debugOverlayContainer.add([
+            this.debugPositionText,
+            this.debugCameraText,
+            this.debugInstructionsText
+        ]);
+        
+        // Set initial visibility based on test mode
+        this.debugOverlayContainer.setVisible(this.debugOverlayVisible);
+    }
+    
+    updateDebugOverlay() {
+        if ((!this.isTestMode && !window.DEBUG_MODE) || !this.player) return;
+        
+        // Initialize overlay if it doesn't exist yet
+        if (!this.debugOverlayContainer && (this.isTestMode || window.DEBUG_MODE)) {
+            this.createDebugOverlay();
+            this.setupCoordinateRecording();
+        }
+        
+        // Toggle overlay visibility
+        if (Phaser.Input.Keyboard.JustDown(this.debugToggleKey)) {
+            this.debugOverlayVisible = !this.debugOverlayVisible;
+            if (this.debugOverlayContainer) {
+                this.debugOverlayContainer.setVisible(this.debugOverlayVisible);
+            }
+            console.log(`🧪 Debug overlay: ${this.debugOverlayVisible ? 'ON' : 'OFF'}`);
+        }
+        
+        // Toggle grid overlay
+        if (Phaser.Input.Keyboard.JustDown(this.gridToggleKey)) {
+            this.gridOverlayVisible = !this.gridOverlayVisible;
+            this.updateGridOverlay();
+            console.log(`🧪 Grid overlay: ${this.gridOverlayVisible ? 'ON' : 'OFF'}`);
+        }
+        
+        if (!this.debugOverlayVisible || !this.debugPositionText) return;
+        
+        // Update position display
+        const worldBounds = this.physics.world.bounds;
+        const percentage = ((this.player.x - worldBounds.x) / worldBounds.width * 100).toFixed(2);
+        
+        this.debugPositionText.setText(
+            `Player Position\n` +
+            `X: ${Math.round(this.player.x)}\n` +
+            `Y: ${Math.round(this.player.y)}\n` +
+            `Progress: ${percentage}%\n` +
+            `Recorded: ${this.recordedPositions.length}`
+        );
+        
+        // Update camera display
+        const camera = this.cameras.main;
+        const cameraRightEdge = camera.scrollX + camera.width;
+        const worldRightEdge = worldBounds.x + worldBounds.width;
+        const atEnd = cameraRightEdge >= worldRightEdge - 10;
+        
+        this.debugCameraText.setText(
+            `Camera\n` +
+            `X: ${Math.round(camera.scrollX)}\n` +
+            `Right: ${Math.round(cameraRightEdge)}\n` +
+            `World End: ${Math.round(worldRightEdge)}\n` +
+            `At End: ${atEnd ? 'YES' : 'NO'}`
+        );
+        
+        // Update grid overlay
+        if (this.gridOverlayVisible) {
+            this.updateGridOverlay();
+        }
+    }
+    
+    updateGridOverlay() {
+        if (!this.gridOverlayVisible) {
+            this.gridGraphics.clear();
+            return;
+        }
+        
+        this.gridGraphics.clear();
+        this.gridGraphics.lineStyle(1, 0x00ff00, 0.3);
+        
+        const camera = this.cameras.main;
+        const worldBounds = this.physics.world.bounds;
+        const startX = Math.floor(camera.scrollX / 100) * 100;
+        const endX = Math.ceil((camera.scrollX + camera.width) / 100) * 100;
+        const startY = 0;
+        const endY = 720;
+        
+        // Vertical lines
+        for (let x = startX; x <= endX; x += 100) {
+            this.gridGraphics.moveTo(x, startY);
+            this.gridGraphics.lineTo(x, endY);
+        }
+        
+        // Horizontal lines
+        for (let y = startY; y <= endY; y += 100) {
+            this.gridGraphics.moveTo(startX, y);
+            this.gridGraphics.lineTo(endX, y);
+        }
+        
+        // Highlight current player X position
+        this.gridGraphics.lineStyle(2, 0xff0000, 0.8);
+        this.gridGraphics.moveTo(this.player.x, startY);
+        this.gridGraphics.lineTo(this.player.x, endY);
+        
+        // Highlight world boundaries
+        this.gridGraphics.lineStyle(2, 0x0000ff, 0.8);
+        this.gridGraphics.moveTo(worldBounds.x, startY);
+        this.gridGraphics.lineTo(worldBounds.x, endY);
+        this.gridGraphics.moveTo(worldBounds.x + worldBounds.width, startY);
+        this.gridGraphics.lineTo(worldBounds.x + worldBounds.width, endY);
     }
 }

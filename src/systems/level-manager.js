@@ -400,6 +400,11 @@ class LevelManager {
                 this.scene.sceneElementManager.createElementsFromConfig(levelConfig.sceneElements);
             }
             
+            // Register events from level config
+            if (levelConfig.events && this.scene.eventManager) {
+                this.scene.eventManager.registerEvents(levelConfig.events);
+            }
+            
             // End transition state
             if (this.scene.gameStateManager) {
                 this.scene.gameStateManager.endTransition();

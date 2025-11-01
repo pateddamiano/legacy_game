@@ -32,6 +32,18 @@ class IntroDialogueScene extends Phaser.Scene {
 
     create() {
         console.log('💬 IntroDialogueScene: Creating intro dialogue...');
+        
+        // Check for debug mode - skip dialogue and go directly to test level
+        if (window.DIRECT_LEVEL_LOAD && window.TEST_LEVEL_ID === 'test') {
+            console.log('%c🧪 DEBUG MODE: Skipping dialogue, going directly to test level', 'color: #00ff00; font-weight: bold;');
+            this.time.delayedCall(100, () => {
+                this.scene.start('GameScene', {
+                    character: 'tireek',
+                    levelId: 'test'
+                });
+            });
+            return;
+        }
 
         const centerX = this.cameras.main.width / 2;
         const centerY = this.cameras.main.height / 2;

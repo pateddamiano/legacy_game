@@ -204,6 +204,15 @@ class PreloadScene extends Phaser.Scene {
             frameHeight: 64
         });
         
+        // Load extras assets (static characters for events)
+        if (typeof EXTRAS_REGISTRY !== 'undefined' && EXTRAS_REGISTRY) {
+            Object.values(EXTRAS_REGISTRY).forEach(extra => {
+                if (extra && extra.key && extra.path) {
+                    this.load.image(extra.key, extra.path);
+                }
+            });
+        }
+        
         // Load item pickup assets
         this.load.image('goldenMicrophone', 'assets/pickups/GoldenMicrophone_64x64.png');
         

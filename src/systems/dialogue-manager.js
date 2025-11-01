@@ -58,12 +58,18 @@ class DialogueManager {
         );
         this.overlay.setScrollFactor(0);
         
-        // Dialogue box background
+        // Dialogue box background (right side, just past 50%)
+        const cam = this.scene.cameras.main;
+        const panelWidth = 520;
+        const panelHeight = 110;
+        const panelX = Math.floor(cam.width * 0.72); // slightly right of center
+        const panelY = Math.floor(cam.height * 0.50); // centered vertically
+        
         this.dialogueBox = this.scene.add.rectangle(
-            this.scene.cameras.main.centerX,
-            this.scene.cameras.main.height - 150,
-            1000,
-            140,
+            panelX,
+            panelY,
+            panelWidth,
+            panelHeight,
             0x000000,
             0.85
         );
@@ -71,8 +77,8 @@ class DialogueManager {
         
         // Speaker name
         this.speakerText = this.scene.add.text(
-            this.scene.cameras.main.centerX - 480,
-            this.scene.cameras.main.height - 210,
+            panelX - Math.floor(panelWidth / 2) + 16,
+            panelY - Math.floor(panelHeight / 2) + 10,
             '',
             {
                 fontSize: '20px',
@@ -84,21 +90,21 @@ class DialogueManager {
         
         // Message text
         this.messageText = this.scene.add.text(
-            this.scene.cameras.main.centerX - 480,
-            this.scene.cameras.main.height - 180,
+            panelX - Math.floor(panelWidth / 2) + 16,
+            panelY - Math.floor(panelHeight / 2) + 38,
             '',
             {
                 fontSize: '18px',
                 fill: '#FFFFFF',
                 fontFamily: 'Arial',
-                wordWrap: { width: 950 }
+                wordWrap: { width: panelWidth - 32 }
             }
         );
         
         // Continue prompt
         this.continuePrompt = this.scene.add.text(
-            this.scene.cameras.main.centerX + 450,
-            this.scene.cameras.main.height - 90,
+            panelX + Math.floor(panelWidth / 2) - 10,
+            panelY + Math.floor(panelHeight / 2) - 18,
             '[SPACE]',
             {
                 fontSize: '16px',
@@ -155,6 +161,11 @@ class DialogueManager {
         
         // Show UI
         this.container.setVisible(true);
+        // Respect per-dialogue background dim preference (default: dim)
+        if (this.overlay) {
+            const shouldDim = dialogue.dimBackground !== false;
+            this.overlay.setVisible(shouldDim);
+        }
         
         // Set speaker name
         this.speakerText.setText(dialogue.speaker ? dialogue.speaker.toUpperCase() : 'NARRATOR');

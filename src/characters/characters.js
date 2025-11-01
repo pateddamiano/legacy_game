@@ -106,11 +106,38 @@ const BLACK_THUG_CONFIG = new CharacterConfig(
     }
 );
 
+// Define Critic enemy configuration
+const CRITIC_CONFIG = new CharacterConfig(
+    'critic',
+    {
+        walk: 'assets/characters/critic/spritesheets/critic_idle_4frames.png', // Using idle as walk
+        enemy_punch: 'assets/characters/critic/spritesheets/critic_punch_3frames.png',
+        idle: 'assets/characters/critic/spritesheets/critic_idle_4frames.png'
+    },
+    {
+        walk: { frames: 4, frameRate: 10, repeat: -1 },   // Medium speed walk (using idle animation)
+        enemy_punch: { frames: 3, frameRate: 16, repeat: 0 }, // Medium speed punch
+        idle: { frames: 4, frameRate: 8, repeat: -1 }      // Medium idle animation
+    }
+);
+
 // Array of all available playable characters
 const ALL_CHARACTERS = [TIREEK_CONFIG, TRYSTON_CONFIG];
 
 // Array of all available enemy types
-const ALL_ENEMY_TYPES = [CRACKHEAD_CONFIG, GREEN_THUG_CONFIG, BLACK_THUG_CONFIG];
+const ALL_ENEMY_TYPES = [CRACKHEAD_CONFIG, GREEN_THUG_CONFIG, BLACK_THUG_CONFIG, CRITIC_CONFIG];
+
+// ========================================
+// EXTRAS REGISTRY (STATIC, NON-ANIMATED CHARACTERS)
+// ========================================
+// These are simple image-based characters used for story beats and events
+const EXTRAS_REGISTRY = {
+    rozotadi: {
+        key: 'extra_rozotadi',
+        path: 'assets/characters/extras/Rozotadi.png',
+        scale: 3.0
+    }
+};
 
 // Export configurations for use in other files
 if (typeof module !== 'undefined' && module.exports) {
@@ -120,8 +147,10 @@ if (typeof module !== 'undefined' && module.exports) {
         CRACKHEAD_CONFIG,
         GREEN_THUG_CONFIG,
         BLACK_THUG_CONFIG,
+        CRITIC_CONFIG,
         ALL_CHARACTERS,
         ALL_ENEMY_TYPES,
+        EXTRAS_REGISTRY,
     };
 }
 
@@ -134,4 +163,6 @@ if (typeof window !== 'undefined') {
     window.CRACKHEAD_CONFIG = CRACKHEAD_CONFIG;
     window.GREEN_THUG_CONFIG = GREEN_THUG_CONFIG;
     window.BLACK_THUG_CONFIG = BLACK_THUG_CONFIG;
+    window.CRITIC_CONFIG = CRITIC_CONFIG;
+    window.EXTRAS_REGISTRY = EXTRAS_REGISTRY;
 }

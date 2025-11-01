@@ -49,9 +49,9 @@ const ENEMY_CONFIG = {
     cleanupDistance: 1000,      // distance at which enemies are removed (performance optimization)
     damageFlashTime: 100,       // duration of damage flash effect (ms) - visual feedback
     
-    // 📏 SCALING & SIZE
-    minScale: 2.904,            // enemy scale at top of street (perspective effect) - 45% bigger (was 2.0)
-    maxScale: 3.63,             // enemy scale at bottom of street (closer to camera) - 45% bigger (was 2.5)
+    // 📏 SCALING & SIZE (further increased by 1.25x)
+    minScale: 4.356,            // 3.4848 * 1.25
+    maxScale: 5.445,            // 4.356 * 1.25
     
     // ⚔️ COMBAT
     playerDamage: 10,          // damage enemies deal to player (DOUBLED from 5 - more punishing!)
@@ -107,6 +107,17 @@ const ENEMY_TYPE_CONFIGS = {
         attackTypes: ['enemy_punch'],
         detectionRange: 1500,        // More aggressive - longer detection range (increased from 1000)
         description: "Harder thug with powerful punch attacks"
+    },
+    
+    critic: {
+        // Special boss-like enemy
+        health: 50,                   // High health (boss-tier)
+        speed: 150,                   // Slower movement (dramatic)
+        attackCooldown: 300,         // Slower attacks
+        playerDamage: 8,             // High damage
+        attackTypes: ['enemy_punch'],
+        detectionRange: 2000,        // Very aggressive - long detection range
+        description: "The Critic - formidable opponent"
     }
 };
 
@@ -121,9 +132,24 @@ class Enemy {
         const enemyType = characterConfig.name;
         const typeConfig = ENEMY_TYPE_CONFIGS[enemyType] || {};
         
+        // Ensure crisp pixel-art filtering for all animations of this enemy
+        if (characterConfig && characterConfig.spriteSheets) {
+            try {
+                Object.keys(characterConfig.spriteSheets).forEach(animKey => {
+                    const texKey = `${characterConfig.name}_${animKey}`;
+                    if (scene.textures.exists(texKey)) {
+                        const tex = scene.textures.get(texKey);
+                        if (tex && tex.setFilter) {
+                            tex.setFilter(Phaser.Textures.FilterMode.NEAREST);
+                        }
+                    }
+                });
+            } catch (e) {}
+        }
+        
         // Create sprite
-        this.sprite = scene.physics.add.sprite(x, y, `${characterConfig.name}_idle`);
-        this.sprite.setScale(2.904); // 45% bigger than original (2.42 * 1.2)
+        this.sprite = scene.physics.add.sprite(Math.round(x), Math.round(y), `${characterConfig.name}_idle`);
+        this.sprite.setScale(ENEMY_CONFIG.minScale);
         this.sprite.setDepth(1000 - y);
         this.sprite.setBounce(0.2);
         this.sprite.setCollideWorldBounds(true);
@@ -227,7 +253,31 @@ class Enemy {
     }
     
     update(time, delta) {
+        // Early returns for invalid states
         if (!this.player || this.state === ENEMY_STATES.DEAD) return;
+        if (!this.sprite || !this.sprite.active) return; // Don't update if sprite is destroyed
+        
+        // If we spawned outside the world horizontally, re-enable world bounds once we enter
+        if (this.reenableWorldBoundsOnEntry) {
+            const bounds = this.scene.physics.world.bounds;
+            let bodyFullyInside = false;
+            if (this.sprite.body) {
+                const worldLeft = bounds.x;
+                const worldRight = bounds.x + bounds.width;
+                bodyFullyInside = (this.sprite.body.left >= worldLeft) && (this.sprite.body.right <= worldRight);
+            } else {
+                bodyFullyInside = (this.sprite.x >= bounds.x) && (this.sprite.x <= (bounds.x + bounds.width));
+            }
+            if (bodyFullyInside) {
+                if (typeof this.sprite.setCollideWorldBounds === 'function') {
+                    this.sprite.setCollideWorldBounds(true);
+                }
+                this.reenableWorldBoundsOnEntry = false;
+            }
+        }
+        
+        // Skip updates if paused by event system
+        if (this.eventPaused) return;
         
         // Update animation lock timer
         if (this.lockTimer > 0) {

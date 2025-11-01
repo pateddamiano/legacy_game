@@ -83,8 +83,11 @@ class Projectile {
             return;
         }
         
-        // Check if projectile is out of world bounds
-        if (this.sprite.x < -100 || this.sprite.x > this.scene.physics.world.bounds.width + 100) {
+        // Check if projectile is out of world bounds (respect current world bounds x and width)
+        const worldBounds = this.scene.physics.world.bounds;
+        const leftEdge = worldBounds.x;
+        const rightEdge = worldBounds.x + worldBounds.width;
+        if (this.sprite.x < (leftEdge - 100) || this.sprite.x > (rightEdge + 100)) {
             this.destroy();
             return;
         }

@@ -46,6 +46,18 @@ class MainMenuScene extends Phaser.Scene {
     create() {
         console.log('🏠 ===== MAIN MENU SCENE CREATED =====');
         
+        // Check for debug mode - immediately redirect to test level
+        if (window.DIRECT_LEVEL_LOAD && window.TEST_LEVEL_ID === 'test') {
+            console.log('%c🧪 DEBUG MODE: Redirecting from MainMenuScene to test level', 'color: #00ff00; font-weight: bold;');
+            this.time.delayedCall(100, () => {
+                this.scene.start('GameScene', {
+                    character: 'tireek',
+                    levelId: 'test'
+                });
+            });
+            return;
+        }
+        
         // Initialize core systems if not already done
         this.initializeCoreServices();
         
