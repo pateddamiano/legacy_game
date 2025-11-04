@@ -29,8 +29,12 @@ class ExtrasManager {
             // Ignore if texture not yet available; Phaser will apply default
         }
 
-        const sprite = this.scene.add.image(Math.round(x), Math.round(y), def.key);
-        
+        const sprite = this.scene.physics.add.image(Math.round(x), Math.round(y), def.key);
+
+        // Disable gravity and world bounds collision for background elements
+        sprite.setGravityY(0);
+        sprite.setCollideWorldBounds(false);
+
         // Determine scale: allow matching player's current display height for consistency
         let scale = options.scale !== undefined ? options.scale : (def.scale || 1);
         const matchPlayer = options.matchPlayer === true || options.matchPlayerScale === true;
@@ -44,7 +48,20 @@ class ExtrasManager {
         }
         sprite.setScale(scale);
         console.log(`🎭 ExtrasManager.spawnExtra: sprite.height=${sprite.height}, player.displayHeight=${this.scene.player?.displayHeight}, finalScale=${scale}, displayHeight=${sprite.displayHeight}`);
-        sprite.setDepth(1000 - y);
+
+        // Handle bottom positioning if specified
+        if (options.bottomY !== undefined) {
+            // Sprite origin is 0.5, so bottom is at current y + (displayHeight/2)
+            // To have bottom at bottomY, set y = bottomY - (displayHeight/2)
+            const newY = options.bottomY - (sprite.displayHeight / 2);
+            sprite.setY(Math.round(newY));
+            console.log(`🎭 Positioning bottom of sprite at y=${options.bottomY}, sprite y=${newY}`);
+        }
+
+        // Set depth - use custom depth if provided, otherwise default to 1000 - y
+        const finalY = sprite.y; // Use the final Y position for depth calculation
+        const depth = options.depth !== undefined ? options.depth : (1000 - finalY);
+        sprite.setDepth(depth);
 
         const extra = { name, sprite };
         const index = this.extras.push(extra) - 1;

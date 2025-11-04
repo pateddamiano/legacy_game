@@ -23,6 +23,15 @@ class UIManager {
         this.scoreContainer = null;
         this.scoreMicrophone = null;
         
+        // Boss health bar elements
+        this.bossHealthBar = null;
+        this.bossHealthBarBg = null;
+        this.bossHealthBarBorder = null;
+        this.bossHealthBarGraphics = null;
+        this.bossNameText = null;
+        this.bossHealthBarVisible = false;
+        this.currentBoss = null;
+        
         console.log('🎨 UIManager initialized!');
     }
     
@@ -46,6 +55,9 @@ class UIManager {
         
         // Create score display
         this.createScoreDisplay();
+        
+        // Create boss health bar (hidden by default)
+        this.createBossHealthBar();
     }
     
     createDebugText() {
@@ -537,6 +549,159 @@ Legend:
         }
     }
     
+    // ========================================
+    // BOSS HEALTH BAR SYSTEM
+    // ========================================
+    
+    createBossHealthBar() {
+        const cam = this.scene.cameras.main;
+        const barWidth = 400;
+        const barHeight = 30;
+        const barX = cam.width / 2; // Center horizontally
+        const barY = 100; // Below player health bars
+        
+        // Boss name text
+        this.bossNameText = this.scene.add.text(barX, barY - 30, '', {
+            fontSize: '24px',
+            fill: '#FFD700',
+            fontFamily: 'Arial',
+            fontWeight: 'bold',
+            stroke: '#000000',
+            strokeThickness: 3
+        });
+        this.bossNameText.setOrigin(0.5, 0.5);
+        this.bossNameText.setDepth(2004);
+        this.bossNameText.setScrollFactor(0);
+        this.bossNameText.setVisible(false);
+        
+        // Border
+        this.bossHealthBarBorder = this.scene.add.rectangle(
+            barX,
+            barY,
+            barWidth + 6,
+            barHeight + 6,
+            0x000000
+        );
+        this.bossHealthBarBorder.setOrigin(0.5, 0.5);
+        this.bossHealthBarBorder.setDepth(2003);
+        this.bossHealthBarBorder.setScrollFactor(0);
+        this.bossHealthBarBorder.setVisible(false);
+        
+        // Background
+        this.bossHealthBarBg = this.scene.add.rectangle(
+            barX,
+            barY,
+            barWidth,
+            barHeight,
+            0x404040
+        );
+        this.bossHealthBarBg.setOrigin(0.5, 0.5);
+        this.bossHealthBarBg.setDepth(2004);
+        this.bossHealthBarBg.setScrollFactor(0);
+        this.bossHealthBarBg.setVisible(false);
+        
+        // Health fill graphics
+        this.bossHealthBarGraphics = this.scene.add.graphics();
+        this.bossHealthBarGraphics.setDepth(2005);
+        this.bossHealthBarGraphics.setScrollFactor(0);
+        
+        // Store dimensions
+        this.bossBarWidth = barWidth;
+        this.bossBarHeight = barHeight;
+        this.bossBarX = barX;
+        this.bossBarY = barY;
+        
+        console.log('👹 Boss health bar created');
+    }
+    
+    showBossHealthBar(bossName, bossInstance = null) {
+        if (!this.bossHealthBarBorder || !this.bossNameText) {
+            console.warn('👹 Boss health bar not initialized');
+            return;
+        }
+        
+        this.bossHealthBarVisible = true;
+        this.currentBoss = bossInstance;
+        
+        // Show all elements
+        this.bossNameText.setText(bossName || 'BOSS');
+        this.bossNameText.setVisible(true);
+        this.bossHealthBarBorder.setVisible(true);
+        this.bossHealthBarBg.setVisible(true);
+        
+        // Update health bar immediately if boss instance provided
+        if (bossInstance) {
+            this.updateBossHealthBar(bossInstance.health, bossInstance.maxHealth);
+        }
+        
+        console.log(`👹 Boss health bar shown for: ${bossName}`);
+    }
+    
+    hideBossHealthBar() {
+        if (!this.bossHealthBarBorder || !this.bossNameText) {
+            return;
+        }
+        
+        this.bossHealthBarVisible = false;
+        this.currentBoss = null;
+        
+        // Hide all elements
+        this.bossNameText.setVisible(false);
+        this.bossHealthBarBorder.setVisible(false);
+        this.bossHealthBarBg.setVisible(false);
+        
+        // Clear graphics
+        if (this.bossHealthBarGraphics) {
+            this.bossHealthBarGraphics.clear();
+        }
+        
+        console.log('👹 Boss health bar hidden');
+    }
+    
+    updateBossHealthBar(currentHealth, maxHealth) {
+        if (!this.bossHealthBarGraphics || !this.bossHealthBarVisible) {
+            return;
+        }
+        
+        // Clear previous graphics
+        this.bossHealthBarGraphics.clear();
+        
+        // Calculate health percentage
+        const healthPercent = Math.max(0, Math.min(1, currentHealth / maxHealth));
+        const currentWidth = this.bossBarWidth * healthPercent;
+        
+        // Color based on health
+        let healthColor;
+        if (healthPercent > 0.6) {
+            healthColor = 0xFF0000; // Bright red
+        } else if (healthPercent > 0.3) {
+            healthColor = 0xFF4500; // Darker red/orange
+        } else {
+            healthColor = 0x8B0000; // Dark red
+        }
+        
+        // Draw the health bar fill
+        if (currentWidth > 0) {
+            // Main health bar fill
+            this.bossHealthBarGraphics.fillStyle(healthColor);
+            this.bossHealthBarGraphics.fillRect(
+                this.bossBarX - this.bossBarWidth / 2,
+                this.bossBarY - this.bossBarHeight / 2,
+                currentWidth,
+                this.bossBarHeight
+            );
+            
+            // Add highlight
+            this.bossHealthBarGraphics.fillStyle(0xffffff, 0.3);
+            this.bossHealthBarGraphics.fillRect(
+                this.bossBarX - this.bossBarWidth / 2,
+                this.bossBarY - this.bossBarHeight / 2,
+                currentWidth,
+                this.bossBarHeight * 0.4
+            );
+        }
+    }
+    
     // Cleanup method for scene destruction
     destroy() {
         if (this.debugGraphics) {
@@ -544,6 +709,9 @@ Legend:
         }
         if (this.healthBarGraphics) {
             this.healthBarGraphics.destroy();
+        }
+        if (this.bossHealthBarGraphics) {
+            this.bossHealthBarGraphics.destroy();
         }
         
         console.log('🗑️ UIManager destroyed');

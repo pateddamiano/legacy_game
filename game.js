@@ -8,7 +8,7 @@
 // ========================================
 const urlParams = new URLSearchParams(window.location.search);
 window.DEBUG_MODE = urlParams.get('debug') === 'true' || urlParams.get('test') === 'true';
-window.TEST_LEVEL_ID = urlParams.get('level') || null;
+window.TEST_LEVEL_ID = urlParams.get('level') ? parseInt(urlParams.get('level'), 10) : null;
 window.DIRECT_LEVEL_LOAD = window.DEBUG_MODE && window.TEST_LEVEL_ID;
 
 // Debug logging

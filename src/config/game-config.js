@@ -61,10 +61,10 @@ const GAME_CONFIG = {
 // ========================================
 // WORLD BOUNDS
 // ========================================
-// 🎯 SINGLE SOURCE OF TRUTH FOR WORLD BOUNDARIES 🎯
-// All systems read from here - DO NOT duplicate these values elsewhere!
+// 🎯 LEVEL-SPECIFIC BOUNDS NOW USED FROM JSON FILES 🎯
+// This is kept for backwards compatibility but levels now define their own bounds
 const WORLD_CONFIG = {
-    width: 3600,
+    width: 100000,  // Very large default - levels now use their own bounds from JSON
     height: 720,
     streetTopLimit: 410,      // Top boundary for vertical movement (expanded upward)
     streetBottomLimit: 650,    // Bottom boundary for vertical movement

@@ -23,8 +23,78 @@ const WEAPON_CONFIG = {
         },
         verticalTolerance: 120, // Increased from 60 - much more forgiving vertical distance
         collisionThreshold: 50   // Increased collision threshold for easier hits
+    },
+    // Boss rating weapons - different star ratings
+    rating_0: {
+        name: '0-Star Rating',
+        spriteKey: 'ratingWeapon0',
+        spinningKey: 'ratingWeapon0', // Static image that will rotate
+        damage: 15,
+        speed: 600,
+        range: 600,
+        cooldown: 2000,
+        size: { width: 48, height: 48 },
+        hitbox: { width: 48, height: 48 },
+        animations: null, // Will rotate sprite instead
+        verticalTolerance: 100,
+        collisionThreshold: 40
+    },
+    rating_1: {
+        name: '1-Star Rating',
+        spriteKey: 'ratingWeapon1',
+        spinningKey: 'ratingWeapon1',
+        damage: 18,
+        speed: 650,
+        range: 650,
+        cooldown: 2000,
+        size: { width: 48, height: 48 },
+        hitbox: { width: 48, height: 48 },
+        animations: null,
+        verticalTolerance: 100,
+        collisionThreshold: 40
+    },
+    rating_2: {
+        name: '2-Star Rating',
+        spriteKey: 'ratingWeapon2',
+        spinningKey: 'ratingWeapon2',
+        damage: 22,
+        speed: 700,
+        range: 700,
+        cooldown: 2000,
+        size: { width: 48, height: 48 },
+        hitbox: { width: 48, height: 48 },
+        animations: null,
+        verticalTolerance: 100,
+        collisionThreshold: 40
+    },
+    rating_3: {
+        name: '3-Star Rating',
+        spriteKey: 'ratingWeapon3',
+        spinningKey: 'ratingWeapon3',
+        damage: 25,
+        speed: 750,
+        range: 750,
+        cooldown: 2000,
+        size: { width: 48, height: 48 },
+        hitbox: { width: 48, height: 48 },
+        animations: null,
+        verticalTolerance: 100,
+        collisionThreshold: 40
+    },
+    rating_4: {
+        name: '4-Star Rating',
+        spriteKey: 'ratingWeapon4',
+        spinningKey: 'ratingWeapon4',
+        damage: 28,
+        speed: 800,
+        range: 800,
+        cooldown: 2000,
+        size: { width: 48, height: 48 },
+        hitbox: { width: 48, height: 48 },
+        animations: null,
+        verticalTolerance: 100,
+        collisionThreshold: 40
     }
-    // Add more weapons here in the future
 };
 
 // ========================================
@@ -58,9 +128,21 @@ class Projectile {
             this.sprite.body.debugBodyColor = 0xff0000; // Red hitbox for debugging
         }
         
-        // Play spinning animation
-        this.sprite.anims.play(`${weaponConfig.name.toLowerCase().replace(' ', '_')}_spinning`, true);
-        
+        // Play spinning animation or add rotation for static weapons
+        if (weaponConfig.animations && weaponConfig.animations.spinning) {
+            // For animated weapons like vinyl records
+            this.sprite.anims.play(`${weaponConfig.name.toLowerCase().replace(' ', '_')}_spinning`, true);
+        } else if (weaponConfig.name.includes('Rating')) {
+            // For rating weapons, add rotation tween
+            this.scene.tweens.add({
+                targets: this.sprite,
+                angle: 360,
+                duration: 500,
+                repeat: -1,
+                ease: 'Linear'
+            });
+        }
+
         // Play throw sound and keep it playing until hit/disappear
         if (this.scene.sound && this.scene.cache.audio.has('weaponRecordThrow')) {
             this.throwSound = this.scene.sound.add('weaponRecordThrow', {
@@ -151,7 +233,14 @@ class WeaponManager {
             frameWidth: 64,
             frameHeight: 64
         });
-        
+
+        // Load boss rating weapon assets
+        this.scene.load.image('ratingWeapon0', 'assets/characters/critic/spritesheets/rating_weapons/0_1frame.png');
+        this.scene.load.image('ratingWeapon1', 'assets/characters/critic/spritesheets/rating_weapons/1_1frame.png');
+        this.scene.load.image('ratingWeapon2', 'assets/characters/critic/spritesheets/rating_weapons/2_1frame.png');
+        this.scene.load.image('ratingWeapon3', 'assets/characters/critic/spritesheets/rating_weapons/3_1frame.png');
+        this.scene.load.image('ratingWeapon4', 'assets/characters/critic/spritesheets/rating_weapons/4_1frame.png');
+
         console.log('🎯 Loading weapon assets...');
     }
     

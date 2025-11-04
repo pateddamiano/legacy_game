@@ -34,9 +34,9 @@ class AudioBootScene extends Phaser.Scene {
     create() {
         console.log('🎵 ===== AUDIO BOOT SCENE CREATED =====');
         
-        // Check for debug mode FIRST - skip everything if test level requested
-        if (window.DIRECT_LEVEL_LOAD && window.TEST_LEVEL_ID === 'test') {
-            console.log('%c🧪 DEBUG MODE: Skipping all loading, going directly to test level', 'color: #00ff00; font-weight: bold;');
+        // Check for debug mode FIRST - skip everything if direct level load requested
+        if (window.DIRECT_LEVEL_LOAD && (window.TEST_LEVEL_ID !== undefined)) {
+            console.log('%c🧪 DEBUG MODE: Skipping menu, going directly to level', 'color: #00ff00; font-weight: bold;', window.TEST_LEVEL_ID);
             // Still need to load assets, but skip UI and go straight to game
             this.setupMinimalLoading();
             return;
@@ -75,13 +75,13 @@ class AudioBootScene extends Phaser.Scene {
     }
 
     setupMinimalLoading() {
-        console.log('🧪 Setting up minimal loading for test level...');
+        console.log('🧪 Setting up minimal loading for direct level...');
         
         // Create simple loading text
         const centerX = this.cameras.main.centerX;
         const centerY = this.cameras.main.centerY;
         
-        this.add.text(centerX, centerY, 'Loading Test Level...', {
+        this.add.text(centerX, centerY, 'Loading Level...', {
             fontSize: '24px',
             fill: '#00ff00',
             fontFamily: 'Arial',
@@ -94,28 +94,28 @@ class AudioBootScene extends Phaser.Scene {
         // Set up progress tracking
         this.setupProgressTracking();
         
-        // Skip audio activation in test mode
+        // Skip audio activation in direct-load mode
         this.audioActivated = true;
         
         // Check if assets are already loaded
         if (this.load.isLoading()) {
             // Assets are still loading, wait for completion
             this.load.once('complete', () => {
-                console.log('🧪 Assets loaded, transitioning to test level...');
+                console.log('🧪 Assets loaded, transitioning directly to level...');
                 this.transitioned = true;
                 this.scene.start('GameScene', {
                     character: 'tireek',
-                    levelId: 'test'
+                    levelId: window.TEST_LEVEL_ID !== undefined ? window.TEST_LEVEL_ID : 'test'
                 });
             });
         } else {
             // Assets already loaded, go immediately
-            console.log('🧪 Assets already loaded, going to test level immediately...');
+            console.log('🧪 Assets already loaded, going to level immediately...');
             this.transitioned = true;
             this.time.delayedCall(500, () => {
                 this.scene.start('GameScene', {
                     character: 'tireek',
-                    levelId: 'test'
+                    levelId: window.TEST_LEVEL_ID !== undefined ? window.TEST_LEVEL_ID : 'test'
                 });
             });
         }
@@ -304,14 +304,24 @@ class AudioBootScene extends Phaser.Scene {
 
     loadAllEnvironmentAssets() {
         console.log('🌍 Loading ALL environment assets...');
-        
-        // Load parallax background texture (will be tiled)
+
+        // Load parallax background textures for different levels
         this.load.image('parallax_background', 'assets/level_1_pieces/Background.png');
         console.log('🌍 Loading parallax background: assets/level_1_pieces/Background.png');
-        
+
+        this.load.image('parallax_background_level2', 'assets/level_2_pieces/level2_background_subway.png');
+        console.log('🌍 Loading level 2 parallax background: assets/level_2_pieces/level2_background_subway.png');
+
+        // Load level 2 moving subway car
+        this.load.image('subwaycar', 'assets/level_2_pieces/subwaycar.png');
+        console.log('🌍 Loading subway car: assets/level_2_pieces/subwaycar.png');
+
         // Load level 1 background segments
         this.loadLevel1Background();
-        
+
+        // Load level 2 background segments (metadata-driven)
+        this.loadLevel2Background();
+
         console.log('🌍 All environment assets configured for loading');
     }
 
@@ -330,6 +340,30 @@ class AudioBootScene extends Phaser.Scene {
         }
     }
 
+    loadLevel2Background() {
+        console.log('🌍 Loading Level 2 background segments (metadata-driven)...');
+        
+        // Load metadata first to determine number of segments dynamically
+        this.load.json('level_2_metadata', 'assets/backgrounds/level_2_segments/metadata.json');
+        
+        // Once metadata is loaded, queue up the segment images
+        this.load.once('filecomplete-json-' + 'level_2_metadata', (key, type, data) => {
+            try {
+                const segments = (data && data.segments) || [];
+                console.log('🌍 📊 Level 2 segments found:', segments.length);
+                segments.forEach((seg) => {
+                    const index = (seg.index !== undefined) ? seg.index : 0;
+                    const segmentKey = `level_2_segment_${index.toString().padStart(3, '0')}`;
+                    const segmentPath = `assets/backgrounds/level_2_segments/segment_${index.toString().padStart(3, '0')}.png`;
+                    this.load.image(segmentKey, segmentPath);
+                    console.log(`🌍 Loading segment: ${segmentKey} from ${segmentPath}`);
+                });
+            } catch (e) {
+                console.warn('🌍 Level 2 metadata load handler error:', e);
+            }
+        });
+    }
+
     loadAllGameplayAssets() {
         console.log('⚔️ Loading ALL gameplay assets...');
         
@@ -339,7 +373,14 @@ class AudioBootScene extends Phaser.Scene {
             frameWidth: 64,
             frameHeight: 64
         });
-        
+
+        // Boss rating weapon assets
+        this.load.image('ratingWeapon0', 'assets/characters/critic/spritesheets/rating_weapons/0_1frame.png');
+        this.load.image('ratingWeapon1', 'assets/characters/critic/spritesheets/rating_weapons/1_1frame.png');
+        this.load.image('ratingWeapon2', 'assets/characters/critic/spritesheets/rating_weapons/2_1frame.png');
+        this.load.image('ratingWeapon3', 'assets/characters/critic/spritesheets/rating_weapons/3_1frame.png');
+        this.load.image('ratingWeapon4', 'assets/characters/critic/spritesheets/rating_weapons/4_1frame.png');
+
         // Pickup assets
         this.load.image('goldenMicrophone', 'assets/pickups/GoldenMicrophone_64x64.png');
         
@@ -576,14 +617,14 @@ class AudioBootScene extends Phaser.Scene {
         }
         
         // Check for debug mode - skip menu and go directly to test level
-        if (window.DIRECT_LEVEL_LOAD && window.TEST_LEVEL_ID === 'test') {
-            console.log('%c🧪 DEBUG MODE: Skipping menu, going directly to test level', 'color: #00ff00; font-weight: bold;');
+        if (window.DIRECT_LEVEL_LOAD && (window.TEST_LEVEL_ID !== undefined)) {
+            console.log('%c🧪 DEBUG MODE: Skipping menu, going directly to level', 'color: #00ff00; font-weight: bold;', window.TEST_LEVEL_ID);
             this.updateUIToShowCompletion();
             this.time.delayedCall(500, () => {
                 this.transitioned = true;
                 this.scene.start('GameScene', {
                     character: 'tireek',
-                    levelId: 'test'
+                    levelId: window.TEST_LEVEL_ID
                 });
             });
             return;

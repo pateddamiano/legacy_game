@@ -19,6 +19,9 @@ class EnvironmentManager {
         // Street/movement boundaries - read from centralized WORLD_CONFIG
         this.streetTopLimit = WORLD_CONFIG.streetTopLimit;
         this.streetBottomLimit = WORLD_CONFIG.streetBottomLimit;
+
+        // Apply level-specific adjustments
+        this.applyLevelSpecificBounds();
         
         // Perspective settings (back to original scale)
         this.perspectiveConfig = {
@@ -37,14 +40,34 @@ class EnvironmentManager {
     // ========================================
     
     initializeWorld() {
-        // Set world bounds for physics and camera
-        this.scene.physics.world.setBounds(0, 0, this.worldWidth, this.worldHeight);
+        // Set world bounds for physics and camera (only if not already set by WorldManager)
+        const currentBounds = this.scene.physics.world.bounds;
+        if (currentBounds.width <= this.worldWidth) {
+            // Bounds haven't been set to level-specific values yet, use defaults
+            this.scene.physics.world.setBounds(0, 0, this.worldWidth, this.worldHeight);
+        } else {
+            // Bounds were already set by WorldManager, use those
+            console.log(`🌍 Using existing world bounds set by WorldManager: ${currentBounds.width}x${currentBounds.height}`);
+        }
         
         // Create all background layers
         this.createParallaxBackgrounds();
         
         console.log(`🌍 World initialized: ${this.worldWidth}x${this.worldHeight}`);
         console.log(`🛣️ Street limits: ${this.streetTopLimit} - ${this.streetBottomLimit}`);
+    }
+
+    /**
+     * Apply level-specific boundary adjustments
+     */
+    applyLevelSpecificBounds() {
+        // Check if we're in level 2 and adjust bounds
+        if (this.scene && this.scene.selectedLevelId === 2) {
+            console.log('🌍 Applying level 2 specific street bounds');
+            this.streetTopLimit = 350;    // Highest point on screen (let player go higher)
+            this.streetBottomLimit = 527; // Lowest point on screen
+            console.log(`🛣️ Level 2 street limits: ${this.streetTopLimit} - ${this.streetBottomLimit}`);
+        }
     }
     
     // ========================================
@@ -218,8 +241,22 @@ class EnvironmentManager {
     // ========================================
     
     setupCameraForEnvironment(camera, targetSprite) {
-        // Set camera bounds to world size
-        camera.setBounds(0, 0, this.worldWidth, this.worldHeight);
+        console.log(`📷 EnvironmentManager.setupCameraForEnvironment called - worldWidth: ${this.worldWidth}`);
+        // Set camera bounds to world size (only if not already set to larger bounds)
+        const currentBounds = camera.getBounds();
+        console.log(`📷 Current camera bounds: ${currentBounds ? `${currentBounds.x}-${currentBounds.x+currentBounds.width} (${currentBounds.width}px)` : 'none'}`);
+
+        // Only set camera bounds if they haven't been set to a reasonable level-specific size
+        // Since levels now define their own bounds in JSON, we should preserve those
+        if (!currentBounds || currentBounds.width <= 5000) {  // Only override if bounds are very small (likely default)
+            console.log(`📷 OVERRIDE: Setting camera bounds to world size: ${this.worldWidth}x${this.worldHeight} (condition: ${!currentBounds ? 'no bounds' : `${currentBounds.width} <= 5000`})`);
+            console.log(`📷 OVERRIDE: Previous bounds were: ${currentBounds ? `${currentBounds.x}-${currentBounds.x+currentBounds.width} (${currentBounds.width}px)` : 'none'}`);
+            camera.setBounds(0, 0, this.worldWidth, this.worldHeight);
+            const newBounds = camera.getBounds();
+            console.log(`📷 OVERRIDE: Camera bounds now set to: ${newBounds.x}-${newBounds.x+newBounds.width} (${newBounds.width}px)`);
+        } else {
+            console.log(`📷 Preserving existing camera bounds: ${currentBounds.width}x${currentBounds.height} (likely set by level system)`);
+        }
         
         // Follow target sprite with smooth camera movement
         if (targetSprite) {

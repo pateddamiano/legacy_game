@@ -236,6 +236,30 @@ class EventManager {
             case 'destroyExtra':
                 this.executeDestroyExtra(action);
                 break;
+            case 'triggerEvent':
+                this.executeTriggerEvent(action);
+                break;
+            case 'startSubwayMovement':
+                this.executeStartSubwayMovement(action);
+                break;
+            case 'spawnSubwayCarCycle':
+                this.executeSpawnSubwayCarCycle(action);
+                break;
+            case 'spawnBoss':
+                this.executeSpawnBoss(action);
+                break;
+            case 'showBossHealthBar':
+                this.executeShowBossHealthBar(action);
+                break;
+            case 'setBossBehavior':
+                this.executeSetBossBehavior(action);
+                break;
+            case 'waitForBossDefeated':
+                this.executeWaitForBossDefeated(action);
+                break;
+            case 'bossDefeatedDialogue':
+                this.executeBossDefeatedDialogue(action);
+                break;
             default:
                 console.warn(`🎬 Unknown action type: ${action.type}`);
                 this.advanceAction();
@@ -299,13 +323,40 @@ class EventManager {
             return;
         }
         
-        console.log(`🎬 Moving ${target} to (${destination.x}, ${destination.y}) over ${duration}ms`);
+        // Support relative syntax like '+=3600' or '-=500' for x/y
+        const parseRelative = (raw, current) => {
+            if (typeof raw === 'string') {
+                // Handle camera-relative expressions (e.g., "camera.x+1400")
+                if (raw.includes('camera.x')) {
+                    const cameraX = this.scene.cameras.main.scrollX;
+                    const expr = raw.replace('camera.x', cameraX.toString());
+                    try {
+                        return eval(expr);
+                    } catch (e) {
+                        console.warn('🎬 Failed to evaluate camera expression:', raw);
+                        return current; // fallback
+                    }
+                }
+
+                // Handle relative syntax like '+=3600' or '-=500'
+                const m = raw.match(/^([+\-]=)(-?\d+(?:\.\d+)?)$/);
+                if (m) {
+                    const delta = parseFloat(m[2]);
+                    return m[1] === '+=' ? current + delta : current - delta;
+                }
+            }
+            return (raw !== undefined && raw !== null) ? raw : current;
+        };
+        const destX = parseRelative(destination.x, entity.x);
+        const destY = parseRelative(destination.y, entity.y);
+        
+        console.log(`🎬 Moving ${target} to (${destX}, ${destY}) over ${duration}ms`);
         
         // Create tween for smooth movement
         const tween = this.scene.tweens.add({
             targets: entity,
-            x: destination.x,
-            y: destination.y !== undefined ? destination.y : entity.y,
+            x: destX,
+            y: destY,
             duration: duration,
             ease: action.ease || 'Power2', // Default easing
             onComplete: () => {
@@ -345,10 +396,21 @@ class EventManager {
     }
     
     executeWait(action) {
-        const duration = action.duration || 1000;
-        
+        let duration = action.duration || 1000;
+
+        // Support random duration in format: "random(min,max)"
+        if (typeof duration === 'string' && duration.startsWith('random(')) {
+            const match = duration.match(/random\((\d+),(\d+)\)/);
+            if (match) {
+                const min = parseInt(match[1]);
+                const max = parseInt(match[2]);
+                duration = Phaser.Math.Between(min, max);
+                console.log(`🎬 Random wait: ${min}-${max}ms, selected: ${duration}ms`);
+            }
+        }
+
         console.log(`🎬 Waiting ${duration}ms`);
-        
+
         // Wait for specified duration, then advance
         this.scene.time.delayedCall(duration, () => {
             this.advanceAction();
@@ -361,19 +423,48 @@ class EventManager {
         if (action.pan) {
             // Pan camera to position
             const duration = action.duration || 1000;
-            console.log(`🎬 Panning camera to (${action.pan.x}, ${action.pan.y})`);
-            
+            const currentScrollX = camera.scrollX;
+            const currentScrollY = camera.scrollY;
+            const targetX = action.pan.x;
+            const targetY = action.pan.y !== undefined ? action.pan.y : camera.scrollY;
+            console.log(`🎬 [PAN] Starting camera pan from (${currentScrollX.toFixed(0)}, ${currentScrollY.toFixed(0)}) to (${targetX.toFixed(0)}, ${targetY.toFixed(0)}) over ${duration}ms`);
+            console.log(`🎬 [PAN] Camera bounds: ${JSON.stringify(camera.getBounds())}`);
+
             // Stop following before panning
             camera.stopFollow();
             
-            this.scene.tweens.add({
+            const panTween = this.scene.tweens.add({
                 targets: camera,
-                scrollX: action.pan.x,
-                scrollY: action.pan.y !== undefined ? action.pan.y : camera.scrollY,
+                scrollX: targetX,
+                scrollY: targetY,
                 duration: duration,
                 ease: action.ease || 'Power2',
+                onStart: () => {
+                    console.log(`🎬 [PAN] ✅ Tween STARTED - Camera at (${camera.scrollX.toFixed(0)}, ${camera.scrollY.toFixed(0)})`);
+                },
+                onUpdate: () => {
+                    console.log(`🎬 [PAN] Tween update - Camera at (${camera.scrollX.toFixed(0)}, ${camera.scrollY.toFixed(0)})`);
+                },
                 onComplete: () => {
+                    console.log(`🎬 [PAN] ✅ Tween COMPLETED - Camera at (${camera.scrollX.toFixed(0)}, ${camera.scrollY.toFixed(0)})`);
                     this.advanceAction();
+                }
+            });
+
+            console.log(`🎬 [PAN] Tween created: ID=${panTween.key}, isPlaying=${panTween.isPlaying()}`);
+
+            // Safety timeout in case tween fails
+            this.scene.time.delayedCall(duration + 500, () => {
+                console.log(`🎬 [PAN] Safety timeout fired - Tween state: destroyed=${panTween.isDestroyed()}, playing=${panTween.isPlaying()}`);
+                if (panTween && !panTween.isDestroyed() && panTween.isPlaying()) {
+                    console.warn(`🎬 [PAN] ⚠️ Camera pan tween still running after ${duration + 500}ms, forcing completion`);
+                    panTween.stop();
+                    camera.scrollX = targetX;
+                    camera.scrollY = targetY;
+                    console.log(`🎬 [PAN] Forced camera to (${camera.scrollX.toFixed(0)}, ${camera.scrollY.toFixed(0)})`);
+                    this.advanceAction();
+                } else {
+                    console.log(`🎬 [PAN] Tween already completed or destroyed, safety timeout skipping`);
                 }
             });
         } else if (action.stopFollow) {
@@ -385,13 +476,31 @@ class EventManager {
         } else if (action.setBounds) {
             // Set camera bounds
             const bounds = action.setBounds;
+            const oldBounds = camera.getBounds();
+            const oldScrollX = camera.scrollX;
+            const oldScrollY = camera.scrollY;
             console.log(`🎬 Setting camera bounds: x=${bounds.x}, y=${bounds.y}, width=${bounds.width}, height=${bounds.height}`);
+            console.log(`🎬 Camera position before bounds: (${oldScrollX}, ${oldScrollY})`);
+            console.log(`🎬 Old camera bounds: ${oldBounds.x}, ${oldBounds.y}, ${oldBounds.width}x${oldBounds.height}`);
+
             camera.setBounds(
                 bounds.x !== undefined ? bounds.x : camera.getBounds().x,
                 bounds.y !== undefined ? bounds.y : camera.getBounds().y,
                 bounds.width !== undefined ? bounds.width : camera.getBounds().width,
                 bounds.height !== undefined ? bounds.height : camera.getBounds().height
             );
+
+            const newBounds = camera.getBounds();
+            const newScrollX = camera.scrollX;
+            const newScrollY = camera.scrollY;
+            console.log(`🎬 New camera bounds: ${newBounds.x}, ${newBounds.y}, ${newBounds.width}x${newBounds.height}`);
+            console.log(`🎬 Camera position after bounds: (${newScrollX}, ${newScrollY})`);
+
+            // Check if camera was clamped
+            if (oldScrollX !== newScrollX || oldScrollY !== newScrollY) {
+                console.log(`🎬 Camera was clamped from (${oldScrollX}, ${oldScrollY}) to (${newScrollX}, ${newScrollY})`);
+            }
+
             this.advanceAction();
         } else if (action.follow) {
             // Set camera follow target
@@ -1139,6 +1248,20 @@ class EventManager {
         // Determine position
         let x = action.position?.x;
         let y = action.position?.y;
+
+        // Handle camera-relative positioning (e.g., "camera.x-200")
+        if (typeof x === 'string' && x.includes('camera.x')) {
+            const cameraX = this.scene.cameras.main.scrollX;
+            // Evaluate simple expressions like "camera.x-200"
+            const expr = x.replace('camera.x', cameraX.toString());
+            try {
+                x = eval(expr);
+            } catch (e) {
+                console.warn('🎬 Failed to evaluate camera expression:', x);
+                x = cameraX - 200; // fallback
+            }
+        }
+
         if (action.relativeTo === 'player' && this.scene.player) {
             const ox = action.offset?.x || 0;
             const oy = action.offset?.y || 0;
@@ -1159,7 +1282,9 @@ class EventManager {
             scale: action.scale,
             matchPlayer: action.matchPlayer,
             matchPlayerScale: action.matchPlayerScale,
-            multiplier: action.multiplier
+            multiplier: action.multiplier,
+            depth: action.depth,
+            bottomY: action.bottomY
         };
         console.log('🎬 executeSpawnExtra:', { name, x, y, opts });
         const extra = this.scene.extrasManager.spawnExtra(name, x, y, opts);
@@ -1184,7 +1309,140 @@ class EventManager {
         this.scene.extrasManager.destroyExtraById(target);
         this.advanceAction();
     }
-    
+
+    executeTriggerEvent(action) {
+        const eventId = action.eventId;
+        if (!eventId) {
+            console.warn('🎬 TriggerEvent missing eventId');
+            this.advanceAction();
+            return;
+        }
+
+        console.log(`🎬 Triggering event: ${eventId}`);
+
+        // Find the event in the current level config
+        const levelConfig = this.scene.levelManager ? this.scene.levelManager.getCurrentLevelConfig() : null;
+        if (!levelConfig || !levelConfig.events) {
+            console.warn('🎬 No level config or events found');
+            this.advanceAction();
+            return;
+        }
+
+        const event = levelConfig.events.find(e => e.id === eventId);
+        if (!event) {
+            console.warn(`🎬 Event ${eventId} not found`);
+            this.advanceAction();
+            return;
+        }
+
+        // Start the event (same as startEvent method)
+        event.triggered = true;
+        this.triggeredEvents.add(event.id);
+        this.activeEvent = event;
+        this.actionQueue = [...event.actions]; // Copy actions array
+        this.currentActionIndex = 0;
+
+        // Execute first action
+        this.executeNextAction();
+
+        // Don't advance to next action since we're starting a new event
+    }
+
+    executeStartSubwayMovement(action) {
+        const target = action.target;
+        const speed = action.speed || 500; // pixels per second
+
+        if (!target) {
+            console.warn('🎬 StartSubwayMovement missing target');
+            this.advanceAction();
+            return;
+        }
+
+        // Get the subway car sprite
+        const entity = this.getEntity(target);
+        if (!entity) {
+            console.warn(`🎬 Could not find subway car: ${target}`);
+            this.advanceAction();
+            return;
+        }
+
+        console.log(`🎬 Starting smart subway movement for ${target} at speed ${speed}px/s`);
+
+        // Set constant velocity for smooth movement
+        entity.setVelocityX(speed);
+
+        // Store reference for cleanup
+        entity.subwayMovementActive = true;
+        entity.subwaySpeed = speed;
+
+        // Set up continuous monitoring to destroy when off-screen
+        const checkOffScreen = () => {
+            if (!entity || !entity.active || !entity.subwayMovementActive) {
+                return; // Already destroyed or movement stopped
+            }
+
+            const camera = this.scene.cameras.main;
+            const cameraRight = camera.scrollX + camera.width;
+
+            // Destroy if subway car has moved well past the right edge of camera
+            if (entity.x > cameraRight + 400) {
+                console.log(`🎬 Subway car ${target} went off-screen, destroying`);
+                entity.subwayMovementActive = false;
+                entity.setVelocityX(0);
+                this.scene.extrasManager.destroyExtraById(target);
+                return;
+            }
+
+            // Continue checking
+            this.scene.time.delayedCall(100, checkOffScreen);
+        };
+
+        // Start the monitoring loop
+        this.scene.time.delayedCall(100, checkOffScreen);
+
+        // Advance to next action immediately (movement continues in background)
+        this.advanceAction();
+    }
+
+    executeSpawnSubwayCarCycle(action) {
+        console.log('🎬 Starting subway car spawning cycle');
+
+        const spawnNextCar = () => {
+            // Generate unique ID for this subway car instance
+            const carId = `extra_subway_car_${Date.now()}`;
+
+            // Spawn the subway car
+            const extra = this.scene.extrasManager.spawnExtra('subwaycar', this.scene.cameras.main.scrollX - 400, 300, {
+                id: carId,
+                bottomY: 410,
+                depth: -100
+            });
+
+            if (extra) {
+                console.log(`🎬 Spawned subway car: ${carId}`);
+
+                // Start movement
+                this.executeStartSubwayMovement({
+                    target: carId,
+                    speed: 1000 // Match the speed from the config
+                });
+            } else {
+                console.warn('🎬 Failed to spawn subway car');
+            }
+
+            // Schedule next spawn with random delay (3-6 seconds as set by user)
+            const delay = Phaser.Math.Between(4000, 8000);
+            console.log(`🎬 Next subway car in ${delay}ms`);
+            this.scene.time.delayedCall(delay, spawnNextCar);
+        };
+
+        // Start the cycle
+        spawnNextCar();
+
+        // Advance to next action immediately (cycle continues in background)
+        this.advanceAction();
+    }
+
     pauseEntities(targets) {
         targets.forEach(target => {
             if (target === 'player') {
@@ -1272,9 +1530,10 @@ class EventManager {
     }
     
     resumePlayer() {
-        if (!this.pausedEntities.player) return; // Not paused
+        if (!this.pausedEntities.player) return;
         
-        console.log('🎬 Resuming player');
+        console.log(`🎬 Resuming player - current animation state: ${this.scene.animationManager.currentState}, locked: ${this.scene.animationManager.animationLocked}`);
+        
         this.pausedEntities.player = false;
         
         // Restore state
@@ -1418,6 +1677,222 @@ class EventManager {
     // ========================================
     // UTILITY METHODS
     // ========================================
+    
+    executeSpawnBoss(action) {
+        const bossType = action.bossType || action.enemyType; // Support both names
+        const position = action.position;
+        const bossConfig = action.config || {};
+        
+        if (!bossType || !position) {
+            console.warn('🎬 SpawnBoss action missing bossType or position');
+            this.advanceAction();
+            return;
+        }
+        
+        // Check if Boss class is available
+        if (typeof Boss === 'undefined') {
+            console.error('🎬 Boss class not defined! Make sure boss-system.js loads before event-manager.js');
+            this.advanceAction();
+            return;
+        }
+        
+        // Find character config
+        let characterConfig = null;
+        if (typeof ALL_ENEMY_TYPES !== 'undefined' && ALL_ENEMY_TYPES) {
+            characterConfig = ALL_ENEMY_TYPES.find(config => config.name === bossType);
+        }
+        
+        if (!characterConfig) {
+            console.warn(`🎬 Could not find character config for boss type: ${bossType}`);
+            this.advanceAction();
+            return;
+        }
+        
+        // Merge boss config
+        const mergedConfig = {
+            type: bossType,
+            name: bossConfig.name || BOSS_TYPE_CONFIGS[bossType]?.name || bossType,
+            ...bossConfig
+        };
+        
+        console.log(`👹 Spawning boss: ${mergedConfig.name} at (${position.x}, ${position.y})`);
+        
+        // Create boss instance
+        const boss = new Boss(this.scene, position.x, position.y, characterConfig, mergedConfig);
+        boss.setPlayer(this.scene.player);
+        
+        // Enable AI for boss (unlike regular enemies spawned by events)
+        boss.eventPaused = false;
+        
+        // Add to enemies array
+        if (!this.scene.enemies) {
+            this.scene.enemies = [];
+        }
+        const bossIndex = this.scene.enemies.length;
+        this.scene.enemies.push(boss);
+        
+        // Store special reference for targeting (e.g., "boss_critic")
+        if (action.id) {
+            if (!this.scene.eventEnemyMap) {
+                this.scene.eventEnemyMap = new Map();
+            }
+            this.scene.eventEnemyMap.set(action.id, bossIndex);
+            console.log(`👹 Stored boss reference: ${action.id} -> index ${bossIndex}`);
+        }
+        
+        // Store boss reference separately for easy access
+        if (!this.scene.bosses) {
+            this.scene.bosses = [];
+        }
+        this.scene.bosses.push(boss);
+        
+        // Advance to next action
+        this.advanceAction();
+    }
+    
+    executeShowBossHealthBar(action) {
+        const bossId = action.bossId || action.target;
+        let boss = null;
+        
+        if (bossId) {
+            // Find boss by ID
+            if (this.scene.eventEnemyMap && this.scene.eventEnemyMap.has(bossId)) {
+                const bossIndex = this.scene.eventEnemyMap.get(bossId);
+                if (this.scene.enemies && this.scene.enemies[bossIndex]) {
+                    boss = this.scene.enemies[bossIndex];
+                }
+            }
+        } else if (this.scene.bosses && this.scene.bosses.length > 0) {
+            // Use first boss if no ID specified
+            boss = this.scene.bosses[0];
+        }
+        
+        if (!boss || !boss.isBoss) {
+            console.warn(`👹 Could not find boss to show health bar for: ${bossId || 'first boss'}`);
+            this.advanceAction();
+            return;
+        }
+        
+        const bossName = boss.bossName || action.bossName || 'BOSS';
+        
+        console.log(`👹 Showing boss health bar for: ${bossName}`);
+        
+        if (this.scene.uiManager && this.scene.uiManager.showBossHealthBar) {
+            this.scene.uiManager.showBossHealthBar(bossName, boss);
+        }
+        
+        this.advanceAction();
+    }
+    
+    executeSetBossBehavior(action) {
+        const bossId = action.bossId || action.target;
+        const behaviors = action.behaviors || {};
+        
+        let boss = null;
+        if (bossId) {
+            if (this.scene.eventEnemyMap && this.scene.eventEnemyMap.has(bossId)) {
+                const bossIndex = this.scene.eventEnemyMap.get(bossId);
+                if (this.scene.enemies && this.scene.enemies[bossIndex]) {
+                    boss = this.scene.enemies[bossIndex];
+                }
+            }
+        } else if (this.scene.bosses && this.scene.bosses.length > 0) {
+            boss = this.scene.bosses[0];
+        }
+        
+        if (!boss || !boss.isBoss) {
+            console.warn(`👹 Could not find boss to set behavior for: ${bossId || 'first boss'}`);
+            this.advanceAction();
+            return;
+        }
+        
+        console.log(`👹 Setting boss behaviors: ${JSON.stringify(behaviors)}`);
+        
+        // Update boss behaviors
+        if (behaviors.jumpOnDamage !== undefined) {
+            boss.behaviors.jumpOnDamage = behaviors.jumpOnDamage;
+        }
+        if (behaviors.throwWeapons !== undefined) {
+            boss.behaviors.throwWeapons = behaviors.throwWeapons;
+        }
+        if (behaviors.chase !== undefined) {
+            boss.behaviors.chase = behaviors.chase;
+        }
+        if (behaviors.attack !== undefined) {
+            boss.behaviors.attack = behaviors.attack;
+        }
+        
+        this.advanceAction();
+    }
+    
+    executeWaitForBossDefeated(action) {
+        const bossId = action.bossId || action.target;
+        
+        let boss = null;
+        if (bossId) {
+            if (this.scene.eventEnemyMap && this.scene.eventEnemyMap.has(bossId)) {
+                const bossIndex = this.scene.eventEnemyMap.get(bossId);
+                if (this.scene.enemies && this.scene.enemies[bossIndex]) {
+                    boss = this.scene.enemies[bossIndex];
+                }
+            }
+        } else if (this.scene.bosses && this.scene.bosses.length > 0) {
+            boss = this.scene.bosses[0];
+        }
+        
+        if (!boss || !boss.isBoss) {
+            console.warn(`👹 Could not find boss to wait for: ${bossId || 'first boss'}`);
+            this.advanceAction();
+            return;
+        }
+        
+        console.log(`👹 Waiting for boss ${boss.bossName} to be defeated...`);
+        console.log(`👹 [WAIT_BOSS] Boss state check: health=${boss.health}/${boss.maxHealth}, state=${boss.state}, isDying=${boss.state === BOSS_STATES.DYING}, isDead=${boss.state === BOSS_STATES.DEAD}`);
+        
+        // Set up callback to advance when boss is defeated
+        const previousCallback = boss.onBossDefeated;
+        boss.onBossDefeated = (defeatedBoss) => {
+            console.log(`👹 [WAIT_BOSS] ✅ onBossDefeated CALLBACK FIRED`);
+            console.log(`👹 Boss ${defeatedBoss.bossName} defeated!`);
+            // Small delay before advancing to next action
+            this.scene.time.delayedCall(500, () => {
+                this.advanceAction();
+            });
+        };
+        console.log(`👹 [WAIT_BOSS] Callback set. Previous callback was: ${previousCallback ? 'YES' : 'NO'}`);
+        
+        // Check if already defeated
+        if (boss.health <= 0 || boss.state === BOSS_STATES.DYING || boss.state === BOSS_STATES.DEAD) {
+            console.log(`👹 [WAIT_BOSS] ⚠️ Boss already in defeated state! health=${boss.health}, state=${boss.state}`);
+            console.log(`👹 Boss already defeated, advancing immediately`);
+            this.advanceAction();
+            return;
+        }
+        
+        // Don't advance - wait for callback
+    }
+    
+    executeBossDefeatedDialogue(action) {
+        const dialogue = action.dialogue;
+        
+        if (!dialogue) {
+            console.warn('👹 BossDefeatedDialogue action missing dialogue data');
+            this.advanceAction();
+            return;
+        }
+        
+        console.log(`👹 Showing post-fight dialogue: "${dialogue.text}"`);
+        
+        // Use DialogueManager if available
+        if (this.scene.dialogueManager) {
+            this.scene.dialogueManager.showDialogue(dialogue, () => {
+                this.advanceAction();
+            });
+        } else {
+            console.warn('👹 DialogueManager not available');
+            this.advanceAction();
+        }
+    }
     
     isEventActive() {
         return this.activeEvent !== null;

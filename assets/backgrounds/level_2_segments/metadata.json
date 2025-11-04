@@ -1,0 +1,72 @@
+{
+  "original_dimensions": [
+    18912,
+    2394
+  ],
+  "scaled_dimensions": [
+    8087,
+    720
+  ],
+  "segment_width": 1200,
+  "game_height": 720,
+  "scale_factor": 0.3007518796992481,
+  "num_segments": 7,
+  "segments": [
+    {
+      "index": 0,
+      "filename": "segment_000.png",
+      "width": 1200,
+      "height": 720,
+      "x_offset": 0,
+      "x_position": 0
+    },
+    {
+      "index": 1,
+      "filename": "segment_001.png",
+      "width": 1200,
+      "height": 720,
+      "x_offset": 1200,
+      "x_position": 1200
+    },
+    {
+      "index": 2,
+      "filename": "segment_002.png",
+      "width": 1200,
+      "height": 720,
+      "x_offset": 2400,
+      "x_position": 2400
+    },
+    {
+      "index": 3,
+      "filename": "segment_003.png",
+      "width": 1200,
+      "height": 720,
+      "x_offset": 3600,
+      "x_position": 3600
+    },
+    {
+      "index": 4,
+      "filename": "segment_004.png",
+      "width": 887,
+      "height": 720,
+      "x_offset": 4800,
+      "x_position": 4800
+    },
+    {
+      "index": 5,
+      "filename": "segment_000.png",
+      "width": 1200,
+      "height": 720,
+      "x_offset": 5677,
+      "x_position": 5677
+    },
+    {
+      "index": 6,
+      "filename": "segment_001.png",
+      "width": 1200,
+      "height": 720,
+      "x_offset": 6877,
+      "x_position": 6877
+    }
+  ]
+}

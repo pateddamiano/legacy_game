@@ -1,0 +1,78 @@
+{
+  "id": 2,
+  "name": "Subway Platform",
+  "background": {
+    "type": "segmented",
+    "dir": "assets/backgrounds/level_2_segments",
+    "metadata": "assets/backgrounds/level_2_segments/metadata.json"
+  },
+  "world": { "top": 350, "bottom": 527 },
+  "spawn": { "x": 379, "y": 410 },
+  "audio": { "music": "streetAmbiance" },
+  "enemies": {
+    "spawnRate": 1200,
+    "max": 4,
+    "types": ["crackhead", "green_thug"],
+    "multipliers": { "health": 1.0, "damage": 1.0 }
+  },
+  "extras": [
+    { "name": "misfit" },
+    { "name": "train_front" },
+    { "name": "train_middle" },
+    { "name": "subwaycar" }
+  ],
+  "events": [
+    {
+      "id": "level_2_intro",
+      "trigger": { "type": "position", "value": 185, "tolerance": 40, "once": true },
+      "actions": [
+        { "type": "pause", "targets": ["player"] },
+        { "type": "camera", "stopFollow": true },
+        { "type": "spawnExtra", "name": "misfit", "position": { "x": 183, "y": 410 }, "id": "extra_misfit", "matchPlayer": false, "multiplier": 1.0 },
+        { "type": "dialogue", "dialogue": { "speaker": "Misfit", "text": "I heard The Critic went this way. Stay sharp." } },
+        { "type": "destroyExtra", "target": "extra_misfit" },
+        { "type": "camera", "follow": "player" },
+        { "type": "resume", "targets": ["player"] }
+      ]
+    },
+    {
+      "id": "level_2_subway_car",
+      "trigger": { "type": "position", "value": 800, "tolerance": 50, "once": true },
+      "actions": [
+        { "type": "spawnSubwayCarCycle" }
+      ]
+    },
+    {
+      "id": "level_2_boss_arena",
+      "trigger": { "type": "position", "value": 7109, "tolerance": 20, "once": true },
+      "actions": [
+        { "type": "pause", "targets": ["player"] },
+        { "type": "camera", "stopFollow": true },
+        { "type": "stopEnemySpawning", "clearEnemies": false },
+        { "type": "clearEnemiesOffscreen", "xThreshold": 6800, "direction": "right", "excludeIds": ["boss_critic"] },
+        { "type": "spawnBoss", "bossType": "critic", "position": { "x": 7760, "y": 520 }, "id": "boss_critic" },
+        { "type": "camera", "pan": { "x": 6803, "duration": 2000, "ease": "Power2" } },
+        { "type": "camera", "setBounds": { "x": 6803, "y": 0, "width": 2400, "height": 720 } },
+        { "type": "wait", "duration": 500 },
+        { "type": "showBossHealthBar", "bossId": "boss_critic" },
+        { "type": "setPlayerBounds", "bounds": { "minX": 6803, "maxX": 8003, "minY": 350, "maxY": 527 } },
+        { "type": "wait", "duration": 500 },
+        { "type": "resume", "targets": ["player"] },
+        { "type": "waitForBossDefeated", "bossId": "boss_critic" },
+        { "type": "pause", "targets": ["player"] },
+        { "type": "bossDefeatedDialogue", "dialogue": { "speaker": "The Critic", "text": "You... you actually did it. I underestimated you." } },
+        { "type": "wait", "duration": 500 },
+        { "type": "dialogue", "dialogue": { "speaker": "Narrator", "text": "The Critic falls defeated on the platform. The path forward is clear." } },
+        { "type": "destroyEnemy", "target": "boss_critic" },
+        { "type": "camera", "follow": "player" },
+        { "type": "setPlayerBounds", "bounds": { "minX": 0, "maxX": 8087, "minY": 350, "maxY": 527 } },
+        { "type": "resume", "targets": ["player"] }
+      ]
+    }
+  ],
+  "assets": {
+    "images": []
+  }
+}
+
+

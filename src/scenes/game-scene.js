@@ -37,11 +37,11 @@ class GameScene extends Phaser.Scene {
 
     init(data) {
         // Check for debug mode and direct level loading
-        if (window.DIRECT_LEVEL_LOAD && window.TEST_LEVEL_ID === 'test') {
-            // Load test level directly
+        if (window.DIRECT_LEVEL_LOAD && (window.TEST_LEVEL_ID !== undefined)) {
+            // Load requested level directly
             this.selectedCharacter = data?.character || 'tireek';
-            this.selectedLevelId = 'test';
-            console.log('%c🧪 TEST MODE: Loading test level directly', 'color: #00ff00; font-weight: bold;');
+            this.selectedLevelId = window.TEST_LEVEL_ID;
+            console.log('%c🧪 DEBUG MODE: Loading level directly', 'color: #00ff00; font-weight: bold;', this.selectedLevelId);
         } else {
             // Receive data from scene manager (character and level info)
             this.selectedCharacter = data?.character || 'tireek';
@@ -63,7 +63,7 @@ class GameScene extends Phaser.Scene {
         window.gameState.currentGame.levelId = this.selectedLevelId;
         
         // Initialize debug/testing mode
-        this.isTestMode = window.DEBUG_MODE || this.selectedLevelId === 'test';
+        this.isTestMode = window.DEBUG_MODE || this.selectedLevelId === 'test' || window.LEVEL_TEST_MODE === true;
         this.coordinateRecordingEnabled = this.isTestMode || window.DEBUG_MODE;
         this.debugOverlayVisible = this.isTestMode;
         this.recordedPositions = [];
@@ -129,17 +129,24 @@ class GameScene extends Phaser.Scene {
         console.log(`🎯 GameScene: Street bounds configured: ${this.streetTopLimit} - ${this.streetBottomLimit}`);
         
         // Initialize level system FIRST (loads world and sets spawn point)
-        this.initializeLevelSystem();
-        
-        // Initialize Level 1 world (must be before createBothCharacters)
-        this.initializeLevel1World();
-        
+        this.initializeUnifiedLevelSystem();
+
+        // Apply level-specific environment adjustments
+        this.environmentManager.applyLevelSpecificBounds();
+
+        // Update street bounds after level-specific adjustments
+        const updatedStreetBounds = this.environmentManager.getStreetBounds();
+        this.streetTopLimit = updatedStreetBounds.top;
+        this.streetBottomLimit = updatedStreetBounds.bottom;
+        this.inputManager.setStreetBounds(this.streetTopLimit, this.streetBottomLimit);
+        console.log(`🎯 GameScene: Updated street bounds for level ${this.selectedLevelId}: ${this.streetTopLimit} - ${this.streetBottomLimit}`);
+
         // Create parallax background AFTER world is initialized (so we have correct bounds)
-        this.createParallaxBackground();
+        this.createParallaxBackgroundFromConfig();
 
         // Set camera background to transparent so parallax shows through
         this.cameras.main.setBackgroundColor('rgba(0, 0, 0, 0)');
-        
+
         // Create both character sprites (only active one will be visible)
         this.createBothCharacters();
         console.log(`🎯 Both characters created, active: ${this.selectedCharacter}`);
@@ -147,15 +154,30 @@ class GameScene extends Phaser.Scene {
         // Set up camera to follow player
         console.log(`📷 📊 Setting up camera. Player position: x=${this.player.x}, y=${this.player.y}`);
         console.log(`📷 📊 World bounds: ${this.physics.world.bounds.x}, ${this.physics.world.bounds.y}, ${this.physics.world.bounds.width}x${this.physics.world.bounds.height}`);
-        
+
         // Set camera bounds to match world bounds
+        console.log(`📷 📊 About to set camera bounds to: ${this.physics.world.bounds.x}, ${this.physics.world.bounds.y}, ${this.physics.world.bounds.width}x${this.physics.world.bounds.height}`);
         this.cameras.main.setBounds(
             this.physics.world.bounds.x,
             this.physics.world.bounds.y,
             this.physics.world.bounds.width,
             this.physics.world.bounds.height
         );
-        
+
+        // Immediately check what the bounds are
+        const boundsAfterSet = this.cameras.main.getBounds();
+        console.log(`📷 📊 Camera bounds immediately after setBounds: ${boundsAfterSet.x}-${boundsAfterSet.x+boundsAfterSet.width} (${boundsAfterSet.width}px wide)`);
+
+        const initialBounds = this.cameras.main.getBounds();
+        console.log(`📷 📊 Camera bounds (getBounds): ${initialBounds.x}-${initialBounds.x+initialBounds.width} (${initialBounds.width}px wide)`);
+
+        // Add camera debug logging
+        this.cameraDebugInterval = setInterval(() => {
+            const cam = this.cameras.main;
+            const bounds = cam.getBounds();
+            console.log(`📷 Camera: scrollX=${Math.round(cam.scrollX)}, bounds=${bounds.x}-${bounds.x+bounds.width} (${bounds.width}px wide)`);
+        }, 1000); // Log every second
+
         // Make camera follow player
         this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
         // Round pixels to reduce sub-pixel sampling blur
@@ -187,6 +209,7 @@ class GameScene extends Phaser.Scene {
         
         // Initialize enemy system (using centralized config)
         this.enemies = [];
+        this.bosses = []; // Initialize bosses array
         this.enemySpawnTimer = 0;
         this.enemySpawnInterval = ENEMY_CONFIG.spawnInterval;
         this.maxEnemies = ENEMY_CONFIG.maxEnemiesOnScreen;
@@ -239,10 +262,11 @@ class GameScene extends Phaser.Scene {
         
         // Note: Level system and Level 1 world already initialized before createBothCharacters()
         
-        // Start background music immediately (assets already loaded)
-        // Using 'fade' music for level 1 (continues from dialogue scene)
-        console.log('🎵 Starting background music...');
-        this.audioManager.playBackgroundMusic('fadeMusic');
+        // Start background music only for Level 1 here; other levels use LevelManager
+        if (this.selectedLevelId === 1) {
+            console.log('🎵 Starting background music for Level 1...');
+            this.audioManager.playBackgroundMusic('fadeMusic');
+        }
         
         // Start street ambiance for level 1
         console.log('🔊 Starting street ambiance...');
@@ -303,24 +327,24 @@ class GameScene extends Phaser.Scene {
     
     createParallaxBackground() {
         console.log('🌍 Creating parallax background...');
-        
+
         // Check if texture exists
         if (!this.textures.exists('parallax_background')) {
             console.error('🌍 Parallax background texture not found!');
             console.log('🌍 Available textures:', Object.keys(this.textures.list).slice(0, 20));
             return;
         }
-        
+
         const texture = this.textures.get('parallax_background');
         const textureWidth = texture.source[0].width;
         const textureHeight = texture.source[0].height;
-        
+
         console.log(`🌍 Parallax texture dimensions: ${textureWidth}x${textureHeight}`);
-        
+
         // Get world width from world bounds
         const worldWidth = this.physics.world.bounds.width;
         console.log(`🌍 World width: ${worldWidth}px`);
-        
+
         // Create a tileSprite that will repeat the texture
         const tileSprite = this.add.tileSprite(
             0,                    // x
@@ -329,12 +353,12 @@ class GameScene extends Phaser.Scene {
             720,                  // height
             'parallax_background' // texture key
         );
-        
+
         tileSprite.setOrigin(0, 0);
         tileSprite.setDepth(-200); // Behind segments (-100)
         tileSprite.setScrollFactor(0.2);
         tileSprite.setAlpha(0.8); // Slight transparency for blending
-        
+
         console.log(`🌍 TileSprite properties:`, {
             x: tileSprite.x,
             y: tileSprite.y,
@@ -346,10 +370,82 @@ class GameScene extends Phaser.Scene {
             scrollFactorX: tileSprite.scrollFactorX,
             scrollFactorY: tileSprite.scrollFactorY
         });
-        
+
         // Store reference for potential animation
         this.parallaxBackground = tileSprite;
-        
+
+        console.log('🌍 Parallax tileSprite created successfully!');
+    }
+
+    createParallaxBackgroundFromConfig() {
+        // Clear any existing parallax background first
+        if (this.parallaxBackground) {
+            console.log('🌍 Clearing existing parallax background...');
+            this.parallaxBackground.destroy();
+            this.parallaxBackground = null;
+        }
+
+        // Get current level config
+        const currentLevelConfig = this.levelManager.getCurrentLevelConfig();
+        if (!currentLevelConfig) {
+            console.error('🌍 No current level config found for parallax background!');
+            return;
+        }
+
+        const parallaxTexture = currentLevelConfig.parallaxTexture;
+        if (!parallaxTexture) {
+            console.log('🌍 No parallax texture specified in level config, skipping...');
+            return;
+        }
+
+        console.log(`🌍 Creating parallax background from config: ${parallaxTexture}`);
+
+        // Check if texture exists
+        if (!this.textures.exists(parallaxTexture)) {
+            console.error(`🌍 Parallax background texture '${parallaxTexture}' not found!`);
+            console.log('🌍 Available textures:', Object.keys(this.textures.list).slice(0, 20));
+            return;
+        }
+
+        const texture = this.textures.get(parallaxTexture);
+        const textureWidth = texture.source[0].width;
+        const textureHeight = texture.source[0].height;
+
+        console.log(`🌍 Parallax texture dimensions: ${textureWidth}x${textureHeight}`);
+
+        // Get world width from world bounds
+        const worldWidth = this.physics.world.bounds.width;
+        console.log(`🌍 World width: ${worldWidth}px`);
+
+        // Create a tileSprite that will repeat the texture
+        const tileSprite = this.add.tileSprite(
+            0,                    // x
+            -360,                 // y (raised up by 50% of 720 = 360px)
+            worldWidth * 2,       // width (make it wider than world)
+            720,                  // height
+            parallaxTexture       // texture key from config
+        );
+
+        tileSprite.setOrigin(0, 0);
+        tileSprite.setDepth(-200); // Behind segments (-100)
+        tileSprite.setScrollFactor(0.2);
+        tileSprite.setAlpha(0.8); // Slight transparency for blending
+
+        console.log(`🌍 TileSprite properties:`, {
+            x: tileSprite.x,
+            y: tileSprite.y,
+            width: tileSprite.width,
+            height: tileSprite.height,
+            depth: tileSprite.depth,
+            visible: tileSprite.visible,
+            alpha: tileSprite.alpha,
+            scrollFactorX: tileSprite.scrollFactorX,
+            scrollFactorY: tileSprite.scrollFactorY
+        });
+
+        // Store reference for potential animation
+        this.parallaxBackground = tileSprite;
+
         console.log('🌍 Parallax tileSprite created successfully!');
     }
 
@@ -398,7 +494,13 @@ class GameScene extends Phaser.Scene {
             
             // Set visibility based on active state
             sprite.setVisible(charData.isActive);
-            
+
+            // Special handling for level 2: Tireek starts flipped
+            if (charName === 'tireek' && this.selectedLevelId === 2) {
+                sprite.setFlipX(true);
+                console.log(`👥 Tireek flipped for level 2 start`);
+            }
+
             // Store sprite reference
             charData.sprite = sprite;
         });
@@ -1366,6 +1468,14 @@ class GameScene extends Phaser.Scene {
         // Update UI and debug visuals using UIManager
         this.updateUIAndDebugVisuals();
         
+        // Update boss health bar if there's an active boss
+        if (this.bosses && this.bosses.length > 0 && this.uiManager) {
+            const activeBoss = this.bosses.find(boss => boss && boss.isBoss && boss.health > 0 && boss.sprite && boss.sprite.active);
+            if (activeBoss) {
+                this.uiManager.updateBossHealthBar(activeBoss.health, activeBoss.maxHealth);
+            }
+        }
+        
         // Update test mode features
         if (this.isTestMode || window.DEBUG_MODE) {
             this.updateCoordinateRecording();
@@ -1675,48 +1785,90 @@ class GameScene extends Phaser.Scene {
     // LEVEL SYSTEM METHODS
     // ========================================
     
-    initializeLevelSystem() {
-        console.log('🎮 Initializing level system...');
-        
-        // Handle test level
-        if (this.selectedLevelId === 'test') {
-            console.log('%c🧪 Loading TEST LEVEL', 'color: #00ff00; font-weight: bold;');
-            // Use test level config directly
-            if (typeof TEST_LEVEL_CONFIG !== 'undefined') {
-                // Manually set up test level without using LevelManager
-                this.setupTestLevel();
-                return;
-            } else {
-                console.error('🧪 TEST_LEVEL_CONFIG not defined!');
-                // Fallback to level 1
-                this.selectedLevelId = 1;
-            }
+    initializeUnifiedLevelSystem() {
+        console.log('🎮 Initializing unified level system...');
+
+        // Try JSON-based level system first
+        if (window.LevelRegistry && window.LevelAssetLoader && window.WorldFactory) {
+            const registry = window.LevelRegistry.getInstance();
+            registry.ensureLevelLoaded(this, this.selectedLevelId).then(async (levelJson) => {
+                if (levelJson) {
+                    console.log('🎮 JSON level detected:', levelJson.name);
+                    await this.loadLevelFromJSON(levelJson);
+                    return;
+                }
+                // Fallback to config-based system
+                this.loadLevelFromConfig();
+            });
+            return;
         }
-        
-        // Load level by ID (find the level with id:1, which should be index 0)
-        const levelIndex = LEVEL_CONFIGS.findIndex(l => l.id === this.selectedLevelId);
-        console.log(`🎮 📊 Loading level with id=${this.selectedLevelId}, found at index=${levelIndex}`);
-        
-        if (levelIndex >= 0) {
-            this.levelManager.loadLevel(levelIndex);
-        } else {
-            console.error(`🎮 Level with id ${this.selectedLevelId} not found!`);
-        }
-        
-        // Set up level manager callbacks
-        this.setupLevelManagerCallbacks();
-        
-        // Register events from level config
-        const currentLevelConfig = this.levelManager.getCurrentLevelConfig();
-        if (currentLevelConfig && currentLevelConfig.events && this.eventManager) {
-            this.eventManager.registerEvents(currentLevelConfig.events);
-        }
-        
-        // Add level info to UI
-        this.updateLevelDisplay();
-        
-        console.log('🎮 Level system initialized!');
+
+        // Use config-based level system
+        this.loadLevelFromConfig();
     }
+
+    async loadLevelFromJSON(levelJson) {
+        console.log('🎮 Loading level from JSON:', levelJson.name);
+
+        // Load assets for this level
+        await window.LevelAssetLoader.ensureLoaded(this, levelJson);
+
+        // Create world
+        await window.WorldFactory.create(this, levelJson);
+
+        // Register events
+        if (this.eventManager && Array.isArray(levelJson.events)) {
+            this.eventManager.registerEvents(levelJson.events);
+        }
+
+        // Start music
+        if (this.audioManager && levelJson.audio && levelJson.audio.music) {
+            this.audioManager.playBackgroundMusic(levelJson.audio.music);
+        }
+
+        // Update UI
+        this.updateLevelDisplay && this.updateLevelDisplay();
+        console.log('🎮 Level loaded from JSON successfully');
+    }
+
+    loadLevelFromConfig() {
+        console.log('🎮 Loading level from config (fallback)...');
+
+        // Check if we have any configs
+        if (!window.LEVEL_CONFIGS || window.LEVEL_CONFIGS.length === 0) {
+            console.error('🎮 No level configs available! JSON system should be handling levels.');
+            console.error('🎮 Check that LevelRegistry, LevelAssetLoader, and WorldFactory are loaded.');
+            return;
+        }
+
+        // Find level config
+        const levelIndex = window.LEVEL_CONFIGS.findIndex(l => l.id === this.selectedLevelId);
+        console.log(`🎮 📊 Loading level with id=${this.selectedLevelId}, found at index=${levelIndex}`);
+
+        if (levelIndex < 0) {
+            console.error(`🎮 Level with id ${this.selectedLevelId} not found in fallback configs!`);
+            console.error('🎮 JSON level system should handle all level loading.');
+            return;
+        }
+
+        const levelConfig = window.LEVEL_CONFIGS[levelIndex];
+
+        // Load level through LevelManager (handles world, enemies, etc.)
+        if (this.levelManager.loadLevel(levelIndex)) {
+            console.log(`🎮 Level ${levelConfig.name} loaded successfully`);
+
+            // Register events from config
+            if (this.eventManager && levelConfig.events) {
+                this.eventManager.registerEvents(levelConfig.events);
+            }
+
+            // Update UI
+            this.updateLevelDisplay && this.updateLevelDisplay();
+        } else {
+            console.error(`🎮 Failed to load level ${levelConfig.name}`);
+        }
+    }
+
     
     setupTestLevel() {
         console.log('🧪 Setting up test level...');
@@ -1741,9 +1893,9 @@ class GameScene extends Phaser.Scene {
         }
         
         // Register events from test level config
-        if (typeof TEST_LEVEL_CONFIG !== 'undefined' && TEST_LEVEL_CONFIG.events && this.eventManager) {
+        if (typeof window.TEST_LEVEL_CONFIG !== 'undefined' && window.TEST_LEVEL_CONFIG.events && this.eventManager) {
             console.log('🧪 Registering test level events...');
-            this.eventManager.registerEvents(TEST_LEVEL_CONFIG.events);
+            this.eventManager.registerEvents(window.TEST_LEVEL_CONFIG.events);
         }
         
         // Initialize debug overlay

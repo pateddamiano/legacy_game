@@ -1,0 +1,79 @@
+{
+  "id": 1,
+  "name": "The Streets",
+  "background": {
+    "type": "segmented",
+    "dir": "assets/backgrounds/level_1_segments",
+    "metadata": "assets/backgrounds/level_1_segments/metadata.json"
+  },
+  "world": { "top": 410, "bottom": 650 },
+  "spawn": { "x": 185, "y": 512 },
+  "parallaxTexture": "parallax_background",
+  "audio": { "music": "fadeMusic" },
+  "enemies": {
+    "spawnRate": 1200,
+    "max": 4,
+    "types": ["crackhead", "green_thug"],
+    "multipliers": { "health": 1.0, "damage": 1.0 }
+  },
+  "extras": [
+    { "name": "rozotadi" }
+  ],
+  "events": [
+    {
+      "id": "level_1_intro",
+      "trigger": { "type": "position", "value": 185, "tolerance": 40, "once": true },
+      "actions": [
+        { "type": "pause", "targets": ["player"] },
+        { "type": "camera", "stopFollow": true },
+        { "type": "spawnExtra", "name": "rozotadi", "position": { "x": 542, "y": 513 }, "id": "extra_rozotadi", "matchPlayer": true, "multiplier": 1.0 },
+        { "type": "flip", "target": "extra_rozotadi", "flipX": true },
+        { "type": "dialogue", "dialogue": { "speaker": "Rozotadi", "text": "Yo! I saw the guy that had your album run towards the subway.. ", "dimBackground": false } },
+        { "type": "dialogue", "dialogue": { "speaker": "Rozotadi", "text": "I'm pretty sure it was *The Critic*...", "dimBackground": false } },
+        { "type": "dialogue", "dialogue": { "speaker": "Rozotadi", "text": "Go get that drive back!", "dimBackground": false } },
+        { "type": "destroyExtra", "target": "extra_rozotadi" },
+        { "type": "camera", "follow": "player" },
+        { "type": "resume", "targets": ["player"] }
+      ]
+    },
+    {
+      "id": "level_1_end",
+      "trigger": { "type": "position", "value": 8081, "tolerance": 50, "once": true },
+      "actions": [
+        { "type": "pause", "targets": ["player"] },
+        { "type": "camera", "stopFollow": true },
+        { "type": "camera", "setBounds": { "x": 0, "y": 0, "width": 9045, "height": 720 } },
+        { "type": "stopEnemySpawning", "clearEnemies": false },
+        { "type": "clearEnemiesOffscreen", "xThreshold": 8600, "direction": "right", "excludeIds": ["enemy_critic"] },
+        { "type": "spawnEnemy", "enemyType": "critic", "position": { "x": 8655, "y": 518 }, "id": "enemy_critic" },
+        { "type": "camera", "pan": { "x": 7845 }, "duration": 2000, "ease": "Power2" },
+        { "type": "wait", "duration": 500 },
+        { "type": "clearEnemiesOffscreen", "xThreshold": 8600, "direction": "right", "excludeIds": ["enemy_critic"] },
+        { "type": "flip", "target": "enemy_critic", "flipX": true },
+        { "type": "dialogue", "dialogue": { "speaker": "Critic", "text": "Not bad... but you've got a long way to go if you want to make it in this city." } },
+        { "type": "wait", "duration": 500 },
+        { "type": "flip", "target": "enemy_critic", "flipX": false },
+        { "type": "move", "target": "enemy_critic", "to": { "x": 8711, "y": 410 }, "duration": 1500, "ease": "Power2" },
+        { "type": "wait", "duration": 500 },
+        { "type": "destroyEnemy", "target": "enemy_critic" },
+        { "type": "waitForEnemyDestroy", "target": "enemy_critic" },
+        { "type": "dialogue", "dialogue": { "speaker": "Narrator", "text": "Survive the fight to go after The Critic!" } },
+        { "type": "wait", "duration": 500 },
+        { "type": "resume", "targets": ["player"] },
+        { "type": "camera", "stopFollow": true },
+        { "type": "setPlayerBounds", "bounds": { "minX": 7850, "maxX": 9040, "minY": 410, "maxY": 650 } },
+        { "type": "startEnemySpawning", "config": { "maxEnemies": 10, "spawnInterval": 600 } },
+        { "type": "wait", "duration": 30000 },
+        { "type": "stopEnemySpawning", "clearEnemies": false },
+        { "type": "waitForEnemiesCleared" },
+        { "type": "dialogue", "dialogue": { "speaker": "Narrator", "text": "Enter the subway to chase The Critic!" } },
+        { "type": "waitForZone", "zone": { "x1": 8550, "x2": 8753, "y1": 380, "y2": 440 } },
+        { "type": "fade", "direction": "out", "duration": 1000, "color": { "r": 0, "g": 0, "b": 0 } },
+        { "type": "loadLevel", "levelId": 2 }
+      ]
+    }
+  ],
+  "assets": { "images": [] }
+}
+
+

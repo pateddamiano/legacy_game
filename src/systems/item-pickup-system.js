@@ -449,8 +449,9 @@ class ItemPickupManager {
             
             // Random Y position within street bounds (but off-screen vertically if possible)
             let y;
-            const streetTop = WORLD_CONFIG.streetTopLimit;
-            const streetBottom = WORLD_CONFIG.streetBottomLimit;
+            // Use environment manager's street bounds (level-specific) instead of global config
+            const streetTop = this.scene.environmentManager ? this.scene.environmentManager.streetTopLimit : WORLD_CONFIG.streetTopLimit;
+            const streetBottom = this.scene.environmentManager ? this.scene.environmentManager.streetBottomLimit : WORLD_CONFIG.streetBottomLimit;
             
             // Try to spawn off-screen vertically first, fall back to street bounds
             if (Math.random() < 0.7) {

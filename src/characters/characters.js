@@ -136,6 +136,16 @@ const EXTRAS_REGISTRY = {
         key: 'extra_rozotadi',
         path: 'assets/characters/extras/Rozotadi.png',
         scale: 3.0
+    },
+    misfit: {
+        key: 'extra_misfit',
+        path: 'assets/characters/extras/Misfit.png',
+        scale: 3.00
+    },
+    subwaycar: {
+        key: 'subwaycar',
+        path: 'assets/level_2_pieces/subwaycar.png',
+        scale: 0.5
     }
 };
 

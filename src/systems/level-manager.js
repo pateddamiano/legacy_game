@@ -7,7 +7,7 @@ class LevelManager {
     constructor(scene) {
         this.scene = scene;
         this.currentLevel = 0;
-        this.levels = LEVEL_CONFIGS;
+        this.levels = window.LEVEL_CONFIGS;
         this.progressionFlags = new Map();
         this.checkpoints = new Map();
         this.enemiesDefeated = 0;
@@ -25,7 +25,7 @@ class LevelManager {
     
     initializeProgressionFlags() {
         // Copy default flags
-        Object.entries(LEVEL_FLAGS).forEach(([flag, value]) => {
+        Object.entries(window.LEVEL_FLAGS).forEach(([flag, value]) => {
             this.progressionFlags.set(flag, value);
         });
         
@@ -44,6 +44,13 @@ class LevelManager {
         }
         
         const levelConfig = this.levels[levelIndex];
+        console.log(`🎮 loadLevel: index=${levelIndex}, id=${levelConfig.id}, name=${levelConfig.name}`);
+        console.log(`🎮 loadLevel: background='${levelConfig.background}', music='${levelConfig.music}'`);
+        if (Array.isArray(levelConfig.events)) {
+            console.log(`🎮 loadLevel: events configured: ${levelConfig.events.length}`);
+        } else {
+            console.log('🎮 loadLevel: no events configured');
+        }
         
         // Check if level is unlocked
         if (!this.isLevelUnlocked(levelIndex)) {
@@ -107,39 +114,64 @@ class LevelManager {
         console.log(`🌍 Loading segmented world: ${worldId}`);
         
         const worldManager = this.scene.worldManager;
-        
-        // Load metadata
         const metadataPath = `assets/backgrounds/${levelConfig.background}/metadata.json`;
-        this.scene.load.json(`${worldId}_metadata`, metadataPath);
+        const metadataKey = `${worldId}_metadata`;
         
-        // Wait for metadata to load
-        this.scene.load.once('filecomplete-json-' + `${worldId}_metadata`, (key, type, data) => {
-            console.log(`🌍 Metadata loaded for ${worldId}:`, data);
-            
-            // Create world configuration
+        // If metadata already in cache (preloaded in AudioBootScene), use it immediately
+        if (this.scene.cache && this.scene.cache.json && this.scene.cache.json.exists(metadataKey)) {
+            const data = this.scene.cache.json.get(metadataKey);
+            console.log(`🌍 Using cached metadata for ${worldId}:`, data);
+
             const worldConfig = {
                 segments: data.segments,
                 metadataPath: metadataPath,
-                spawnPoint: {
+                spawnPoint: levelConfig.spawnPoint || {
                     x: data.segments[0].x_position + 100,
                     y: 600
                 },
                 bounds: {
                     x: data.segments[0].x_position,
                     y: 0,
-                    width: data.segments[data.segments.length - 1].x_position + 
-                          data.segments[data.segments.length - 1].width - 
+                    width: data.segments[data.segments.length - 1].x_position +
+                          data.segments[data.segments.length - 1].width -
                           data.segments[0].x_position,
                     height: 720
                 }
             };
             
-            // Register and create the world
             worldManager.registerWorld(worldId, worldConfig);
             worldManager.createWorld(worldId);
-            
+            console.log(`🌍 Segmented world ${worldId} created successfully (from cache)`);
+            return;
+        }
+        
+        // Otherwise, request metadata and start the loader if needed
+        this.scene.load.json(metadataKey, metadataPath);
+        this.scene.load.once('filecomplete-json-' + metadataKey, (key, type, data) => {
+            console.log(`🌍 Metadata loaded for ${worldId}:`, data);
+            const worldConfig = {
+                segments: data.segments,
+                metadataPath: metadataPath,
+                spawnPoint: levelConfig.spawnPoint || {
+                    x: data.segments[0].x_position + 100,
+                    y: 600
+                },
+                bounds: {
+                    x: data.segments[0].x_position,
+                    y: 0,
+                    width: data.segments[data.segments.length - 1].x_position +
+                          data.segments[data.segments.length - 1].width -
+                          data.segments[0].x_position,
+                    height: 720
+                }
+            };
+            worldManager.registerWorld(worldId, worldConfig);
+            worldManager.createWorld(worldId);
             console.log(`🌍 Segmented world ${worldId} created successfully`);
         });
+        if (!this.scene.load.isLoading()) {
+            this.scene.load.start();
+        }
     }
     
     loadSimpleWorld(worldId, levelConfig) {
@@ -155,7 +187,7 @@ class LevelManager {
                 width: 3600, // Default width
                 height: 720
             },
-            spawnPoint: {
+            spawnPoint: levelConfig.spawnPoint || {
                 x: 200,
                 y: 600
             },
