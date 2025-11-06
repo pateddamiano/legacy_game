@@ -368,7 +368,7 @@ class UIManager {
     }
     
     updateDebugDisplay(debugData) {
-        if (!this.debugMode) return;
+        if (!this.debugMode || !this.debugText) return;
         
         const { 
             state, 
