@@ -6,6 +6,7 @@
 
 class InputManager {
     constructor(scene) {
+        this.disabled = false;
         this.scene = scene;
         
         // Input state tracking
@@ -87,14 +88,19 @@ class InputManager {
     // ========================================
     
     updateInputState() {
+        // Don't process input if disabled by dialogue manager
+        if (this.disabled) {
+            return;
+        }
+
         // Safety check - ensure all input objects are ready
         if (!this.cursors || !this.keys) {
             return;
         }
         
         // Check if dialogue is active - if so, block ALL input (DialogueManager handles SPACE)
-        const isDialogueActive = this.scene.dialogueManager && this.scene.dialogueManager.isDialogueActive();
-        
+        const isDialogueActive = this.scene.dialogueManager && typeof this.scene.dialogueManager.isActive === 'function' && this.scene.dialogueManager.isActive();
+
         if (isDialogueActive) {
             // Clear all input states when dialogue is active
             this.inputState.left = false;

@@ -20,7 +20,15 @@ class AudioManager {
         // Looping SFX (like running sound and ambient sounds)
         this.runningSoundEffect = null;
         this.ambianceSoundEffect = null;
-        
+
+        // Sound effect spam prevention
+        this.lastFocusTime = Date.now();
+        this.isFocused = true;
+
+        // Set up focus/blur event listeners to prevent sound spam when tabbing back
+        this.setupFocusHandling();
+
+
         console.log('🎵 AudioManager initialized!');
     }
     
@@ -34,7 +42,7 @@ class AudioManager {
                 fadeInDuration: 2000, // 2 seconds fade in
                 fadeOutDuration: 1000 // 1 second fade out
             },
-            
+
             // Sound effects settings
             soundEffects: {
                 enabled: true,
@@ -50,7 +58,10 @@ class AudioManager {
                 combo: { volume: 0.5 },
                 powerUp: { volume: 0.7 },
                 gameOver: { volume: 0.8 }
-            }
+            },
+
+            // Sound effect spam prevention
+            focusCooldown: 1000 // Cooldown after regaining focus (ms)
         };
     }
     
@@ -174,28 +185,40 @@ class AudioManager {
         if (!this.config.soundEffects.enabled || this.sfxMuted) {
             return;
         }
-        
+
+        // Check focus cooldown to prevent sound spam when tabbing back
+        if (this.focusCooldownEnd && Date.now() < this.focusCooldownEnd) {
+            // Still in cooldown period, discard the sound
+            console.log(`🎵 Discarded ${sfxKey} (focus cooldown active)`);
+            return;
+        }
+
         // Check if sound exists in cache
         if (!this.scene.cache.audio.has(sfxKey)) {
             console.warn(`🔊 Sound effect not found in cache: ${sfxKey}. Make sure to load it in preload().`);
             return;
         }
-        
+
         // Determine volume (custom or from config)
         let volume = customVolume || this.config.soundEffects.volume;
-        
+
         // Check for specific SFX volume settings
         if (this.config.soundEffects[sfxKey]) {
             volume = this.config.soundEffects[sfxKey].volume;
         }
-        
+
         // Play the sound effect
-        this.sound.play(sfxKey, { volume: volume });
+        this.sound.play(sfxKey, {
+            volume: volume
+        });
+
+        console.log(`🎵 Playing ${sfxKey}`);
     }
+
     
     playRandomSoundEffect(sfxArray, customVolume = null) {
         if (!sfxArray || sfxArray.length === 0) return;
-        
+
         const randomSfx = sfxArray[Math.floor(Math.random() * sfxArray.length)];
         this.playSoundEffect(randomSfx, customVolume);
     }
@@ -250,9 +273,55 @@ class AudioManager {
     }
     
     // ========================================
+    // FOCUS MANAGEMENT (prevents sound spam when tabbing back)
+    // ========================================
+
+    setupFocusHandling() {
+        // Handle visibility change (tab switching, minimizing window, etc.)
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                this.handleBlur();
+            } else {
+                this.handleFocus();
+            }
+        });
+
+        // Handle window focus/blur events
+        window.addEventListener('blur', () => this.handleBlur());
+        window.addEventListener('focus', () => this.handleFocus());
+
+
+        console.log('🎵 Focus handling initialized');
+    }
+
+    handleBlur() {
+        this.isFocused = false;
+        this.lastFocusTime = Date.now();
+        console.log('🎵 Game lost focus');
+    }
+
+    handleFocus() {
+        const now = Date.now();
+        const timeAway = now - this.lastFocusTime;
+
+        this.isFocused = true;
+        this.lastFocusTime = now;
+
+
+        // If we were away for more than the focus cooldown, apply cooldown
+        if (timeAway > this.config.focusCooldown) {
+            // Add a brief cooldown to prevent immediate sound spam
+            this.focusCooldownEnd = now + this.config.focusCooldown;
+            console.log(`🎵 Game regained focus after ${Math.round(timeAway/1000)}s - applying cooldown`);
+        } else {
+            console.log('🎵 Game regained focus');
+        }
+    }
+
+    // ========================================
     // UTILITY METHODS
     // ========================================
-    
+
     getMusicStatus() {
         return {
             isPlaying: this.currentBackgroundMusic && this.currentBackgroundMusic.isPlaying,
@@ -266,24 +335,31 @@ class AudioManager {
         return {
             isMuted: this.sfxMuted,
             volume: this.config.soundEffects.volume,
-            individualVolumes: { ...this.config.soundEffects }
+            individualVolumes: { ...this.config.soundEffects },
+            isFocused: this.isFocused
         };
     }
     
     // Cleanup method for scene destruction
     destroy() {
+        // Remove event listeners
+        document.removeEventListener('visibilitychange', this.handleBlur);
+        document.removeEventListener('visibilitychange', this.handleFocus);
+        window.removeEventListener('blur', this.handleBlur);
+        window.removeEventListener('focus', this.handleFocus);
+
         if (this.currentBackgroundMusic) {
             this.currentBackgroundMusic.stop();
             this.currentBackgroundMusic.destroy();
             this.currentBackgroundMusic = null;
         }
-        
+
         // Stop running sound effect
         this.stopPlayerRunning();
-        
+
         // Stop ambiance sound effect
         this.stopAmbiance();
-        
+
         console.log('🗑️ AudioManager destroyed');
     }
     

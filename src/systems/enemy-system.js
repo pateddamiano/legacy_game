@@ -6,10 +6,23 @@
 // Enemy AI States
 const ENEMY_STATES = {
     SPAWNING: 'spawning',
-    WALKING: 'walking', 
+    WALKING: 'walking',
     ATTACKING: 'attacking',
     STUNNED: 'stunned',
     DEAD: 'dead'
+};
+
+// Enemy Behavior Types
+const ENEMY_BEHAVIORS = {
+    CALL_FOR_HELP: 'callForHelp',
+    COORDINATE_ALLIES: 'coordinateAllies',
+    ASSESS_PLAYER_STATE: 'assessPlayerState',
+    CHECK_ENVIRONMENT: 'checkEnvironment',
+    CHECK_CROWD_SIZE: 'checkCrowdSize',
+    CHECK_EXPERIENCE: 'checkExperience',
+    CHECK_PLAYER_HEALTH: 'checkPlayerHealth',
+    CHECK_PLAYER_WEAPONS: 'checkPlayerWeapons',
+    DODGE_ATTACKS: 'dodgeAttacks'
 };
 
 // ========================================
@@ -79,7 +92,7 @@ const ENEMY_TYPE_CONFIGS = {
     crackhead: {
         // Base stats (inherits from ENEMY_CONFIG if not specified)
         health: 10,                    // Weak but numerous
-        speed: 300,                   // Slow, shambling movement
+        speed: 400,                   // Slow, shambling movement
         attackCooldown: 300,         // Slower attacks
         playerDamage: 2,             // Less damage (DOUBLED from 1)
         attackTypes: ['jab', 'bottle_attack'],
@@ -89,8 +102,8 @@ const ENEMY_TYPE_CONFIGS = {
     
     green_thug: {
         // Medium difficulty enemy
-        health: 15,                   // Medium health
-        speed: 250,                   // Faster than crackhead
+        health: 20,                   // Medium health
+        speed: 300,                   // Faster than crackhead
         attackCooldown: 250,         // Standard attack speed
         playerDamage: 4,             // Medium damage (DOUBLED from 2)
         attackTypes: ['knife_hit'],
@@ -100,7 +113,7 @@ const ENEMY_TYPE_CONFIGS = {
     
     black_thug: {
         // Harder enemy type
-        health: 20,                   // Higher health
+        health: 30,                   // Higher health
         speed: 200,                   // Fast movement
         attackCooldown: 200,         // Faster attacks
         playerDamage: 6,             // Higher damage (DOUBLED from 3)
@@ -340,68 +353,20 @@ class Enemy {
             return;
         }
         
-        // Some enemies call for help when they first detect the player
-        if (!this.hasCalledForHelp && this.characterConfig.name === 'black_thug') {
-            this.callForHelp();
-            this.hasCalledForHelp = true;
+        // Only run AI behaviors when player is within detection range AND not too frequently
+        if (this.shouldRunAIBehaviors(time)) {
+            // Execute all behaviors assigned to this enemy
+            this.executeBehaviors();
         }
-        
-        // Some enemies become more aggressive when low on health
+
+        // Handle low-health aggression (this affects attack parameters, not behaviors)
         let currentAttackRange = this.attackRange;
         let currentAttackCooldown = this.attackCooldown;
-        
+
         if (this.characterConfig.name === 'black_thug' && this.health < this.maxHealth * 0.3) {
             // Black thugs become more aggressive when low on health
             currentAttackRange += 20; // Attack from further away
             currentAttackCooldown *= 0.7; // Attack faster
-        }
-        
-        // Some enemies can dodge player attacks
-        if (this.characterConfig.name === 'green_thug' && this.health > this.maxHealth * 0.5) {
-            // Green thugs can dodge when healthy
-            this.checkForDodge();
-        }
-        
-        // Some enemies work together
-        if (this.characterConfig.name === 'black_thug') {
-            // Black thugs coordinate with other black thugs
-            this.coordinateWithAllies();
-        }
-        
-        // Some enemies are aware of their environment
-        if (this.characterConfig.name === 'green_thug') {
-            // Green thugs are more cautious in certain situations
-            this.checkEnvironment();
-        }
-        
-        // Some enemies are aware of player state
-        if (this.characterConfig.name === 'black_thug') {
-            // Black thugs adjust strategy based on player state
-            this.assessPlayerState();
-        }
-        
-        // Some enemies are aware of crowd size
-        if (this.characterConfig.name === 'crackhead') {
-            // Crackheads are more aggressive in groups
-            this.checkCrowdSize();
-        }
-        
-        // Some enemies change behavior over time
-        if (this.characterConfig.name === 'green_thug') {
-            // Green thugs become more experienced over time
-            this.checkExperience();
-        }
-        
-        // Some enemies are aware of player health
-        if (this.characterConfig.name === 'black_thug') {
-            // Black thugs are more aggressive when player is low on health
-            this.checkPlayerHealth();
-        }
-        
-        // Some enemies are aware of player weapons
-        if (this.characterConfig.name === 'green_thug') {
-            // Green thugs are more cautious when player has weapons
-            this.checkPlayerWeapons();
         }
         
         // Some enemies retreat when very low on health
@@ -538,8 +503,9 @@ class Enemy {
     
     callForHelp() {
         // Black thugs can call for help when they first detect the player
-        console.log(`Black thug calls for help! Player detected at distance ${Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y))}`);
-        
+        const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
+        console.log(`Black thug calls for help! Player detected at distance ${distance}`);
+
         // This could trigger additional enemy spawning or make nearby enemies more aggressive
         // For now, just log the behavior
     }
@@ -548,8 +514,9 @@ class Enemy {
         // Green thugs can dodge player attacks when healthy
         // This is a placeholder for future dodge mechanics
         // For now, just log the behavior
+        const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
         if (Math.random() < 0.1) { // 10% chance to dodge
-            console.log(`Green thug attempts to dodge!`);
+            console.log(`Green thug attempts to dodge! (distance: ${distance})`);
         }
     }
 
@@ -557,15 +524,17 @@ class Enemy {
         // Black thugs coordinate with other black thugs
         // This is a placeholder for future cooperative behavior
         // For now, just log the behavior
-        console.log(`Black thug coordinates with allies!`);
+        const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
+        console.log(`Black thug coordinates with allies! (distance: ${distance})`);
     }
     
     checkEnvironment() {
         // Green thugs check their environment for tactical advantages
         // This is a placeholder for future environmental awareness
         // For now, just log the behavior
+        const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
         if (Math.random() < 0.05) { // 5% chance to check environment
-            console.log(`Green thug assesses the situation!`);
+            console.log(`Green thug assesses the situation! (distance: ${distance})`);
         }
     }
     
@@ -573,8 +542,9 @@ class Enemy {
         // Black thugs assess the player's current state
         // This is a placeholder for future player state assessment
         // For now, just log the behavior
+        const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
         if (Math.random() < 0.03) { // 3% chance to assess player
-            console.log(`Black thug assesses player state!`);
+            console.log(`Black thug assesses player state! (distance: ${distance})`);
         }
     }
     
@@ -582,8 +552,9 @@ class Enemy {
         // Crackheads are more aggressive in groups
         // This is a placeholder for future crowd behavior
         // For now, just log the behavior
+        const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
         if (Math.random() < 0.08) { // 8% chance to check crowd
-            console.log(`Crackhead checks crowd size!`);
+            console.log(`Crackhead checks crowd size! (distance: ${distance})`);
         }
     }
     
@@ -591,7 +562,8 @@ class Enemy {
         // Green thugs become more experienced over time
         const timeAlive = this.scene.time.now - this.spawnTime;
         if (timeAlive > 10000 && Math.random() < 0.02) { // After 10 seconds, 2% chance
-            console.log(`Green thug gains experience! Time alive: ${Math.round(timeAlive/1000)}s`);
+            const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
+            console.log(`Green thug gains experience! Time alive: ${Math.round(timeAlive/1000)}s (distance: ${distance})`);
         }
     }
     
@@ -599,8 +571,9 @@ class Enemy {
         // Black thugs are more aggressive when player is low on health
         // This is a placeholder for future player health assessment
         // For now, just log the behavior
+        const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
         if (Math.random() < 0.04) { // 4% chance to check player health
-            console.log(`Black thug checks player health!`);
+            console.log(`Black thug checks player health! (distance: ${distance})`);
         }
     }
     
@@ -608,8 +581,9 @@ class Enemy {
         // Green thugs are more cautious when player has weapons
         // This is a placeholder for future weapon awareness
         // For now, just log the behavior
+        const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
         if (Math.random() < 0.06) { // 6% chance to check player weapons
-            console.log(`Green thug checks player weapons!`);
+            console.log(`Green thug checks player weapons! (distance: ${distance})`);
         }
     }
     
@@ -765,6 +739,87 @@ class Enemy {
         this.sprite.setDepth(1000 - this.sprite.y);
     }
     
+    // ========================================
+    // AI BEHAVIOR SYSTEM
+    // ========================================
+
+    executeBehaviors() {
+        // Execute all behaviors assigned to this enemy
+        if (!this.behaviors || this.behaviors.length === 0) {
+            return; // No behaviors assigned
+        }
+
+        this.behaviors.forEach(behaviorName => {
+            const behaviorMethod = this.getBehaviorMethod(behaviorName);
+            if (behaviorMethod) {
+                behaviorMethod.call(this);
+            }
+        });
+    }
+
+    getBehaviorMethod(behaviorName) {
+        // Map behavior names to actual methods
+        const behaviorMap = {
+            [ENEMY_BEHAVIORS.CALL_FOR_HELP]: () => {
+                if (!this.hasCalledForHelp) {
+                    this.callForHelp();
+                    this.hasCalledForHelp = true;
+                }
+            },
+            [ENEMY_BEHAVIORS.COORDINATE_ALLIES]: () => this.coordinateWithAllies(),
+            [ENEMY_BEHAVIORS.ASSESS_PLAYER_STATE]: () => this.assessPlayerState(),
+            [ENEMY_BEHAVIORS.CHECK_ENVIRONMENT]: () => this.checkEnvironment(),
+            [ENEMY_BEHAVIORS.CHECK_CROWD_SIZE]: () => this.checkCrowdSize(),
+            [ENEMY_BEHAVIORS.CHECK_EXPERIENCE]: () => this.checkExperience(),
+            [ENEMY_BEHAVIORS.CHECK_PLAYER_HEALTH]: () => this.checkPlayerHealth(),
+            [ENEMY_BEHAVIORS.CHECK_PLAYER_WEAPONS]: () => this.checkPlayerWeapons(),
+            [ENEMY_BEHAVIORS.DODGE_ATTACKS]: () => {
+                if (this.health > this.maxHealth * 0.5) {
+                    this.checkForDodge();
+                }
+            }
+        };
+
+        return behaviorMap[behaviorName];
+    }
+
+    // ========================================
+    // AI OPTIMIZATION METHODS
+    // ========================================
+
+    shouldRunAIBehaviors(time) {
+        // Only run AI behaviors when player is within detection range
+        const distanceToPlayer = Phaser.Math.Distance.Between(
+            this.sprite.x, this.sprite.y,
+            this.player.x, this.player.y
+        );
+
+        if (distanceToPlayer > this.detectionRange) {
+            return false; // Too far away
+        }
+
+        // Throttle AI behavior frequency to prevent spam
+        // Only run behaviors every 2-5 seconds per enemy
+        if (!this.lastAIBehaviorTime) {
+            this.lastAIBehaviorTime = time;
+            return true;
+        }
+
+        const timeSinceLastBehavior = time - this.lastAIBehaviorTime;
+        const behaviorInterval = 2000 + Math.random() * 3000; // 2-5 second intervals
+
+        if (timeSinceLastBehavior >= behaviorInterval) {
+            this.lastAIBehaviorTime = time;
+            return true;
+        }
+
+        return false;
+    }
+
+    // ========================================
+    // UTILITY METHODS
+    // ========================================
+
     getAttackHitbox() {
         // Only return hitbox if attacking, animation is locked, AND windup is complete
         if (this.state !== ENEMY_STATES.ATTACKING || !this.animationLocked || !this.canDealDamage) {

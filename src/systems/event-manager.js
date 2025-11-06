@@ -15,14 +15,15 @@ class EventManager {
         this.actionQueue = []; // Queue of actions for current event
         this.currentActionIndex = 0;
         this.isPaused = false;
-        
+
+
         // Entity pause state tracking
         this.pausedEntities = {
             player: false,
             enemies: [],
             all: false
         };
-        
+
         // Store original entity states for restoration
         this.savedEntityStates = new Map();
         
@@ -38,7 +39,7 @@ class EventManager {
             console.log('🎬 No events to register');
             return;
         }
-        
+
         console.log(`🎬 Registering ${events.length} event(s)`);
         this.events = events.map(event => ({
             ...event,
@@ -144,16 +145,18 @@ class EventManager {
             console.warn(`🎬 Event ${event.id || 'unnamed'} has no actions`);
             return;
         }
-        
+
         // Mark event as triggered
         event.triggered = true;
         this.triggeredEvents.add(event.id);
-        
+
         // Set as active event
         this.activeEvent = event;
         this.actionQueue = [...event.actions]; // Copy actions array
         this.currentActionIndex = 0;
-        
+
+        console.log(`🎬 Started event: ${event.id || 'unnamed'}`);
+
         // Execute first action
         this.executeNextAction();
     }
@@ -275,6 +278,8 @@ class EventManager {
     }
     
     completeEvent() {
+        console.log(`🎬 Completed event: ${this.activeEvent?.id || 'unnamed'}`);
+
         this.activeEvent = null;
         this.actionQueue = [];
         this.currentActionIndex = 0;
@@ -1902,10 +1907,11 @@ class EventManager {
         return this.activeEvent;
     }
     
+
     // ========================================
     // CLEANUP
     // ========================================
-    
+
     destroy() {
         // Resume all paused entities before destroying
         if (this.pausedEntities.player) {

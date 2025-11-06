@@ -214,6 +214,9 @@ class UIManager {
     }
     
     updateDualCharacterHealth(tireekHealth, trystonHealth, activeCharacter) {
+        // Skip if UI elements not initialized yet
+        if (!this.tireekHealthGraphics || !this.trystonHealthGraphics) return;
+        
         // Update Tireek health bar
         this.updateCharacterHealthBar(this.tireekHealthGraphics, tireekHealth, 100, 
             this.tireekBarX, this.tireekBarY, this.dualBarWidth, this.dualBarHeight,
@@ -224,13 +227,15 @@ class UIManager {
             this.trystonBarX, this.trystonBarY, this.dualBarWidth, this.dualBarHeight,
             activeCharacter === 'tryston');
         
-        // Update labels to show active character
-        if (activeCharacter === 'tireek') {
-            this.tireekLabel.setStyle({ fill: '#FFD700', fontWeight: 'bold' });
-            this.trystonLabel.setStyle({ fill: '#888888', fontWeight: 'normal' });
-        } else {
-            this.tireekLabel.setStyle({ fill: '#888888', fontWeight: 'normal' });
-            this.trystonLabel.setStyle({ fill: '#FFD700', fontWeight: 'bold' });
+        // Update labels to show active character (only if UI elements are initialized)
+        if (this.tireekLabel && this.trystonLabel) {
+            if (activeCharacter === 'tireek') {
+                this.tireekLabel.setStyle({ fill: '#FFD700', fontWeight: 'bold' });
+                this.trystonLabel.setStyle({ fill: '#888888', fontWeight: 'normal' });
+            } else {
+                this.tireekLabel.setStyle({ fill: '#888888', fontWeight: 'normal' });
+                this.trystonLabel.setStyle({ fill: '#FFD700', fontWeight: 'bold' });
+            }
         }
     }
     

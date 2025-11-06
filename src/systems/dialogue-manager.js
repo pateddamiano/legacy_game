@@ -146,13 +146,18 @@ class DialogueManager {
         if (!this.container) {
             this.createDialogueUI();
         }
-        
+
         console.log(`💬 Showing dialogue: "${dialogue.text}" (speaker: ${dialogue.speaker || 'narrator'})`);
-        
+
+        // PAUSE GAMEPLAY FIRST - before showing dialogue
+        if (dialogue.pauseGame !== false) {
+            this.pauseGameplay();
+        }
+
         this.isActive = true;
         this.currentDialogue = dialogue;
         this.onDialogueComplete = callback;
-        
+
         // Update game state
         if (this.scene.gameStateManager) {
             this.scene.gameStateManager.setDialogueActive(true);
@@ -179,11 +184,6 @@ class DialogueManager {
         
         // Start typewriter
         this.startTypewriter();
-        
-        // Pause game if specified
-        if (dialogue.pauseGame !== false) {
-            this.pauseGameplay();
-        }
         
         // Auto-dismiss if duration specified and no callback
         if (dialogue.duration && !callback) {
@@ -397,7 +397,11 @@ class DialogueManager {
     // ========================================
     // UTILITY
     // ========================================
-    
+
+    isActive() {
+        return this.isActive;
+    }
+
     isDialogueActive() {
         return this.isActive;
     }

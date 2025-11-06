@@ -107,7 +107,7 @@ class GameScene extends Phaser.Scene {
         console.log('🎮 All managers initialized');
     }
 
-    create() {
+    async create() {
         console.log(`🎯 GameScene: Creating level ${this.selectedLevelId} with ${this.selectedCharacter}`);
         
         // No loading needed - assets already loaded in PreloadScene
@@ -129,61 +129,11 @@ class GameScene extends Phaser.Scene {
         console.log(`🎯 GameScene: Street bounds configured: ${this.streetTopLimit} - ${this.streetBottomLimit}`);
         
         // Initialize level system FIRST (loads world and sets spawn point)
-        this.initializeUnifiedLevelSystem();
-
-        // Apply level-specific environment adjustments
-        this.environmentManager.applyLevelSpecificBounds();
-
-        // Update street bounds after level-specific adjustments
-        const updatedStreetBounds = this.environmentManager.getStreetBounds();
-        this.streetTopLimit = updatedStreetBounds.top;
-        this.streetBottomLimit = updatedStreetBounds.bottom;
-        this.inputManager.setStreetBounds(this.streetTopLimit, this.streetBottomLimit);
-        console.log(`🎯 GameScene: Updated street bounds for level ${this.selectedLevelId}: ${this.streetTopLimit} - ${this.streetBottomLimit}`);
-
-        // Create parallax background AFTER world is initialized (so we have correct bounds)
-        this.createParallaxBackgroundFromConfig();
-
-        // Set camera background to transparent so parallax shows through
-        this.cameras.main.setBackgroundColor('rgba(0, 0, 0, 0)');
-
-        // Create both character sprites (only active one will be visible)
-        this.createBothCharacters();
-        console.log(`🎯 Both characters created, active: ${this.selectedCharacter}`);
+        // Character creation now happens after level initialization completes
+        await this.initializeUnifiedLevelSystem();
         
-        // Set up camera to follow player
-        console.log(`📷 📊 Setting up camera. Player position: x=${this.player.x}, y=${this.player.y}`);
-        console.log(`📷 📊 World bounds: ${this.physics.world.bounds.x}, ${this.physics.world.bounds.y}, ${this.physics.world.bounds.width}x${this.physics.world.bounds.height}`);
-
-        // Set camera bounds to match world bounds
-        console.log(`📷 📊 About to set camera bounds to: ${this.physics.world.bounds.x}, ${this.physics.world.bounds.y}, ${this.physics.world.bounds.width}x${this.physics.world.bounds.height}`);
-        this.cameras.main.setBounds(
-            this.physics.world.bounds.x,
-            this.physics.world.bounds.y,
-            this.physics.world.bounds.width,
-            this.physics.world.bounds.height
-        );
-
-        // Immediately check what the bounds are
-        const boundsAfterSet = this.cameras.main.getBounds();
-        console.log(`📷 📊 Camera bounds immediately after setBounds: ${boundsAfterSet.x}-${boundsAfterSet.x+boundsAfterSet.width} (${boundsAfterSet.width}px wide)`);
-
-        const initialBounds = this.cameras.main.getBounds();
-        console.log(`📷 📊 Camera bounds (getBounds): ${initialBounds.x}-${initialBounds.x+initialBounds.width} (${initialBounds.width}px wide)`);
-
-        // Add camera debug logging
-        this.cameraDebugInterval = setInterval(() => {
-            const cam = this.cameras.main;
-            const bounds = cam.getBounds();
-            console.log(`📷 Camera: scrollX=${Math.round(cam.scrollX)}, bounds=${bounds.x}-${bounds.x+bounds.width} (${bounds.width}px wide)`);
-        }, 1000); // Log every second
-
-        // Make camera follow player
-        this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
-        // Round pixels to reduce sub-pixel sampling blur
+        // Set up camera properties
         this.cameras.main.roundPixels = true;
-        
-        console.log(`📷 📊 Camera setup complete. Camera scroll: x=${this.cameras.main.scrollX}, y=${this.cameras.main.scrollY}`);
 
         // Input is now handled by InputManager
 
@@ -204,8 +154,7 @@ class GameScene extends Phaser.Scene {
             this.player.anims.play(`${this.currentCharacterConfig.name}_idle`, true);
         });
 
-        // Initialize animation state manager
-        this.animationManager = new AnimationStateManager(this.player);
+        // Animation manager will be initialized after character creation
         
         // Initialize enemy system (using centralized config)
         this.enemies = [];
@@ -459,7 +408,7 @@ class GameScene extends Phaser.Scene {
             
             // Get spawn point from world manager
             const spawnPoint = this.worldManager.getSpawnPoint();
-            console.log(`👥 📊 Creating ${charName} at spawn point: x=${spawnPoint.x}, y=${spawnPoint.y}`);
+            console.log(`🎯 CHARACTER CREATION: Creating ${charName} at spawn point (${spawnPoint.x}, ${spawnPoint.y})`);
             // Ensure pixel-art crispness for all animations of this character
             if (charData.config && charData.config.spriteSheets) {
                 try {
@@ -586,7 +535,7 @@ class GameScene extends Phaser.Scene {
         }
         
         // Only allow switching if not in middle of an action (unless forced)
-        if (!forceSwitch && (this.animationManager.animationLocked || this.isJumping || 
+        if (!forceSwitch && this.animationManager && (this.animationManager.animationLocked || this.isJumping || 
             this.animationManager.currentState === 'attack' || 
             this.animationManager.currentState === 'airkick')) {
             console.log("Cannot switch characters during action");
@@ -655,6 +604,7 @@ class GameScene extends Phaser.Scene {
         // Re-setup camera follow ONLY if camera is not locked by event system
         if (!this.eventCameraLocked) {
             this.cameras.main.startFollow(this.player, true, 0.1, 0);
+            console.log(`🎯 CHARACTER SWITCH: Camera following new player at (${Math.round(this.player.x)}, ${Math.round(this.player.y)})`);
         }
         
         // Update health bar with new character's health
@@ -981,6 +931,9 @@ class GameScene extends Phaser.Scene {
     }
     
     updateEnemies(time, delta) {
+        // Skip if enemies array not initialized yet
+        if (!this.enemies) return;
+        
         // Skip enemy spawning if disabled (test mode or maxEnemies is 0)
         if (this.maxEnemies === 0 || this.isTestMode) {
             // Still update existing enemies if any (for event system)
@@ -1043,6 +996,9 @@ class GameScene extends Phaser.Scene {
     }
     
     checkCombat() {
+        // Skip if animation manager not initialized yet
+        if (!this.animationManager) return;
+        
         // Check player attacks hitting enemies (both ground attacks and air kicks)
         if ((this.animationManager.currentState === 'attack' || this.animationManager.currentState === 'airkick') && this.animationManager.animationLocked) {
             const playerHitbox = this.getPlayerAttackHitbox();
@@ -1078,7 +1034,8 @@ class GameScene extends Phaser.Scene {
         }
         
         // Check enemy attacks hitting player
-        this.enemies.forEach(enemy => {
+        if (this.enemies) {
+            this.enemies.forEach(enemy => {
             const enemyHitbox = enemy.getAttackHitbox();
             if (enemyHitbox && this.isColliding(enemyHitbox, this.player)) {
                 // Only deal damage if this enemy hasn't hit the player with this attack yet
@@ -1089,10 +1046,11 @@ class GameScene extends Phaser.Scene {
                 }
             }
         });
+        }
     }
     
     getPlayerAttackHitbox() {
-        if ((this.animationManager.currentState !== 'attack' && this.animationManager.currentState !== 'airkick') || !this.animationManager.animationLocked) {
+        if (!this.animationManager || (this.animationManager.currentState !== 'attack' && this.animationManager.currentState !== 'airkick') || !this.animationManager.animationLocked) {
             return null;
         }
         
@@ -1224,7 +1182,8 @@ class GameScene extends Phaser.Scene {
     
     checkCharacterCollisions() {
         // Check player collision with all enemies
-        this.enemies.forEach(enemy => {
+        if (this.enemies) {
+            this.enemies.forEach(enemy => {
             if (!enemy.sprite || enemy.state === ENEMY_STATES.DEAD) return;
             
             // Calculate horizontal and vertical distances separately
@@ -1289,9 +1248,11 @@ class GameScene extends Phaser.Scene {
                 }
             }
         });
+        }
         
         // Check enemy-to-enemy collisions
-        for (let i = 0; i < this.enemies.length; i++) {
+        if (this.enemies) {
+            for (let i = 0; i < this.enemies.length; i++) {
             const enemy1 = this.enemies[i];
             if (!enemy1.sprite || enemy1.state === ENEMY_STATES.DEAD) continue;
             
@@ -1359,6 +1320,7 @@ class GameScene extends Phaser.Scene {
                 }
             }
         }
+        }
     }
 
     update(time, delta) {
@@ -1370,11 +1332,13 @@ class GameScene extends Phaser.Scene {
             this.worldManager.updateWorld(this.player.x);
         }
         
-        // Update animation state manager
-        this.animationManager.update(delta);
+        // Update animation state manager (only if initialized)
+        if (this.animationManager) {
+            this.animationManager.update(delta);
+        }
 
-        // Update input state (only if input manager is ready and not loading)
-        if (this.inputManager && !this.isLoading) {
+        // Update input state (only if input manager is ready, not loading, and not disabled)
+        if (this.inputManager && !this.isLoading && !this.inputManager.disabled) {
             this.inputManager.updateInputState();
             
             // Handle input and movement using managers
@@ -1393,11 +1357,13 @@ class GameScene extends Phaser.Scene {
         this.updateEnemies(time, delta);
         
         // Update perspective scaling for all enemies (restored)
-        this.enemies.forEach(enemy => {
-            if (enemy.sprite && enemy.sprite.active) {
-                this.environmentManager.updatePerspective(enemy.sprite);
-            }
-        });
+        if (this.enemies) {
+            this.enemies.forEach(enemy => {
+                if (enemy.sprite && enemy.sprite.active) {
+                    this.environmentManager.updatePerspective(enemy.sprite);
+                }
+            });
+        }
         
         // Update weapon system
         this.weaponManager.update();
@@ -1550,7 +1516,7 @@ class GameScene extends Phaser.Scene {
     }
 
     handleInput() {
-        if (!this.inputManager) return;
+        if (!this.inputManager || !this.player) return;
         
         // Handle system input using InputManager
         this.inputManager.handleSystemInput({
@@ -1614,13 +1580,13 @@ class GameScene extends Phaser.Scene {
     }
 
     handleMovement() {
-        if (!this.inputManager) return;
+        if (!this.inputManager || !this.player) return;
         
         // Check if we're doing an air kick (jumping + attacking)
-        const isAirKick = this.isJumping && (this.animationManager.currentState === 'airkick');
+        const isAirKick = this.isJumping && (this.animationManager && this.animationManager.currentState === 'airkick');
         
         // Don't allow movement during GROUND attacks only
-        if ((this.animationManager.currentState === 'attack' || this.animationManager.animationLocked) && !isAirKick) {
+        if (this.animationManager && (this.animationManager.currentState === 'attack' || this.animationManager.animationLocked) && !isAirKick) {
             // Force stop all movement for ground attacks
             this.player.setVelocityX(0);
             this.player.body.velocity.x = 0;
@@ -1640,7 +1606,7 @@ class GameScene extends Phaser.Scene {
             this.player.body.acceleration.y = 0;
             
             // Don't allow vertical movement during attacks
-            if (this.animationManager.currentState === 'attack' || this.animationManager.animationLocked) {
+            if (this.animationManager && (this.animationManager.currentState === 'attack' || this.animationManager.animationLocked)) {
                 this.player.body.velocity.y = 0;
                 console.log("Vertical movement blocked - in attack");
                 return;
@@ -1666,6 +1632,9 @@ class GameScene extends Phaser.Scene {
     }
 
     handleJumping() {
+        // Skip if player not initialized yet
+        if (!this.player) return;
+        
         // Handle landing from jump
         if (this.isJumping) {
             // Debug: log jump state every few frames
@@ -1688,6 +1657,9 @@ class GameScene extends Phaser.Scene {
     }
 
     handleAnimations() {
+        // Skip if animation manager or player not initialized yet
+        if (!this.animationManager || !this.player) return;
+        
         const charName = this.player.characterConfig.name;
         
         // Don't override locked animations
@@ -1731,7 +1703,7 @@ class GameScene extends Phaser.Scene {
         this.isJumping = true;
         
         // Play jump animation
-        if (this.animationManager.setState('jump')) {
+        if (this.animationManager && this.animationManager.setState('jump')) {
             this.player.anims.play(`${charName}_jump`, true);
         }
         
@@ -1759,7 +1731,9 @@ class GameScene extends Phaser.Scene {
         this.isJumping = false;
         
         // Reset animation state
-        this.animationManager.setState('idle');
+        if (this.animationManager) {
+            this.animationManager.setState('idle');
+        }
         
         console.log(`${reason} - Landed at Y: ${landingY}`);
     }
@@ -1785,36 +1759,74 @@ class GameScene extends Phaser.Scene {
     // LEVEL SYSTEM METHODS
     // ========================================
     
-    initializeUnifiedLevelSystem() {
+    async initializeUnifiedLevelSystem() {
         console.log('🎮 Initializing unified level system...');
 
         // Try JSON-based level system first
         if (window.LevelRegistry && window.LevelAssetLoader && window.WorldFactory) {
             const registry = window.LevelRegistry.getInstance();
-            registry.ensureLevelLoaded(this, this.selectedLevelId).then(async (levelJson) => {
-                if (levelJson) {
-                    console.log('🎮 JSON level detected:', levelJson.name);
-                    await this.loadLevelFromJSON(levelJson);
-                    return;
-                }
-                // Fallback to config-based system
-                this.loadLevelFromConfig();
-            });
+            const levelJson = await registry.ensureLevelLoaded(this, this.selectedLevelId);
+            if (levelJson) {
+                console.log('🎮 JSON level detected:', levelJson.name);
+                await this.loadLevelFromJSON(levelJson);
+                this.onLevelInitializationComplete();
+                return;
+            }
+            // Fallback to config-based system
+            this.loadLevelFromConfig();
+            this.onLevelInitializationComplete();
             return;
         }
 
         // Use config-based level system
         this.loadLevelFromConfig();
+        this.onLevelInitializationComplete();
+    }
+
+    onLevelInitializationComplete() {
+        console.log('🎯 Level initialization complete, creating characters and finalizing setup...');
+        
+        // Apply level-specific environment adjustments
+        this.environmentManager.applyLevelSpecificBounds();
+
+        // Update street bounds after level-specific adjustments
+        const updatedStreetBounds = this.environmentManager.getStreetBounds();
+        this.streetTopLimit = updatedStreetBounds.top;
+        this.streetBottomLimit = updatedStreetBounds.bottom;
+        this.inputManager.setStreetBounds(this.streetTopLimit, this.streetBottomLimit);
+        console.log(`🎯 GameScene: Updated street bounds for level ${this.selectedLevelId}: ${this.streetTopLimit} - ${this.streetBottomLimit}`);
+
+        // Create parallax background AFTER world is initialized (so we have correct bounds)
+        this.createParallaxBackgroundFromConfig();
+
+        // Set camera background to transparent so parallax shows through
+        this.cameras.main.setBackgroundColor('rgba(0, 0, 0, 0)');
+
+        // Create both character sprites (only active one will be visible)
+        // This now happens AFTER the world and spawn point are properly set up
+        this.createBothCharacters();
+        console.log(`🎯 Both characters created, active: ${this.selectedCharacter}`);
+        
+        // Initialize animation state manager now that player exists
+        this.animationManager = new AnimationStateManager(this.player);
+        console.log('🎯 Animation manager initialized');
+        
+        // Update camera bounds to match the loaded world
+        this.cameras.main.setBounds(0, 0, this.physics.world.bounds.width || 1200, this.physics.world.bounds.height || 720);
     }
 
     async loadLevelFromJSON(levelJson) {
-        console.log('🎮 Loading level from JSON:', levelJson.name);
+        console.log(`🎯 LEVEL ${levelJson.id} LOADING:`, levelJson.name);
 
         // Load assets for this level
         await window.LevelAssetLoader.ensureLoaded(this, levelJson);
 
         // Create world
         await window.WorldFactory.create(this, levelJson);
+
+        // World and spawn point are now set up
+        // Character creation will happen in onLevelInitializationComplete()
+        console.log(`🎯 Level ${levelJson.id} world created successfully`);
 
         // Register events
         if (this.eventManager && Array.isArray(levelJson.events)) {
@@ -1828,7 +1840,7 @@ class GameScene extends Phaser.Scene {
 
         // Update UI
         this.updateLevelDisplay && this.updateLevelDisplay();
-        console.log('🎮 Level loaded from JSON successfully');
+        console.log(`🎯 LEVEL ${levelJson.id} LOADED SUCCESSFULLY`);
     }
 
     loadLevelFromConfig() {
@@ -2020,12 +2032,19 @@ class GameScene extends Phaser.Scene {
     }
     
     resetPlayerState() {
-        console.log('🎮 Resetting player state...');
-        
         // Get spawn point from world manager
         const spawnPoint = this.worldManager.getSpawnPoint();
-        
-        // Reset both character sprites
+
+        // Reset camera first - stop follow and position at spawn point
+        this.cameras.main.stopFollow();
+        const cameraTargetX = Math.max(0, spawnPoint.x - this.cameras.main.width / 2);
+        this.cameras.main.setScroll(cameraTargetX, 0);
+
+        // Update camera bounds to match current world bounds
+        const worldBounds = this.physics.world.bounds;
+        this.cameras.main.setBounds(worldBounds.x, worldBounds.y, worldBounds.width, worldBounds.height);
+
+        // Reset both character sprites to spawn point
         Object.values(this.characters).forEach(charData => {
             if (charData.sprite) {
                 charData.sprite.setPosition(spawnPoint.x, spawnPoint.y);
@@ -2033,24 +2052,27 @@ class GameScene extends Phaser.Scene {
                 charData.sprite.body.reset(spawnPoint.x, spawnPoint.y);
             }
         });
-        
+
         // Reset player reference
         this.player.setPosition(spawnPoint.x, spawnPoint.y);
         this.player.setVelocity(0, 0);
         this.player.body.reset(spawnPoint.x, spawnPoint.y);
-        
+
+        // Restart camera follow
+        this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+
         // Reset player state
         this.isJumping = false;
         this.canDoubleJump = true;
         this.doubleJumpUsed = false;
         this.isFacingRight = true;
-        
+
         // Partially restore health (75% of max)
         Object.keys(this.characters).forEach(charName => {
             const charData = this.characters[charName];
             charData.health = Math.min(charData.maxHealth, charData.health + (charData.maxHealth * 0.75));
         });
-        
+
         // Update UI
         if (this.uiManager) {
             const activeChar = this.characters[this.getActiveCharacterName()];
@@ -2061,11 +2083,11 @@ class GameScene extends Phaser.Scene {
                 this.getActiveCharacterName()
             );
         }
-        
+
         // Resume gameplay
         this.isLoading = false;
-        
-        console.log('🎮 Player state reset complete');
+
+        console.log(`🎯 RESET COMPLETE: Player at (${Math.round(this.player.x)}, ${Math.round(this.player.y)})`);
     }
     
     getActiveCharacterName() {
