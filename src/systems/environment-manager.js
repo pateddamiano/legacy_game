@@ -41,6 +41,11 @@ class EnvironmentManager {
     
     initializeWorld() {
         // Set world bounds for physics and camera (only if not already set by WorldManager)
+        if (!this.scene.physics || !this.scene.physics.world) {
+            console.error('🌍 Physics world not available in environment manager!');
+            return;
+        }
+
         const currentBounds = this.scene.physics.world.bounds;
         if (currentBounds.width <= this.worldWidth) {
             // Bounds haven't been set to level-specific values yet, use defaults

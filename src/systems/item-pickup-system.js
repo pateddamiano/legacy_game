@@ -18,7 +18,7 @@ const ITEM_TYPES = {
         glowColor: 0x00ff00,        // Green glow
         magnetRange: 80,
         magnetSpeed: 300,
-        collisionRadius: 40,
+        collisionRadius: 60,        // Increased from 40 for easier pickup, especially near edges
         bobHeight: 8,
         bobSpeed: 2000,
         spawnWhenPlayerHealthFull: false,
@@ -228,43 +228,26 @@ class ItemPickup {
     applyItemEffect() {
         if (this.typeName === 'HEALTH') {
             // Heal both characters (dual character system)
-            if (this.scene.characters) {
+            if (this.scene.characterManager) {
+                // Use CharacterManager's heal method for both characters
+                const healAmount = this.itemType.healAmount;
+                
                 // Heal Tireek
-                const tireekHealAmount = Math.min(
-                    this.itemType.healAmount,
-                    this.scene.characters.tireek.maxHealth - this.scene.characters.tireek.health
-                );
-                if (tireekHealAmount > 0) {
-                    this.scene.characters.tireek.health += tireekHealAmount;
-                }
+                this.scene.characterManager.heal('tireek', healAmount);
                 
                 // Heal Tryston
-                const trystonHealAmount = Math.min(
-                    this.itemType.healAmount,
-                    this.scene.characters.tryston.maxHealth - this.scene.characters.tryston.health
-                );
-                if (trystonHealAmount > 0) {
-                    this.scene.characters.tryston.health += trystonHealAmount;
-                }
-                
-                // Update UI
-                const activeChar = this.scene.selectedCharacter;
-                this.scene.uiManager.updateHealthBar(
-                    this.scene.characters[activeChar].health, 
-                    this.scene.characters[activeChar].maxHealth
-                );
-                this.scene.uiManager.updateDualCharacterHealth(
-                    this.scene.characters.tireek.health,
-                    this.scene.characters.tryston.health,
-                    activeChar
-                );
+                this.scene.characterManager.heal('tryston', healAmount);
                 
                 // Play health pickup sound
                 if (this.scene.audioManager) {
                     this.scene.audioManager.playHealthPickup();
                 }
                 
-                console.log(`💚 Both characters healed! Tireek: ${this.scene.characters.tireek.health}/100, Tryston: ${this.scene.characters.tryston.health}/100`);
+                const tireekHealth = this.scene.characterManager.characters.tireek.health;
+                const trystonHealth = this.scene.characterManager.characters.tryston.health;
+                console.log(`💚 Both characters healed! Tireek: ${tireekHealth}/100, Tryston: ${trystonHealth}/100`);
+            } else {
+                console.warn('⚠️ CharacterManager not found, cannot heal player!');
             }
         } else if (this.typeName === 'MICROPHONE') {
             // Award points
@@ -399,9 +382,9 @@ class ItemPickupManager {
         // Special logic for health items
         if (itemType === 'HEALTH') {
             // Don't spawn health if BOTH characters are at full health (dual character system)
-            if (!config.spawnWhenPlayerHealthFull && this.scene.characters) {
-                const tireekFull = this.scene.characters.tireek.health >= this.scene.characters.tireek.maxHealth;
-                const trystonFull = this.scene.characters.tryston.health >= this.scene.characters.tryston.maxHealth;
+            if (!config.spawnWhenPlayerHealthFull && this.scene.characterManager) {
+                const tireekFull = this.scene.characterManager.characters.tireek.health >= this.scene.characterManager.characters.tireek.maxHealth;
+                const trystonFull = this.scene.characterManager.characters.tryston.health >= this.scene.characterManager.characters.tryston.maxHealth;
                 
                 if (tireekFull && trystonFull) {
                     return false; // Both at full health, no need for pickup
@@ -453,6 +436,11 @@ class ItemPickupManager {
             const streetTop = this.scene.environmentManager ? this.scene.environmentManager.streetTopLimit : WORLD_CONFIG.streetTopLimit;
             const streetBottom = this.scene.environmentManager ? this.scene.environmentManager.streetBottomLimit : WORLD_CONFIG.streetBottomLimit;
             
+            // Add margin from boundaries to prevent items from spawning too close to edges
+            const boundaryMargin = 50; // Margin from top/bottom boundaries
+            const safeTop = streetTop + boundaryMargin;
+            const safeBottom = streetBottom - boundaryMargin;
+            
             // Try to spawn off-screen vertically first, fall back to street bounds
             if (Math.random() < 0.7) {
                 // 70% chance to spawn off-screen vertically
@@ -462,11 +450,11 @@ class ItemPickupManager {
                 } else {
                     y = cameraY + cameraHeight + config.spawnOffscreenDistance;
                 }
-                // Clamp to street bounds
-                y = Math.max(streetTop, Math.min(streetBottom, y));
+                // Clamp to safe street bounds (with margin from edges)
+                y = Math.max(safeTop, Math.min(safeBottom, y));
             } else {
-                // 30% chance to spawn within street bounds (for variety)
-                y = Phaser.Math.Between(streetTop, streetBottom);
+                // 30% chance to spawn within safe street bounds (for variety)
+                y = Phaser.Math.Between(safeTop, safeBottom);
             }
             
             // Return the position immediately - no distance constraints needed

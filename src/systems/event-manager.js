@@ -357,6 +357,38 @@ class EventManager {
         
         console.log(`🎬 Moving ${target} to (${destX}, ${destY}) over ${duration}ms`);
         
+        // Stop any physics movement and disable physics temporarily for smooth tween movement
+        if (entity.body) {
+            entity.body.setVelocity(0, 0);
+            entity.body.setImmovable(true); // Prevent physics from interfering
+        }
+        
+        // If this is an enemy, ensure it's paused and set velocity to 0
+        if (target.startsWith('enemy_')) {
+            const restOfString = target.substring(6);
+            let enemyIndex = null;
+            
+            // Check eventEnemyMap first for special IDs
+            if (this.scene.eventEnemyMap && this.scene.eventEnemyMap.has(target)) {
+                enemyIndex = this.scene.eventEnemyMap.get(target);
+            } else {
+                // Try parsing as index
+                const index = parseInt(restOfString);
+                if (!isNaN(index)) {
+                    enemyIndex = index;
+                }
+            }
+            
+            if (enemyIndex !== null && this.scene.enemies && this.scene.enemies[enemyIndex]) {
+                const enemy = this.scene.enemies[enemyIndex];
+                enemy.eventPaused = true; // Ensure enemy AI is paused
+                if (enemy.sprite && enemy.sprite.body) {
+                    enemy.sprite.body.setVelocity(0, 0);
+                    enemy.sprite.body.setImmovable(true);
+                }
+            }
+        }
+        
         // Create tween for smooth movement
         const tween = this.scene.tweens.add({
             targets: entity,
@@ -364,9 +396,32 @@ class EventManager {
             y: destY,
             duration: duration,
             ease: action.ease || 'Power2', // Default easing
+            onStart: () => {
+                console.log(`🎬 Started moving ${target} to (${destX}, ${destY})`);
+            },
+            onUpdate: () => {
+                // Keep velocity at 0 during tween to prevent physics interference
+                if (entity.body) {
+                    entity.body.setVelocity(0, 0);
+                }
+            },
             onComplete: () => {
                 console.log(`🎬 Move complete for ${target}`);
-                this.advanceAction();
+                // Re-enable physics if it was disabled
+                if (entity.body) {
+                    entity.body.setImmovable(false);
+                }
+                
+                // If destroyOnComplete is set, destroy the enemy immediately
+                if (action.destroyOnComplete && target.startsWith('enemy_')) {
+                    console.log(`🎬 Destroying ${target} immediately after movement completes`);
+                    // Use a small delay to ensure tween cleanup happens first
+                    this.scene.time.delayedCall(10, () => {
+                        this.executeDestroyEnemy({ target: target });
+                    });
+                } else {
+                    this.advanceAction();
+                }
             }
         });
         
@@ -388,14 +443,21 @@ class EventManager {
         
         console.log(`🎬 Showing dialogue: "${dialogue.text}"`);
         
+        // CRITICAL: Pause all enemies during dialogue to prevent them from attacking the frozen player
+        this.pauseEnemies();
+        
         // Use DialogueManager if available
         if (this.scene.dialogueManager) {
             // Show dialogue with callback to advance to next action
             this.scene.dialogueManager.showDialogue(dialogue, () => {
+                // Resume enemies when dialogue completes
+                this.resumeEnemies();
                 this.advanceAction();
             });
         } else {
             console.warn('🎬 DialogueManager not available');
+            // Resume enemies even if dialogue manager isn't available
+            this.resumeEnemies();
             this.advanceAction();
         }
     }
@@ -1487,11 +1549,11 @@ class EventManager {
         this.pausedEntities.player = true;
         
         // Save current state
-        if (this.scene.player) {
+        if (this.scene.player && this.scene.player.body) {
             this.savedEntityStates.set('player', {
                 velocityX: this.scene.player.body.velocity.x,
                 velocityY: this.scene.player.body.velocity.y,
-                gravityY: this.scene.player.body.gravity.y,
+                gravityY: (this.scene.player.body.gravity && this.scene.player.body.gravity.y !== undefined) ? this.scene.player.body.gravity.y : 0,
                 isJumping: this.scene.isJumping || false,
                 animationState: this.scene.animationManager?.currentState || 'idle',
                 animationLocked: this.scene.animationManager?.animationLocked || false,
@@ -1502,14 +1564,35 @@ class EventManager {
             this.scene.player.body.setVelocity(0, 0);
             this.scene.player.body.setGravityY(0);
             
-            // Clear animation lock if in airkick to prevent stuck state
-            if (this.scene.animationManager && this.scene.animationManager.currentState === 'airkick') {
-                console.log('🎬 Clearing airkick animation lock on pause');
-                this.scene.animationManager.currentState = 'idle';
-                this.scene.animationManager.animationLocked = false;
-                this.scene.animationManager.lockTimer = 0;
-                // Play idle animation
-                const charName = this.scene.currentCharacterConfig?.name || 'tireek';
+            // Stop running sound effect immediately
+            if (this.scene.audioManager) {
+                this.scene.audioManager.stopPlayerRunning();
+            }
+            
+            // Reset animation state to idle and stop running animation
+            const charName = this.scene.currentCharacterConfig?.name || 'tireek';
+            if (this.scene.animationManager) {
+                // Clear any animation locks
+                if (this.scene.animationManager.currentState === 'airkick' || 
+                    this.scene.animationManager.currentState === 'run') {
+                    console.log(`🎬 Clearing ${this.scene.animationManager.currentState} animation state on pause`);
+                    this.scene.animationManager.currentState = 'idle';
+                    this.scene.animationManager.animationLocked = false;
+                    this.scene.animationManager.lockTimer = 0;
+                    // Play idle animation
+                    this.scene.player.anims.play(`${charName}_idle`, true);
+                } else if (this.scene.animationManager.currentState === 'attack') {
+                    // For attacks, we might want to let them finish, but if we're pausing, clear it
+                    this.scene.animationManager.currentState = 'idle';
+                    this.scene.animationManager.animationLocked = false;
+                    this.scene.animationManager.lockTimer = 0;
+                    this.scene.player.anims.play(`${charName}_idle`, true);
+                } else {
+                    // Ensure idle animation is playing
+                    this.scene.player.anims.play(`${charName}_idle`, true);
+                }
+            } else {
+                // Fallback: just play idle animation
                 this.scene.player.anims.play(`${charName}_idle`, true);
             }
             
@@ -1542,10 +1625,12 @@ class EventManager {
         this.pausedEntities.player = false;
         
         // Restore state
-        if (this.scene.player && this.savedEntityStates.has('player')) {
+        if (this.scene.player && this.scene.player.body && this.savedEntityStates.has('player')) {
             const savedState = this.savedEntityStates.get('player');
             this.scene.player.body.setVelocity(savedState.velocityX, savedState.velocityY);
-            this.scene.player.body.setGravityY(savedState.gravityY);
+            if (savedState.gravityY !== undefined) {
+                this.scene.player.body.setGravityY(savedState.gravityY);
+            }
             
             // Ensure animation state is cleared (don't restore airkick state)
             if (this.scene.animationManager) {

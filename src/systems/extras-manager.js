@@ -8,6 +8,13 @@ class ExtrasManager {
         this.scene = scene;
         this.extras = [];
         this.eventExtraMap = new Map();
+        this.streetTopLimit = 0;
+        this.streetBottomLimit = 0;
+    }
+
+    setStreetBounds(streetTopLimit, streetBottomLimit) {
+        this.streetTopLimit = streetTopLimit;
+        this.streetBottomLimit = streetBottomLimit;
     }
 
     spawnExtra(name, x, y, options = {}) {
@@ -35,7 +42,10 @@ class ExtrasManager {
         sprite.setGravityY(0);
         sprite.setCollideWorldBounds(false);
 
-        // Determine scale: allow matching player's current display height for consistency
+        // Store the extra definition for perspective scaling
+        sprite.extraDef = def;
+
+        // Determine initial scale: allow matching player's current display height for consistency
         let scale = options.scale !== undefined ? options.scale : (def.scale || 1);
         const matchPlayer = options.matchPlayer === true || options.matchPlayerScale === true;
         if (matchPlayer && this.scene.player && sprite.height) {
@@ -46,6 +56,13 @@ class ExtrasManager {
                 scale = computedScale;
             }
         }
+        
+        // If perspective scaling is enabled (not disabled via options), apply initial perspective scale
+        const usePerspectiveScaling = options.disablePerspectiveScaling !== true;
+        if (usePerspectiveScaling && this.streetTopLimit !== 0 && this.streetBottomLimit !== 0) {
+            scale = this.calculatePerspectiveScale(y, def);
+        }
+        
         sprite.setScale(scale);
         console.log(`🎭 ExtrasManager.spawnExtra: sprite.height=${sprite.height}, player.displayHeight=${this.scene.player?.displayHeight}, finalScale=${scale}, displayHeight=${sprite.displayHeight}`);
 
@@ -56,12 +73,21 @@ class ExtrasManager {
             const newY = options.bottomY - (sprite.displayHeight / 2);
             sprite.setY(Math.round(newY));
             console.log(`🎭 Positioning bottom of sprite at y=${options.bottomY}, sprite y=${newY}`);
+            
+            // Recalculate perspective scale if needed
+            if (usePerspectiveScaling && this.streetTopLimit !== 0 && this.streetBottomLimit !== 0) {
+                const newScale = this.calculatePerspectiveScale(newY, def);
+                sprite.setScale(newScale);
+            }
         }
 
         // Set depth - use custom depth if provided, otherwise default to 1000 - y
         const finalY = sprite.y; // Use the final Y position for depth calculation
         const depth = options.depth !== undefined ? options.depth : (1000 - finalY);
         sprite.setDepth(depth);
+
+        // Store whether to use perspective scaling
+        sprite.usePerspectiveScaling = usePerspectiveScaling;
 
         const extra = { name, sprite };
         const index = this.extras.push(extra) - 1;
@@ -71,6 +97,39 @@ class ExtrasManager {
         }
 
         return extra;
+    }
+
+    calculatePerspectiveScale(y, def) {
+        // Get perspective scales from extra definition (defaults if not specified)
+        const perspectiveScales = def.perspectiveScales || {minScale: 3.0, maxScale: 4.0};
+        const baseMinScale = perspectiveScales.minScale;
+        const baseMaxScale = perspectiveScales.maxScale;
+        
+        // Get baseScale multiplier from extra definition (defaults to 1.0)
+        const baseScaleMultiplier = def.baseScale !== undefined ? def.baseScale : 1.0;
+        
+        // Calculate normalized Y position (0 = top, 1 = bottom)
+        const normalizedY = (y - this.streetTopLimit) / (this.streetBottomLimit - this.streetTopLimit);
+        const clampedY = Math.max(0, Math.min(1, normalizedY)); // Clamp to 0-1 range
+        
+        // Calculate base scale based on Y position
+        const baseScale = baseMinScale + (baseMaxScale - baseMinScale) * clampedY;
+        
+        // Apply base scale multiplier
+        return baseScale * baseScaleMultiplier;
+    }
+
+    updatePerspective() {
+        // Update perspective scaling for all extras that have it enabled
+        this.extras.forEach(extra => {
+            if (extra && extra.sprite && extra.sprite.usePerspectiveScaling && extra.sprite.extraDef) {
+                const newScale = this.calculatePerspectiveScale(extra.sprite.y, extra.sprite.extraDef);
+                extra.sprite.setScale(newScale);
+                
+                // Update depth based on Y position
+                extra.sprite.setDepth(1000 - extra.sprite.y);
+            }
+        });
     }
 
     destroyExtraById(target) {

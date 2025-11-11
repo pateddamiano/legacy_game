@@ -59,8 +59,15 @@ const ENEMY_CONFIG = {
     
     // 🎨 VISUAL & CLEANUP
     deathLingerTime: 2000,      // how long dead enemies stay on screen (ms) - dramatic effect
-    cleanupDistance: 1000,      // distance at which enemies are removed (performance optimization)
-    damageFlashTime: 100,       // duration of damage flash effect (ms) - visual feedback
+    cleanupDistance: 1200,      // distance at which enemies are removed (increased to be larger than spawn distance ~820px)
+    cleanupDistanceBehind: 1000, // More aggressive cleanup for enemies behind player (when player is moving forward)
+    cleanupGracePeriod: 3000,   // Grace period after spawn before cleanup can occur (ms) - prevents immediate cleanup
+    damageFlashTime: 200,       // duration of damage flash effect (ms) - increased for better visibility
+    deathFlashTime: 300,        // duration of death flash effect (ms) - visible red flash before disappearing
+    
+    // 🏃 CATCH-UP BEHAVIOR
+    catchUpSpeedMultiplier: 2.0, // Speed multiplier when enemy is behind player and player is moving forward
+    catchUpDistance: 500,       // Distance threshold for catch-up behavior (enemy behind player by this much)
     
     // 📏 SCALING & SIZE (further increased by 1.25x)
     minScale: 4.356,            // 3.4848 * 1.25
@@ -70,6 +77,8 @@ const ENEMY_CONFIG = {
     playerDamage: 10,          // damage enemies deal to player (DOUBLED from 5 - more punishing!)
     playerFlashTime: 200,       // player damage flash duration (ms) - visual feedback
     attackWindupDelay: 300,     // delay before attack actually hits (ms) - gives player time to react
+    knockbackForce: 150,        // Horizontal knockback force when hit by player (pixels/second)
+    knockbackDuration: 200,     // Duration of knockback effect (ms)
     
     // 🎯 VERTICAL MOVEMENT CONTROL
     verticalMoveSpeed: 1,       // Reduced from 2 - much slower vertical movement
@@ -97,6 +106,7 @@ const ENEMY_TYPE_CONFIGS = {
         playerDamage: 2,             // Less damage (DOUBLED from 1)
         attackTypes: ['jab', 'bottle_attack'],
         detectionRange: 900,         // Less aggressive - shorter detection range (increased from 600)
+        baseScale: 0.65,              // Base size multiplier (1.0 = normal size, 0.8 = smaller, 1.2 = larger)
         description: "Weak but numerous crackhead enemies"
     },
     
@@ -105,9 +115,10 @@ const ENEMY_TYPE_CONFIGS = {
         health: 20,                   // Medium health
         speed: 300,                   // Faster than crackhead
         attackCooldown: 250,         // Standard attack speed
-        playerDamage: 4,             // Medium damage (DOUBLED from 2)
+        playerDamage: 5,             // Medium damage (DOUBLED from 2)
         attackTypes: ['knife_hit'],
         detectionRange: 1200,        // Standard detection range (increased from 800)
+        baseScale: 0.6,              // Base size multiplier (1.0 = normal size)
         description: "Medium difficulty thug with knife attacks"
     },
     
@@ -116,9 +127,10 @@ const ENEMY_TYPE_CONFIGS = {
         health: 30,                   // Higher health
         speed: 200,                   // Fast movement
         attackCooldown: 200,         // Faster attacks
-        playerDamage: 6,             // Higher damage (DOUBLED from 3)
+        playerDamage: 7,             // Higher damage (DOUBLED from 3)
         attackTypes: ['enemy_punch'],
         detectionRange: 1500,        // More aggressive - longer detection range (increased from 1000)
+        baseScale: 0.6,              // Base size multiplier (1.0 = normal size)
         description: "Harder thug with powerful punch attacks"
     },
     
@@ -127,9 +139,10 @@ const ENEMY_TYPE_CONFIGS = {
         health: 50,                   // High health (boss-tier)
         speed: 150,                   // Slower movement (dramatic)
         attackCooldown: 300,         // Slower attacks
-        playerDamage: 8,             // High damage
+        playerDamage: 9,             // High damage
         attackTypes: ['enemy_punch'],
         detectionRange: 2000,        // Very aggressive - long detection range
+        baseScale: 1.0,              // Base size multiplier (1.0 = normal size)
         description: "The Critic - formidable opponent"
     }
 };
@@ -144,6 +157,9 @@ class Enemy {
         // Get enemy type configuration
         const enemyType = characterConfig.name;
         const typeConfig = ENEMY_TYPE_CONFIGS[enemyType] || {};
+        
+        // Store base scale multiplier from type config (defaults to 1.0 if not specified)
+        this.baseScaleMultiplier = typeConfig.baseScale !== undefined ? typeConfig.baseScale : 1.0;
         
         // Ensure crisp pixel-art filtering for all animations of this enemy
         if (characterConfig && characterConfig.spriteSheets) {
@@ -162,7 +178,8 @@ class Enemy {
         
         // Create sprite
         this.sprite = scene.physics.add.sprite(Math.round(x), Math.round(y), `${characterConfig.name}_idle`);
-        this.sprite.setScale(ENEMY_CONFIG.minScale);
+        // Apply base scale multiplier to initial scale
+        this.sprite.setScale(ENEMY_CONFIG.minScale * this.baseScaleMultiplier);
         this.sprite.setDepth(1000 - y);
         this.sprite.setBounce(0.2);
         this.sprite.setCollideWorldBounds(true);
@@ -210,6 +227,10 @@ class Enemy {
         this.windupTimer = 0;     // Time remaining in windup
         this.canDealDamage = false; // True when attack can actually hit
         
+        // Knockback tracking
+        this.isKnockedBack = false; // True when enemy is being knocked back
+        this.knockbackTimer = 0;   // Time remaining in knockback
+        
         // Movement bounds - read from centralized WORLD_CONFIG
         this.streetTopLimit = WORLD_CONFIG.streetTopLimit;
         this.streetBottomLimit = WORLD_CONFIG.streetBottomLimit;
@@ -240,8 +261,8 @@ class Enemy {
                 const walkKey = `${this.characterConfig.name}_walk`;
                 const idleKey = `${this.characterConfig.name}_idle`;
                 
-                console.log(`Enemy ${this.characterConfig.name} trying to play walk animation: ${walkKey}`);
-                console.log(`Available animations:`, Object.keys(this.scene.anims.anims.entries));
+                //console.log(`Enemy ${this.characterConfig.name} trying to play walk animation: ${walkKey}`);
+                // console.log(`Available animations:`, Object.keys(this.scene.anims.anims.entries));
                 
                 // Check if animations exist and are valid
                 if (this.scene.anims.exists(walkKey) && this.scene.anims.get(walkKey).frames.length > 0) {
@@ -291,6 +312,18 @@ class Enemy {
         
         // Skip updates if paused by event system
         if (this.eventPaused) return;
+        
+        // Update knockback timer
+        if (this.isKnockedBack) {
+            this.knockbackTimer -= delta;
+            if (this.knockbackTimer <= 0) {
+                this.isKnockedBack = false;
+                // Velocity will be cleared by the delayedCall in takeDamage, but also clear here as safety
+                if (this.state === ENEMY_STATES.WALKING || this.state === ENEMY_STATES.SPAWNING) {
+                    this.sprite.setVelocityX(0);
+                }
+            }
+        }
         
         // Update animation lock timer
         if (this.lockTimer > 0) {
@@ -393,12 +426,29 @@ class Enemy {
     }
     
     moveTowardPlayer() {
+        // Don't move if being knocked back
+        if (this.isKnockedBack) {
+            return;
+        }
+        
         const dx = this.player.x - this.sprite.x;
         const dy = this.player.y - this.sprite.y;
         
         // Add some movement variety based on enemy type
         let moveSpeed = this.speed;
         let verticalSpeed = ENEMY_CONFIG.verticalMoveSpeed;
+        
+        // CATCH-UP BEHAVIOR: If enemy is behind player and player is moving forward, speed up
+        const isBehindPlayer = dx > 0; // Enemy is to the left of player
+        const horizontalDistance = Math.abs(dx);
+        const playerMovingRight = this.player.body && this.player.body.velocity.x > 0;
+        const playerFacingRight = !this.player.flipX;
+        
+        // Apply catch-up speed multiplier when enemy is behind player and player is moving/heading right
+        if (isBehindPlayer && horizontalDistance > ENEMY_CONFIG.catchUpDistance && (playerMovingRight || playerFacingRight)) {
+            moveSpeed *= ENEMY_CONFIG.catchUpSpeedMultiplier;
+            console.log(`🏃 Enemy ${this.characterConfig.name} catching up! Speed: ${moveSpeed.toFixed(0)} (${horizontalDistance.toFixed(0)}px behind)`);
+        }
         
         // Increase vertical movement when close to player (better tracking)
         const distanceToPlayer = Math.sqrt(dx * dx + dy * dy);
@@ -419,7 +469,10 @@ class Enemy {
             const playerDirection = this.player.x > this.sprite.x ? 1 : -1;
             const flankingOffset = 30; // Try to stay slightly to the side
             if (Math.abs(dx) > flankingOffset) {
-                moveSpeed *= 0.8; // Move slower when flanking
+                // Don't slow down if we're catching up
+                if (!(isBehindPlayer && horizontalDistance > ENEMY_CONFIG.catchUpDistance)) {
+                    moveSpeed *= 0.8; // Move slower when flanking (unless catching up)
+                }
             }
         }
         
@@ -692,19 +745,49 @@ class Enemy {
         console.log(`Enemy ${this.characterConfig.name} starts ${attackType} attack (${windupDelay}ms windup)`);
     }
     
-    takeDamage(damage = 1) {
+    takeDamage(damage = 1, knockbackSource = null) {
         if (this.state === ENEMY_STATES.DEAD) return;
         
         this.health -= damage;
         console.log(`Enemy ${this.characterConfig.name} takes ${damage} damage (${this.health}/${this.maxHealth} HP)`);
         
-        // Flash effect
-        this.sprite.setTint(0xff0000);
-        this.scene.time.delayedCall(ENEMY_CONFIG.damageFlashTime, () => {
-            if (this.sprite && this.state !== ENEMY_STATES.DEAD) {
-                this.sprite.setTint(0xffffff);
-            }
-        });
+        // Apply knockback if source is provided
+        if (knockbackSource && this.sprite && this.sprite.body) {
+            const dx = this.sprite.x - knockbackSource.x;
+            const knockbackDirection = dx > 0 ? 1 : -1; // Push away from player
+            const knockbackVelocity = knockbackDirection * ENEMY_CONFIG.knockbackForce;
+            
+            // Set knockback flag and timer
+            this.isKnockedBack = true;
+            this.knockbackTimer = ENEMY_CONFIG.knockbackDuration;
+            
+            // Apply knockback velocity
+            this.sprite.setVelocityX(knockbackVelocity);
+            
+            console.log(`💥 Knockback applied to ${this.characterConfig.name}: ${knockbackVelocity}px/s for ${ENEMY_CONFIG.knockbackDuration}ms`);
+            
+            // Clear knockback after duration
+            this.scene.time.delayedCall(ENEMY_CONFIG.knockbackDuration, () => {
+                if (this.sprite && this.sprite.body && this.state !== ENEMY_STATES.DEAD) {
+                    // Only clear velocity if enemy is still in walking state (not attacking)
+                    if (this.state === ENEMY_STATES.WALKING || this.state === ENEMY_STATES.SPAWNING) {
+                        this.sprite.setVelocityX(0);
+                    }
+                    this.isKnockedBack = false;
+                    this.knockbackTimer = 0;
+                }
+            });
+        }
+        
+        // Flash effect (only if not dying)
+        if (this.health > 0) {
+            this.sprite.setTint(0xff0000);
+            this.scene.time.delayedCall(ENEMY_CONFIG.damageFlashTime, () => {
+                if (this.sprite && this.state !== ENEMY_STATES.DEAD) {
+                    this.sprite.setTint(0xffffff);
+                }
+            });
+        }
         
         if (this.health <= 0) {
             this.setState(ENEMY_STATES.DEAD);
@@ -714,26 +797,53 @@ class Enemy {
                 this.scene.audioManager.playEnemyDeath();
             }
             
-            // Different death effects based on enemy type
-            if (this.characterConfig.name === 'crackhead') {
-                this.sprite.setTint(0x666666); // Darker gray for crackheads
-            } else if (this.characterConfig.name === 'green_thug') {
-                this.sprite.setTint(0x556B2F); // Dark olive green for green thugs
-            } else if (this.characterConfig.name === 'black_thug') {
-                this.sprite.setTint(0x2F2F2F); // Very dark gray for black thugs
-            }
+            // Visible red flash effect on death (override any damage flash)
+            this.sprite.setTint(0xff0000); // Bright red flash
+            this.scene.time.delayedCall(ENEMY_CONFIG.deathFlashTime, () => {
+                if (this.sprite && this.state === ENEMY_STATES.DEAD) {
+                    // Different death tints based on enemy type after flash
+                    if (this.characterConfig.name === 'crackhead') {
+                        this.sprite.setTint(0x666666); // Darker gray for crackheads
+                    } else if (this.characterConfig.name === 'green_thug') {
+                        this.sprite.setTint(0x556B2F); // Dark olive green for green thugs
+                    } else if (this.characterConfig.name === 'black_thug') {
+                        this.sprite.setTint(0x2F2F2F); // Very dark gray for black thugs
+                    } else {
+                        this.sprite.setTint(0x333333); // Default dark gray
+                    }
+                }
+            });
             
-            // Remove after delay
-            this.scene.time.delayedCall(ENEMY_CONFIG.deathLingerTime, () => {
-                this.destroy();
+            // Fade out and remove after delay
+            this.scene.time.delayedCall(ENEMY_CONFIG.deathFlashTime, () => {
+                if (this.sprite && this.state === ENEMY_STATES.DEAD) {
+                    this.scene.tweens.add({
+                        targets: this.sprite,
+                        alpha: 0,
+                        duration: ENEMY_CONFIG.deathLingerTime - ENEMY_CONFIG.deathFlashTime,
+                        ease: 'Power2',
+                        onComplete: () => {
+                            // Remove from enemies array before destroying
+                            if (this.scene.enemies && Array.isArray(this.scene.enemies)) {
+                                const index = this.scene.enemies.indexOf(this);
+                                if (index !== -1) {
+                                    this.scene.enemies.splice(index, 1);
+                                }
+                            }
+                            this.destroy();
+                        }
+                    });
+                }
             });
         }
     }
     
     updatePerspective() {
-        // Same perspective system as player
+        // Same perspective system as player, but with base scale multiplier applied
         const normalizedY = (this.sprite.y - this.streetTopLimit) / (this.streetBottomLimit - this.streetTopLimit);
-        const scale = ENEMY_CONFIG.minScale + (ENEMY_CONFIG.maxScale - ENEMY_CONFIG.minScale) * normalizedY;
+        const baseScale = ENEMY_CONFIG.minScale + (ENEMY_CONFIG.maxScale - ENEMY_CONFIG.minScale) * normalizedY;
+        // Apply enemy-specific base scale multiplier
+        const scale = baseScale * this.baseScaleMultiplier;
         
         this.sprite.setScale(scale);
         this.sprite.setDepth(1000 - this.sprite.y);

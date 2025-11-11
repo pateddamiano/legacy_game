@@ -275,18 +275,24 @@ class WorldManager {
      * @param {Object} config - World configuration
      */
     setWorldBounds(worldId, config) {
+        // Safety check: ensure physics world exists
+        if (!this.scene.physics || !this.scene.physics.world) {
+            console.error('🌍 Physics world not available when setting world bounds!');
+            return;
+        }
+
         if (config.segments && config.segments.length > 0) {
             const leftBound = config.segments[0].x_position;
-            const rightBound = config.segments[config.segments.length - 1].x_position + 
+            const rightBound = config.segments[config.segments.length - 1].x_position +
                               config.segments[config.segments.length - 1].width;
-            
+
             this.scene.physics.world.setBounds(
                 leftBound,
                 0,
                 rightBound - leftBound,
                 this.gameHeight
             );
-            
+
             console.log(`🌍 World bounds set: ${leftBound} to ${rightBound} (${rightBound - leftBound}x${this.gameHeight})`);
         } else if (config.bounds) {
             this.scene.physics.world.setBounds(
@@ -295,7 +301,7 @@ class WorldManager {
                 config.bounds.width,
                 config.bounds.height
             );
-            
+
             console.log(`🌍 World bounds set: ${config.bounds.x},${config.bounds.y} ${config.bounds.width}x${config.bounds.height}`);
         }
     }

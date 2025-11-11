@@ -5,11 +5,13 @@
 
 // Character Animation Configuration System
 class CharacterConfig {
-    constructor(name, spriteSheets, animations, frameSize = {width: 128, height: 96}) {
+    constructor(name, spriteSheets, animations, frameSize = {width: 128, height: 96}, baseScale = 1.0, perspectiveScales = {minScale: 3.0, maxScale: 4.0}) {
         this.name = name;
         this.spriteSheets = spriteSheets;
         this.animations = animations;
         this.frameSize = frameSize;
+        this.baseScale = baseScale; // Base size multiplier for perspective scaling
+        this.perspectiveScales = perspectiveScales; // Min and max scale for perspective effect
     }
 }
 
@@ -33,7 +35,10 @@ const TIREEK_CONFIG = new CharacterConfig(
         jump: { frames: 1, frameRate: 12, repeat: 0 },
         airkick: { frames: 1, frameRate: 12, repeat: 0 },
         idle: { frames: 5, frameRate: 12, repeat: -1 }    // Keep idle at normal speed
-    }
+    },
+    {width: 128, height: 96},
+    0.87,  // Base scale multiplier (1.0 = normal size, can be adjusted per character)
+    {minScale: 3.3396, maxScale: 4.2504}  // Perspective scaling range (Tireek: 2.783 * 1.2 to 3.542 * 1.2)
 );
 
 // Define Tryston character configuration
@@ -56,7 +61,10 @@ const TRYSTON_CONFIG = new CharacterConfig(
         jump: { frames: 1, frameRate: 12, repeat: 0 },
         airkick: { frames: 1, frameRate: 12, repeat: 0 },
         idle: { frames: 5, frameRate: 12, repeat: -1 }    // Keep idle at normal speed
-    }
+    },
+    {width: 128, height: 96},
+    0.85,  // Base scale multiplier (1.0 = normal size, can be adjusted per character)
+    {minScale: 3.3396, maxScale: 4.2504}  // Perspective scaling range (Tryston: 2.662 * 1.2 to 3.388 * 1.2)
 );
 
 // Define Crackhead enemy configuration
@@ -135,17 +143,23 @@ const EXTRAS_REGISTRY = {
     rozotadi: {
         key: 'extra_rozotadi',
         path: 'assets/characters/extras/Rozotadi.png',
-        scale: 3.0
+        scale: 3.0,  // Legacy static scale (used if perspective scaling disabled)
+        baseScale: 0.8,  // Base size multiplier for perspective scaling
+        perspectiveScales: {minScale: 3.0, maxScale: 4.0}  // Perspective scaling range
     },
     misfit: {
         key: 'extra_misfit',
         path: 'assets/characters/extras/Misfit.png',
-        scale: 3.00
+        scale: 3.00,  // Legacy static scale (used if perspective scaling disabled)
+        baseScale: 1.0,  // Base size multiplier for perspective scaling
+        perspectiveScales: {minScale: 3.0, maxScale: 4.0}  // Perspective scaling range
     },
     subwaycar: {
         key: 'subwaycar',
         path: 'assets/level_2_pieces/subwaycar.png',
-        scale: 0.5
+        scale: 0.5,  // Legacy static scale (used if perspective scaling disabled)
+        baseScale: 1.0,  // Base size multiplier for perspective scaling
+        perspectiveScales: {minScale: 0.4, maxScale: 0.6}  // Perspective scaling range (smaller for background elements)
     }
 };
 

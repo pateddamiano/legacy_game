@@ -470,7 +470,9 @@ class WeaponManager {
                     
                     // Deal damage to enemy with red flash effect
                     if (enemy.takeDamage) {
-                        enemy.takeDamage(damage);
+                        // Pass projectile position for knockback effect (knockback away from projectile)
+                        const knockbackSource = projectile.sprite || null;
+                        enemy.takeDamage(damage, knockbackSource);
                         
                         // Enhanced red flash effect for weapon hits
                         enemy.sprite.setTint(0xff0000); // Bright red tint
