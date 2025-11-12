@@ -74,6 +74,14 @@ class CombatManager {
                         if (verticalDistance <= verticalTolerance && this.isColliding(playerHitbox, enemy.sprite)) {
                             // Only deal damage if this enemy hasn't been hit by this attack yet
                             if (!enemy.hitByCurrentAttack) {
+                                // Check if enemy is protected from damage
+                                if (this.scene.eventEnemyProtection && this.scene.eventEnemyProtection.isProtectedFromDamage(enemy)) {
+                                    console.log(`🛡️ Combat blocked: Protected enemy cannot be damaged`);
+                                    // Still mark as hit to prevent repeated attempts
+                                    enemy.hitByCurrentAttack = true;
+                                    return;
+                                }
+                                
                                 enemy.takeDamage(10, this.player); // Deal 10 damage per hit, pass player for knockback
                                 enemy.hitByCurrentAttack = true; // Mark as hit by this attack
                                 console.log(`Player hit enemy with ${this.animationManager.currentState}! (Vertical dist: ${Math.round(verticalDistance)})`);

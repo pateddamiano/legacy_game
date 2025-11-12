@@ -16,6 +16,10 @@ class EventManager {
         this.currentActionIndex = 0;
         this.isPaused = false;
 
+        // Initialize protection system if not already present
+        if (!this.scene.eventEnemyProtection) {
+            this.scene.eventEnemyProtection = new EventEnemyProtection(this.scene);
+        }
 
         // Entity pause state tracking
         this.pausedEntities = {
@@ -157,6 +161,10 @@ class EventManager {
 
         console.log(`🎬 Started event: ${event.id || 'unnamed'}`);
 
+        // Automatically pause all enemies at the start of events to prevent attacks during camera pans, dialogue, etc.
+        // They will be resumed explicitly by resume actions or when the event completes
+        this.pauseEnemies();
+
         // Execute first action
         this.executeNextAction();
     }
@@ -279,6 +287,11 @@ class EventManager {
     
     completeEvent() {
         console.log(`🎬 Completed event: ${this.activeEvent?.id || 'unnamed'}`);
+
+        // Validate protection registry on event completion
+        if (this.scene.eventEnemyProtection) {
+            this.scene.eventEnemyProtection.validateRegistry();
+        }
 
         this.activeEvent = null;
         this.actionQueue = [];
@@ -446,6 +459,17 @@ class EventManager {
         // CRITICAL: Pause all enemies during dialogue to prevent them from attacking the frozen player
         this.pauseEnemies();
         
+        // Ensure event-managed enemies stay visible during dialogue
+        if (this.scene.enemies && this.scene.eventEnemyMap) {
+            this.scene.eventEnemyMap.forEach((enemyIndex, enemyId) => {
+                const enemy = this.scene.enemies[enemyIndex];
+                if (enemy && enemy.sprite) {
+                    enemy.sprite.setVisible(true);
+                    enemy.sprite.setActive(true);
+                }
+            });
+        }
+        
         // Use DialogueManager if available
         if (this.scene.dialogueManager) {
             // Show dialogue with callback to advance to next action
@@ -510,7 +534,7 @@ class EventManager {
                     console.log(`🎬 [PAN] ✅ Tween STARTED - Camera at (${camera.scrollX.toFixed(0)}, ${camera.scrollY.toFixed(0)})`);
                 },
                 onUpdate: () => {
-                    console.log(`🎬 [PAN] Tween update - Camera at (${camera.scrollX.toFixed(0)}, ${camera.scrollY.toFixed(0)})`);
+                    // console.log(`🎬 [PAN] Tween update - Camera at (${camera.scrollX.toFixed(0)}, ${camera.scrollY.toFixed(0)})`);
                 },
                 onComplete: () => {
                     console.log(`🎬 [PAN] ✅ Tween COMPLETED - Camera at (${camera.scrollX.toFixed(0)}, ${camera.scrollY.toFixed(0)})`);
@@ -639,6 +663,27 @@ class EventManager {
         // Disable AI for spawned enemy (they'll be controlled by events)
         enemy.eventPaused = true;
         
+        // Store the event ID on the enemy for easier identification
+        if (action.id) {
+            enemy.eventId = action.id;
+        }
+        
+        // Ensure sprite is visible and has proper depth for event sequences
+        if (enemy.sprite) {
+            enemy.sprite.setVisible(true);
+            enemy.sprite.setActive(true);
+            // Use Y-position based depth for proper layering (same as regular enemies)
+            enemy.sprite.setDepth(enemy.sprite.y);
+        }
+        
+        // Set initial flip state IMMEDIATELY if specified in action (before anything else can override it)
+        if (action.flipX !== undefined && enemy.sprite) {
+            enemy.sprite.setFlipX(action.flipX);
+            // Also update the enemy's facingLeft property to match
+            enemy.facingLeft = action.flipX;
+            console.log(`🎬 Set initial flipX=${action.flipX} for spawned enemy ${action.id || enemyType} (immediate)`);
+        }
+        
         // Add to enemies array
         if (!this.scene.enemies) {
             this.scene.enemies = [];
@@ -647,6 +692,7 @@ class EventManager {
         this.scene.enemies.push(enemy);
         
         // Store special reference for targeting (e.g., "enemy_critic")
+        // IMPORTANT: Store this BEFORE setting flipX to ensure exclusion checks work
         if (action.id) {
             // Store mapping: "enemy_critic" -> enemyIndex
             if (!this.scene.eventEnemyMap) {
@@ -654,6 +700,29 @@ class EventManager {
             }
             this.scene.eventEnemyMap.set(action.id, enemyIndex);
             console.log(`🎬 Stored enemy reference: ${action.id} -> index ${enemyIndex}`);
+            
+            // Register enemy for protection in centralized system
+            const protectionLevel = action.protectionLevel || PROTECTION_LEVELS.EVENT_CONTROLLED;
+            const metadata = {
+                eventName: this.activeEvent?.id || 'unknown',
+                spawnedAt: this.scene.time.now,
+                enemyType: enemyType,
+                position: { x: position.x, y: position.y }
+            };
+            
+            if (this.scene.eventEnemyProtection) {
+                this.scene.eventEnemyProtection.registerEnemy(action.id, enemy, protectionLevel, metadata);
+            }
+        }
+        
+        // Ensure flipX persists (set again after a tiny delay to override any AI behavior)
+        if (action.flipX !== undefined) {
+            this.scene.time.delayedCall(1, () => {
+                if (enemy.sprite && enemy.sprite.active) {
+                    enemy.sprite.setFlipX(action.flipX);
+                    enemy.facingLeft = action.flipX;
+                }
+            });
         }
         
         // Advance to next action
@@ -787,6 +856,11 @@ class EventManager {
         // Mark enemy as destroyed
         enemy.destroyed = true;
         
+        // Unregister from protection system
+        if (this.scene.eventEnemyProtection) {
+            this.scene.eventEnemyProtection.unregisterEnemy(target);
+        }
+        
         // Remove from enemies array
         if (enemyIndex >= 0 && this.scene.enemies) {
             this.scene.enemies.splice(enemyIndex, 1);
@@ -906,11 +980,26 @@ class EventManager {
             return;
         }
         
+        // Skip flip if already in desired state (optimization)
+        if (flipX !== undefined && sprite.flipX === flipX) {
+            console.log(`🎬 Skipping flip for ${target} - already flipped to ${flipX}`);
+            this.advanceAction();
+            return;
+        }
+        
         console.log(`🎬 Flipping ${target}: flipX=${flipX}, flipY=${flipY}`);
         
         sprite.setFlipX(flipX);
         if (flipY !== undefined) {
             sprite.setFlipY(flipY);
+        }
+        
+        // Also update facingLeft for enemies if applicable
+        if (target.startsWith('enemy_') && this.scene.enemies) {
+            const enemyIndex = this.scene.eventEnemyMap?.get(target);
+            if (enemyIndex !== undefined && this.scene.enemies[enemyIndex]) {
+                this.scene.enemies[enemyIndex].facingLeft = flipX;
+            }
         }
         
         this.advanceAction();
@@ -1170,15 +1259,22 @@ class EventManager {
         const enemiesToRemove = [];
         const excludeIds = Array.isArray(action.excludeIds) ? action.excludeIds : [];
         
+        console.log(`🎬 ClearEnemiesOffscreen: threshold=${xThreshold}, direction=${direction}, excludeIds=${JSON.stringify(excludeIds)}`);
+        console.log(`🎬 Current eventEnemyMap:`, this.scene.eventEnemyMap);
+        console.log(`🎬 Current enemies count: ${this.scene.enemies.length}`);
+        
         // Build a fast lookup of indices that should be excluded based on special IDs
         const excludedIndices = new Set();
         if (this.scene.eventEnemyMap && excludeIds.length > 0) {
             for (const [id, mapIndex] of this.scene.eventEnemyMap.entries()) {
                 if (excludeIds.includes(id)) {
                     excludedIndices.add(mapIndex);
+                    console.log(`🎬 Adding index ${mapIndex} to exclusions for ID ${id}`);
                 }
             }
         }
+        
+        console.log(`🎬 Excluded indices:`, excludedIndices);
         
         // Filter enemies based on position
         this.scene.enemies.forEach((enemy, index) => {
@@ -1193,12 +1289,40 @@ class EventManager {
                 shouldRemove = enemyX < xThreshold;
             }
             
+            console.log(`🎬 Enemy at index ${index}: x=${enemyX}, shouldRemove=${shouldRemove} (${direction} of ${xThreshold}), eventId=${enemy.eventId || 'none'}`);
+            
             if (!shouldRemove) return;
             
             // Respect exclusions (by special ID or explicit enemy_<index>)
-            if (excludedIndices.has(index)) return;
-            if (excludeIds.includes(`enemy_${index}`)) return;
+            // FIRST: Check if this enemy has an eventId that should be excluded
+            if (enemy.eventId && excludeIds.includes(enemy.eventId)) {
+                console.log(`🎬 ✅ Excluding enemy at index ${index} from cleanup (eventId: ${enemy.eventId})`);
+                return;
+            }
             
+            // SECOND: Check if this enemy is in the excludedIndices set (based on eventEnemyMap)
+            if (excludedIndices.has(index)) {
+                console.log(`🎬 ✅ Excluding enemy at index ${index} from cleanup (in excludedIndices)`);
+                return;
+            }
+            
+            // THIRD: Also check if this enemy's ID is in the excludeIds list by searching eventEnemyMap
+            if (this.scene.eventEnemyMap) {
+                for (const [id, mapIndex] of this.scene.eventEnemyMap.entries()) {
+                    if (mapIndex === index && excludeIds.includes(id)) {
+                        console.log(`🎬 ✅ Excluding enemy ${id} at index ${index} from cleanup (eventEnemyMap match)`);
+                        return;
+                    }
+                }
+            }
+            
+            // FOURTH: Check explicit enemy_<index> format
+            if (excludeIds.includes(`enemy_${index}`)) {
+                console.log(`🎬 ✅ Excluding enemy_${index} from cleanup (explicit index)`);
+                return;
+            }
+            
+            console.log(`🎬 ❌ Marking enemy at index ${index} for removal (x=${enemyX})`);
             enemiesToRemove.push(index);
         });
         
@@ -1206,6 +1330,8 @@ class EventManager {
         for (let i = enemiesToRemove.length - 1; i >= 0; i--) {
             const index = enemiesToRemove[i];
             const enemy = this.scene.enemies[index];
+            
+            console.log(`🎬 Removing enemy at index ${index}, eventId=${enemy?.eventId || 'none'}`);
             
             if (enemy) {
                 // Stop any active tweens
@@ -1237,13 +1363,18 @@ class EventManager {
             
             // Update and prune eventEnemyMap
             if (this.scene.eventEnemyMap) {
+                console.log(`🎬 EventEnemyMap before cleanup:`, this.scene.eventEnemyMap);
                 for (const [key, value] of this.scene.eventEnemyMap.entries()) {
                     if (value === index) {
+                        console.log(`🎬 Removing eventEnemyMap entry: ${key} -> ${value}`);
                         this.scene.eventEnemyMap.delete(key);
                     } else if (value > index) {
-                        this.scene.eventEnemyMap.set(key, value - 1);
+                        const newIndex = value - 1;
+                        console.log(`🎬 Updating eventEnemyMap entry: ${key} ${value} -> ${newIndex}`);
+                        this.scene.eventEnemyMap.set(key, newIndex);
                     }
                 }
+                console.log(`🎬 EventEnemyMap after cleanup:`, this.scene.eventEnemyMap);
             }
         }
         
@@ -1262,17 +1393,44 @@ class EventManager {
             // Check if it's a special ID (e.g., "enemy_critic")
             const restOfString = target.substring(6); // Remove "enemy_" prefix
             
-            // Check eventEnemyMap first for special IDs
+            // FIRST: Try protection system lookup (most reliable)
+            if (this.scene.eventEnemyProtection) {
+                const protectionInfo = this.scene.eventEnemyProtection.getProtectionById(target);
+                if (protectionInfo && protectionInfo.enemy && protectionInfo.enemy.sprite && 
+                    protectionInfo.enemy.sprite.active && !protectionInfo.enemy.destroyed) {
+                    return protectionInfo.enemy.sprite;
+                }
+            }
+            
+            // FALLBACK: Check eventEnemyMap for special IDs
             if (this.scene.eventEnemyMap && this.scene.eventEnemyMap.has(target)) {
                 const index = this.scene.eventEnemyMap.get(target);
-                if (this.scene.enemies && this.scene.enemies[index] && this.scene.enemies[index].sprite) {
+                // Validate index and enemy existence
+                if (this.scene.enemies && 
+                    index >= 0 && 
+                    index < this.scene.enemies.length && 
+                    this.scene.enemies[index] && 
+                    this.scene.enemies[index].sprite && 
+                    this.scene.enemies[index].sprite.active &&
+                    !this.scene.enemies[index].destroyed) {
                     return this.scene.enemies[index].sprite;
+                } else {
+                    // Enemy was removed but map entry still exists - clean it up
+                    console.warn(`🎬 Enemy ${target} at index ${index} no longer exists, cleaning up map entry`);
+                    this.scene.eventEnemyMap.delete(target);
                 }
             }
             
             // Otherwise, try parsing as index (e.g., "enemy_0")
             const index = parseInt(restOfString);
-            if (!isNaN(index) && this.scene.enemies && this.scene.enemies[index] && this.scene.enemies[index].sprite) {
+            if (!isNaN(index) && 
+                this.scene.enemies && 
+                index >= 0 && 
+                index < this.scene.enemies.length && 
+                this.scene.enemies[index] && 
+                this.scene.enemies[index].sprite &&
+                this.scene.enemies[index].sprite.active &&
+                !this.scene.enemies[index].destroyed) {
                 return this.scene.enemies[index].sprite;
             }
         } else if (target.startsWith('extra_')) {

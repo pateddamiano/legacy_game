@@ -142,7 +142,7 @@ const ENEMY_TYPE_CONFIGS = {
         playerDamage: 9,             // High damage
         attackTypes: ['enemy_punch'],
         detectionRange: 2000,        // Very aggressive - long detection range
-        baseScale: 1.0,              // Base size multiplier (1.0 = normal size)
+        baseScale: 0.85,              // Base size multiplier (1.0 = normal size)
         description: "The Critic - formidable opponent"
     }
 };
@@ -180,7 +180,7 @@ class Enemy {
         this.sprite = scene.physics.add.sprite(Math.round(x), Math.round(y), `${characterConfig.name}_idle`);
         // Apply base scale multiplier to initial scale
         this.sprite.setScale(ENEMY_CONFIG.minScale * this.baseScaleMultiplier);
-        this.sprite.setDepth(1000 - y);
+        this.sprite.setDepth(y);
         this.sprite.setBounce(0.2);
         this.sprite.setCollideWorldBounds(true);
         
@@ -221,6 +221,8 @@ class Enemy {
         this.animationLocked = false;
         this.lockTimer = 0;
         this.facingLeft = true; // Start facing left (walking toward player from right)
+        // Set sprite to visually face left to match facingLeft property
+        this.sprite.setFlipX(true);
         
         // Attack timing properties
         this.isWindingUp = false; // True during attack windup phase
@@ -310,7 +312,10 @@ class Enemy {
             }
         }
         
-        // Skip updates if paused by event system
+        // Update perspective scaling (always update depth, even for event-paused enemies)
+        this.updatePerspective();
+        
+        // Skip AI updates if paused by event system (but still update visual properties above)
         if (this.eventPaused) return;
         
         // Update knockback timer
@@ -356,9 +361,6 @@ class Enemy {
                 this.canDealDamage = true;
             }
         }
-        
-        // Update perspective scaling
-        this.updatePerspective();
         
         // AI behavior based on state
         switch (this.state) {
@@ -416,7 +418,8 @@ class Enemy {
         }
         
         // Check if in attack range and ready to attack
-        if (distanceToPlayer <= currentAttackRange && time - this.lastAttackTime > currentAttackCooldown) {
+        // Don't attack if paused by event system
+        if (!this.eventPaused && distanceToPlayer <= currentAttackRange && time - this.lastAttackTime > currentAttackCooldown) {
             this.setState(ENEMY_STATES.ATTACKING);
             return;
         }
@@ -447,7 +450,7 @@ class Enemy {
         // Apply catch-up speed multiplier when enemy is behind player and player is moving/heading right
         if (isBehindPlayer && horizontalDistance > ENEMY_CONFIG.catchUpDistance && (playerMovingRight || playerFacingRight)) {
             moveSpeed *= ENEMY_CONFIG.catchUpSpeedMultiplier;
-            console.log(`🏃 Enemy ${this.characterConfig.name} catching up! Speed: ${moveSpeed.toFixed(0)} (${horizontalDistance.toFixed(0)}px behind)`);
+            // console.log(`🏃 Enemy ${this.characterConfig.name} catching up! Speed: ${moveSpeed.toFixed(0)} (${horizontalDistance.toFixed(0)}px behind)`);
         }
         
         // Increase vertical movement when close to player (better tracking)
@@ -665,6 +668,9 @@ class Enemy {
     startAttack() {
         if (this.animationLocked) return;
         
+        // Don't start attacks if paused by event system
+        if (this.eventPaused) return;
+        
         // Choose attack based on enemy type preferences
         const attackTypes = this.enemyTypeConfig.attackTypes || ['jab'];
         let attackType;
@@ -748,6 +754,12 @@ class Enemy {
     takeDamage(damage = 1, knockbackSource = null) {
         if (this.state === ENEMY_STATES.DEAD) return;
         
+        // Check if this enemy is protected from damage
+        if (this.scene.eventEnemyProtection && this.scene.eventEnemyProtection.isProtectedFromDamage(this)) {
+            console.log(`🛡️ Damage blocked for protected enemy: ${this.characterConfig.name}`);
+            return;
+        }
+        
         this.health -= damage;
         console.log(`Enemy ${this.characterConfig.name} takes ${damage} damage (${this.health}/${this.maxHealth} HP)`);
         
@@ -790,6 +802,13 @@ class Enemy {
         }
         
         if (this.health <= 0) {
+            // Check if this enemy is protected from death
+            if (this.scene.eventEnemyProtection && this.scene.eventEnemyProtection.isProtectedFromCleanup(this)) {
+                console.log(`🛡️ Death blocked for protected enemy: ${this.characterConfig.name} (health set to 1)`);
+                this.health = 1; // Keep alive with minimal health
+                return;
+            }
+            
             this.setState(ENEMY_STATES.DEAD);
             
             // Play enemy death sound effect
@@ -823,6 +842,12 @@ class Enemy {
                         duration: ENEMY_CONFIG.deathLingerTime - ENEMY_CONFIG.deathFlashTime,
                         ease: 'Power2',
                         onComplete: () => {
+                            // Check protection one more time before final destruction
+                            if (this.scene.eventEnemyProtection && this.scene.eventEnemyProtection.isProtectedFromCleanup(this)) {
+                                console.log(`🛡️ Final destruction blocked for protected enemy: ${this.characterConfig.name}`);
+                                return;
+                            }
+                            
                             // Remove from enemies array before destroying
                             if (this.scene.enemies && Array.isArray(this.scene.enemies)) {
                                 const index = this.scene.enemies.indexOf(this);
@@ -846,7 +871,8 @@ class Enemy {
         const scale = baseScale * this.baseScaleMultiplier;
         
         this.sprite.setScale(scale);
-        this.sprite.setDepth(1000 - this.sprite.y);
+        // Fix depth calculation: higher Y (lower on screen) should have higher depth (appear in front)
+        this.sprite.setDepth(this.sprite.y);
     }
     
     // ========================================

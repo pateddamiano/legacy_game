@@ -249,8 +249,8 @@ class PlayerPhysicsManager {
         
         this.player.setScale(scale);
         
-        // Set depth/z-index - higher Y = lower depth (behind other objects)
-        this.player.setDepth(1000 - this.player.y);
+        // Set depth/z-index - higher Y (lower on screen) should have higher depth (appear in front)
+        this.player.setDepth(this.player.y);
     }
     
     // ========================================

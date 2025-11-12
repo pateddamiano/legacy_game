@@ -81,9 +81,9 @@ class ExtrasManager {
             }
         }
 
-        // Set depth - use custom depth if provided, otherwise default to 1000 - y
+        // Set depth - use custom depth if provided, otherwise use Y position for proper layering
         const finalY = sprite.y; // Use the final Y position for depth calculation
-        const depth = options.depth !== undefined ? options.depth : (1000 - finalY);
+        const depth = options.depth !== undefined ? options.depth : finalY;
         sprite.setDepth(depth);
 
         // Store whether to use perspective scaling
@@ -127,7 +127,7 @@ class ExtrasManager {
                 extra.sprite.setScale(newScale);
                 
                 // Update depth based on Y position
-                extra.sprite.setDepth(1000 - extra.sprite.y);
+                extra.sprite.setDepth(extra.sprite.y);
             }
         });
     }

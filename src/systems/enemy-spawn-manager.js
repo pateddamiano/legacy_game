@@ -105,6 +105,35 @@ class EnemySpawnManager {
             
             // Aggressive cleanup: Remove enemies that are far from player
             if (enemy.sprite && enemy.sprite.active) {
+                // FIRST: Check centralized protection system
+                if (this.scene.eventEnemyProtection && this.scene.eventEnemyProtection.isProtectedFromCleanup(enemy)) {
+                    // Enemy is protected by the centralized system - skip all cleanup
+                    return;
+                }
+                
+                // LEGACY: Skip cleanup for enemies managed by the event system
+                // Check if enemy is paused by events or is in the eventEnemyMap
+                const isEventManaged = enemy.eventPaused === true;
+                const hasEventId = enemy.eventId !== undefined;
+                
+                // Check if this enemy index is in the eventEnemyMap (more robust check)
+                let isInEventMap = false;
+                if (this.scene.eventEnemyMap && this.scene.eventEnemyMap.size > 0) {
+                    // Check if any entry in the map points to this enemy index
+                    for (const mapIndex of this.scene.eventEnemyMap.values()) {
+                        if (mapIndex === index) {
+                            isInEventMap = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if (isEventManaged || isInEventMap || hasEventId) {
+                    // Don't cleanup event-managed enemies - let the event system handle them
+                    console.log(`🧹 Skipping cleanup for event-managed enemy: eventPaused=${isEventManaged}, hasEventId=${hasEventId}, inEventMap=${isInEventMap}`);
+                    return;
+                }
+                
                 const distanceToPlayer = Phaser.Math.Distance.Between(
                     enemy.sprite.x, enemy.sprite.y,
                     this.player.x, this.player.y
@@ -203,7 +232,7 @@ class EnemySpawnManager {
         const distanceToPlayer = Math.abs(spawnX - playerX);
         
         if (distanceToPlayer < minDistanceFromPlayer) {
-            console.log(`⚠️ Spawn too close to player (${distanceToPlayer}px), skipping...`);
+            // console.log(`⚠️ Spawn too close to player (${distanceToPlayer}px), skipping...`);
             return; // Skip this spawn
         }
         
@@ -216,7 +245,7 @@ class EnemySpawnManager {
         });
         
         if (tooCloseToEnemy) {
-            console.log(`⚠️ Spawn too close to existing enemy, skipping...`);
+            // console.log(`⚠️ Spawn too close to existing enemy, skipping...`);
             return; // Skip this spawn
         }
         

@@ -359,6 +359,24 @@ class DialogueManager {
     pauseGameplay() {
         console.log('💬 Pausing gameplay for dialogue');
         
+        // Check if event system already has control
+        const eventManager = this.scene.eventManager;
+        const playerPausedByEvent = eventManager && eventManager.pausedEntities.player;
+        const enemiesPausedByEvent = eventManager && eventManager.pausedEntities.enemies.length > 0;
+        
+        if (playerPausedByEvent || enemiesPausedByEvent) {
+            console.log('💬 Event system already has control - minimal dialogue pause');
+            // Don't interfere with event system's pause state
+            // Just pause physics if not already paused
+            if (this.scene.physics && this.scene.physics.world && !this.scene.physics.world.isPaused) {
+                this.scene.physics.world.isPaused = true;
+            }
+            return;
+        }
+        
+        // Normal dialogue pause - no event system control
+        console.log('💬 Full dialogue pause - no event control detected');
+        
         // Pause physics
         if (this.scene.physics && this.scene.physics.world) {
             this.scene.physics.world.isPaused = true;
@@ -377,6 +395,35 @@ class DialogueManager {
     
     resumeGameplay() {
         console.log('💬 Resuming gameplay after dialogue');
+        
+        // Check if event system has control over pause state
+        const eventManager = this.scene.eventManager;
+        const playerPausedByEvent = eventManager && eventManager.pausedEntities.player;
+        const enemiesPausedByEvent = eventManager && eventManager.pausedEntities.enemies.length > 0;
+        
+        if (playerPausedByEvent || enemiesPausedByEvent) {
+            console.log(`💬 Event system has control - Player paused: ${playerPausedByEvent}, Enemies paused: ${enemiesPausedByEvent}`);
+            
+            // Only resume physics world, but let event system control entities
+            if (this.scene.physics && this.scene.physics.world) {
+                this.scene.physics.world.isPaused = false;
+            }
+            
+            // If only player is paused by events, we can still enable input for dialogue navigation
+            // but the input manager will ignore movement commands due to event pause
+            if (playerPausedByEvent && !this.scene.inputManager.disabled) {
+                // Input manager is already enabled, leave it as is for dialogue interaction
+            } else if (!playerPausedByEvent && this.scene.inputManager) {
+                // Player not paused by events, safe to enable input
+                this.scene.inputManager.disabled = false;
+            }
+            
+            // Don't resume game state - let event system control it
+            return;
+        }
+        
+        // Normal resume - event system doesn't have control
+        console.log('💬 No event control detected - full resume');
         
         // Resume physics
         if (this.scene.physics && this.scene.physics.world) {
