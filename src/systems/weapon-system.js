@@ -274,10 +274,17 @@ class WeaponManager {
     }
     
     createWeaponUI() {
-        const uiX = 20;
-        const uiY = 130; // Below health bar (adjusted for larger health bars)
-        const centerX = uiX + 40; // Adjusted for larger icon
-        const centerY = uiY + 40; // Adjusted for larger icon
+        // Position next to health bar on the right
+        // Health bar is at x: 70, width: 350, so right edge is at 420
+        // Health bar center Y is approximately 60 + (46 + 38) / 2 = 102
+        const healthBarX = 70;
+        const healthBarWidth = 350;
+        const healthBarY = 60;
+        const healthBarTotalHeight = 46 + 38; // nameTextHeight + healthBarHeight
+        
+        const spacing = 40; // Space between health bar and weapon icon
+        const centerX = healthBarX + healthBarWidth + spacing + 45; // Add radius to center the circle
+        const centerY = healthBarY + (healthBarTotalHeight / 2) - 10; // Vertically centered with health bar
         const radius = 45; // Increased from 35
         
         // Weapon icon background
@@ -292,7 +299,7 @@ class WeaponManager {
         
         // Weapon icon (static vinyl)
         this.weaponIcon = this.scene.add.image(centerX, centerY, 'vinylWeapon');
-        this.weaponIcon.setScale(1.2); // Increased from 0.8
+        this.weaponIcon.setScale(1.4); // Increased from 0.8
         this.weaponIcon.setScrollFactor(0);
         this.weaponIcon.setDepth(1001);
         this.weaponUI.add(this.weaponIcon);
@@ -315,9 +322,9 @@ class WeaponManager {
         this.uiCenter = { x: centerX, y: centerY };
         this.uiRadius = radius;
         
-        // Weapon key text
-        const keyText = this.scene.add.text(centerX, uiY + 65, 'Q', {
-            fontSize: '14px',
+        // Weapon key text (positioned below the icon)
+        const keyText = this.scene.add.text(centerX, centerY + radius + 10, 'Q', {
+            fontSize: GAME_CONFIG.ui.fontSize.micro,
             fill: '#ffffff',
             stroke: '#000000',
             strokeThickness: 2

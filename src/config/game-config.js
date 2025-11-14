@@ -54,7 +54,23 @@ const GAME_CONFIG = {
     ui: {
         healthBarWidth: 250,
         healthBarHeight: 25,
-        debugMode: false
+        debugMode: false,
+        fontFamily: 'VT323', // Centralized font for all game text
+        // Centralized font sizes - adjust these to scale all text globally
+        fontSize: {
+            title: '60px',        // Main titles (e.g., "SELECT YOUR FIGHTER!")
+            subtitle: '55px',     // Large subtitles
+            golden_microphone_count: '50px',      // Section headings, score display
+            heading: '40px',      // Section headings, score display
+            button: '48px',       // Menu buttons
+            buttonHover: '52px',  // Button hover state (slightly larger)
+            body: '40px',         // Main body text, labels, score display
+            label: '32px',        // Dialogue, labels
+            small: '28px',        // Small text, volume controls
+            tiny: '24px',         // Tiny labels, debug text
+            micro: '22px',        // Character names, health bars, debug text
+            mini: '20px'          // Very small debug text
+        }
     }
 };
 

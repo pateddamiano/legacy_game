@@ -101,9 +101,9 @@ class MainMenuScene extends Phaser.Scene {
             try {
                 // Create minimal fallback UI
                 this.add.text(600, 360, 'MAIN MENU\n(Error in UI creation)\n\nPress ENTER to continue', {
-                    fontSize: '32px',
+                    fontSize: GAME_CONFIG.ui.fontSize.button,
                     fill: '#ffffff',
-                    fontFamily: 'Arial',
+                    fontFamily: GAME_CONFIG.ui.fontFamily,
                     align: 'center'
                 }).setOrigin(0.5);
                 
@@ -463,9 +463,9 @@ class MainMenuScene extends Phaser.Scene {
         try {
             // 8-bit style button configuration
             const buttonStyle = {
-                fontSize: '32px',
+                fontSize: GAME_CONFIG.ui.fontSize.button,
                 fill: '#FFD700', // Golden yellow like title
-                fontFamily: 'Arial Black, Arial',
+                fontFamily: GAME_CONFIG.ui.fontFamily,
                 fontWeight: 'bold',
                 stroke: '#B8860B', // Dark gold outline
                 strokeThickness: 4,
@@ -480,9 +480,9 @@ class MainMenuScene extends Phaser.Scene {
             };
             
             const buttonHoverStyle = {
-                fontSize: '34px', // Slightly bigger on hover
+                fontSize: GAME_CONFIG.ui.fontSize.buttonHover, // Slightly bigger on hover
                 fill: '#FF6B35', // Orange like title highlights
-                fontFamily: 'Arial Black, Arial',
+                fontFamily: GAME_CONFIG.ui.fontFamily,
                 fontWeight: 'bold',
                 stroke: '#CC4125', // Dark orange outline
                 strokeThickness: 4,
@@ -702,9 +702,9 @@ class MainMenuScene extends Phaser.Scene {
             'Development: Patrick Damiano (@pat__damiano)\n' +
             'Music: ++ (@foreverplusplus)\n' +
             'Click anywhere to close', {
-            fontSize: '24px',
+            fontSize: GAME_CONFIG.ui.fontSize.body,
             fill: '#ffffff',
-            fontFamily: 'Courier New, monospace',
+            fontFamily: GAME_CONFIG.ui.fontFamily,
             align: 'center',
             lineSpacing: 10
         }).setOrigin(0.5);
@@ -745,9 +745,9 @@ class MainMenuScene extends Phaser.Scene {
             this.cameras.main.centerY - 120,
             'SETTINGS',
             {
-                fontSize: '36px',
+                fontSize: GAME_CONFIG.ui.fontSize.subtitle,
                 fill: '#FFD700',
-                fontFamily: 'Arial Black, Arial',
+                fontFamily: GAME_CONFIG.ui.fontFamily,
                 fontWeight: 'bold',
                 stroke: '#B8860B',
                 strokeThickness: 3
@@ -760,9 +760,9 @@ class MainMenuScene extends Phaser.Scene {
             this.cameras.main.centerY - 60,
             'Music Volume:',
             {
-                fontSize: '18px',
+                fontSize: GAME_CONFIG.ui.fontSize.small,
                 fill: '#FFD700',
-                fontFamily: 'Arial',
+                fontFamily: GAME_CONFIG.ui.fontFamily,
                 fontWeight: 'bold'
             }
         ).setOrigin(0, 0.5);
@@ -776,9 +776,9 @@ class MainMenuScene extends Phaser.Scene {
             this.cameras.main.centerY - 60,
             '◀',
             {
-                fontSize: '24px',
+                fontSize: GAME_CONFIG.ui.fontSize.body,
                 fill: '#FFD700',
-                fontFamily: 'Arial'
+                fontFamily: GAME_CONFIG.ui.fontFamily
             }
         ).setOrigin(0.5)
          .setInteractive({ useHandCursor: true })
@@ -797,9 +797,9 @@ class MainMenuScene extends Phaser.Scene {
             this.cameras.main.centerY - 60,
             `${currentVolume}%`,
             {
-                fontSize: '18px',
+                fontSize: GAME_CONFIG.ui.fontSize.small,
                 fill: '#FF6B35',
-                fontFamily: 'Arial',
+                fontFamily: GAME_CONFIG.ui.fontFamily,
                 fontWeight: 'bold'
             }
         ).setOrigin(0.5);
@@ -810,9 +810,9 @@ class MainMenuScene extends Phaser.Scene {
             this.cameras.main.centerY - 60,
             '▶',
             {
-                fontSize: '24px',
+                fontSize: GAME_CONFIG.ui.fontSize.body,
                 fill: '#FFD700',
-                fontFamily: 'Arial'
+                fontFamily: GAME_CONFIG.ui.fontFamily
             }
         ).setOrigin(0.5)
          .setInteractive({ useHandCursor: true })
@@ -831,9 +831,9 @@ class MainMenuScene extends Phaser.Scene {
             this.cameras.main.centerY + 80,
             'CLOSE',
             {
-                fontSize: '24px',
+                fontSize: GAME_CONFIG.ui.fontSize.body,
                 fill: '#FFD700',
-                fontFamily: 'Arial Black, Arial',
+                fontFamily: GAME_CONFIG.ui.fontFamily,
                 fontWeight: 'bold',
                 stroke: '#B8860B',
                 strokeThickness: 2

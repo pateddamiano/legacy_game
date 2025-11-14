@@ -81,9 +81,9 @@ class DialogueManager {
             panelY - Math.floor(panelHeight / 2) + 10,
             '',
             {
-                fontSize: '20px',
+                fontSize: GAME_CONFIG.ui.fontSize.label,
                 fill: '#FFD700',
-                fontFamily: 'Arial',
+                fontFamily: GAME_CONFIG.ui.fontFamily,
                 fontStyle: 'bold'
             }
         );
@@ -94,9 +94,9 @@ class DialogueManager {
             panelY - Math.floor(panelHeight / 2) + 38,
             '',
             {
-                fontSize: '18px',
+                fontSize: GAME_CONFIG.ui.fontSize.small,
                 fill: '#FFFFFF',
-                fontFamily: 'Arial',
+                fontFamily: GAME_CONFIG.ui.fontFamily,
                 wordWrap: { width: panelWidth - 32 }
             }
         );
@@ -107,9 +107,9 @@ class DialogueManager {
             panelY + Math.floor(panelHeight / 2) - 18,
             '[SPACE]',
             {
-                fontSize: '16px',
+                fontSize: GAME_CONFIG.ui.fontSize.tiny,
                 fill: '#FFD700',
-                fontFamily: 'Arial',
+                fontFamily: GAME_CONFIG.ui.fontFamily,
                 fontStyle: 'italic'
             }
         );
@@ -166,8 +166,11 @@ class DialogueManager {
         
         // Show UI
         this.container.setVisible(true);
+        
         // Respect per-dialogue background dim preference (default: dim)
-        if (this.overlay) {
+        // Note: Event dialogues will have their overlay controlled by EventManager
+        const isEventDialogue = this.scene.eventManager && this.scene.eventManager.isEventActive();
+        if (!isEventDialogue && this.overlay) {
             const shouldDim = dialogue.dimBackground !== false;
             this.overlay.setVisible(shouldDim);
         }
@@ -241,6 +244,8 @@ class DialogueManager {
     
     hideDialogue() {
         console.log('💬 Hiding dialogue');
+        
+        // Note: Cinematic darkening is managed by EventManager, not here
         
         this.isActive = false;
         this.currentDialogue = null;

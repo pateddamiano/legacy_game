@@ -16,6 +16,7 @@ class LevelInitializationManager {
         // State
         this.parallaxBackground = null;
         this.selectedLevelId = 1;
+        this.currentLevelJson = null; // Store the current level JSON config
         
         console.log('🎮 LevelInitializationManager initialized');
     }
@@ -89,6 +90,9 @@ class LevelInitializationManager {
     
     async loadLevelFromJSON(levelJson) {
         console.log(`🎯 LEVEL ${levelJson.id} LOADING:`, levelJson.name);
+        
+        // Store the current level JSON config for parallax background access
+        this.currentLevelJson = levelJson;
         
         // Load assets for this level
         await window.LevelAssetLoader.ensureLoaded(this.scene, levelJson);
@@ -212,8 +216,13 @@ class LevelInitializationManager {
             this.parallaxBackground = null;
         }
         
-        // Get current level config
-        const currentLevelConfig = this.levelManager.getCurrentLevelConfig();
+        // Get current level config - prefer JSON config if available
+        let currentLevelConfig = this.currentLevelJson;
+        if (!currentLevelConfig) {
+            // Fallback to level manager config
+            currentLevelConfig = this.levelManager.getCurrentLevelConfig();
+        }
+        
         if (!currentLevelConfig) {
             console.error('🌍 No current level config found for parallax background!');
             return;
@@ -245,15 +254,17 @@ class LevelInitializationManager {
         console.log(`🌍 World width: ${worldWidth}px`);
         
         // Create a tileSprite that will repeat the texture
+        const scale = 1.2; // Scale up the background
         const tileSprite = this.scene.add.tileSprite(
             0,                    // x
-            -360,                 // y (raised up by 50% of 720 = 360px)
+            -360,                 // y (moved down from -360 to -200)
             worldWidth * 2,       // width (make it wider than world)
             720,                  // height
             parallaxTexture       // texture key from config
         );
         
         tileSprite.setOrigin(0, 0);
+        tileSprite.setScale(scale); // Scale up the background
         tileSprite.setDepth(-200); // Behind segments (-100)
         tileSprite.setScrollFactor(0.2);
         tileSprite.setAlpha(0.8); // Slight transparency for blending

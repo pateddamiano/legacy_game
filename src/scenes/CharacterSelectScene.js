@@ -217,9 +217,9 @@ class CharacterSelectScene extends Phaser.Scene {
         
         // Title with golden theme
         this.add.text(centerX, 80, 'SELECT YOUR FIGHTER!', {
-            fontSize: '48px',
+            fontSize: GAME_CONFIG.ui.fontSize.title,
             fill: '#FFD700', // Golden yellow
-            fontFamily: 'Arial Black, Arial',
+            fontFamily: GAME_CONFIG.ui.fontFamily,
             fontWeight: 'bold',
             stroke: '#B8860B', // Dark gold outline
             strokeThickness: 4,
@@ -310,9 +310,9 @@ class CharacterSelectScene extends Phaser.Scene {
         
         // Character name - white by default, will change to yellow when selected
         const nameText = this.add.text(0, 100, character.displayName, {
-            fontSize: '32px',
+            fontSize: GAME_CONFIG.ui.fontSize.heading,
             fill: '#FFFFFF', // White by default
-            fontFamily: 'Arial Black, Arial',
+            fontFamily: GAME_CONFIG.ui.fontFamily,
             fontWeight: 'bold',
             stroke: '#000000', // Black outline
             strokeThickness: 3,
@@ -360,9 +360,9 @@ class CharacterSelectScene extends Phaser.Scene {
         buttonBg.setStrokeStyle(3, 0xFFD700);
         
         const backButton = this.add.text(130, 50, '← BACK', {
-            fontSize: '24px',
+            fontSize: GAME_CONFIG.ui.fontSize.body,
             fill: '#FFD700', // Golden yellow
-            fontFamily: 'Arial Black, Arial',
+            fontFamily: GAME_CONFIG.ui.fontFamily,
             fontWeight: 'bold',
             stroke: '#B8860B', // Dark gold outline
             strokeThickness: 2
@@ -417,9 +417,9 @@ class CharacterSelectScene extends Phaser.Scene {
         this.continueButtonBg.setVisible(false); // Hidden initially
         
         this.continueButton = this.add.text(centerX, buttonY, 'START GAME', {
-            fontSize: '32px',
+            fontSize: GAME_CONFIG.ui.fontSize.heading,
             fill: '#FFD700', // Golden yellow
-            fontFamily: 'Arial Black, Arial',
+            fontFamily: GAME_CONFIG.ui.fontFamily,
             fontWeight: 'bold',
             stroke: '#B8860B', // Dark gold outline
             strokeThickness: 3,
@@ -438,7 +438,7 @@ class CharacterSelectScene extends Phaser.Scene {
               this.continueButton.setStyle({ 
                   fill: '#FF6B35', 
                   stroke: '#CC4125',
-                  fontSize: '34px'
+                  fontSize: GAME_CONFIG.ui.fontSize.buttonHover
               });
               this.continueButtonBg.setFillStyle(0x4A2818, 0.9);
               this.continueButtonBg.setStrokeStyle(4, 0xFF6B35);
@@ -447,7 +447,7 @@ class CharacterSelectScene extends Phaser.Scene {
               this.continueButton.setStyle({ 
                   fill: '#FFD700', 
                   stroke: '#B8860B',
-                  fontSize: '32px'
+                  fontSize: GAME_CONFIG.ui.fontSize.heading
               });
               this.continueButtonBg.setFillStyle(0x2C1810, 0.9);
               this.continueButtonBg.setStrokeStyle(3, 0xFFD700);

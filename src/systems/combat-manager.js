@@ -17,7 +17,7 @@ class CombatManager {
         this.player = null;
         this.streetTopLimit = 0;
         this.streetBottomLimit = 0;
-        this.autoSwitchThreshold = 25;
+        this.autoSwitchThreshold = 40;
         
         console.log('⚔️ CombatManager initialized');
     }
@@ -34,6 +34,8 @@ class CombatManager {
         this.streetTopLimit = streetTopLimit;
         this.streetBottomLimit = streetBottomLimit;
         this.autoSwitchThreshold = autoSwitchThreshold;
+
+        console.log(`⚔️ CombatManager initialized: autoSwitchThreshold=${this.autoSwitchThreshold}, player=${!!this.player}, animationManager=${!!this.animationManager}`);
     }
     
     // ========================================
@@ -100,15 +102,21 @@ class CombatManager {
     
     checkEnemyAttacks() {
         if (!this.enemies) return;
-        
+
         this.enemies.forEach(enemy => {
             const enemyHitbox = enemy.getAttackHitbox();
             if (enemyHitbox && this.isColliding(enemyHitbox, this.player)) {
                 // Only deal damage if this enemy hasn't hit the player with this attack yet
                 if (!enemy.hasHitPlayer) {
-                    this.playerTakeDamage(enemy.playerDamage);
+                    console.log(`🎯 Enemy ${enemy.characterConfig.name} hit detected! Damage: ${enemy.playerDamage}`);
+                    // Use scene.playerTakeDamage to ensure callbacks are provided for auto-switching
+                    if (this.scene && this.scene.playerTakeDamage) {
+                        this.scene.playerTakeDamage(enemy.playerDamage);
+                    } else {
+                        console.error('❌ Cannot call playerTakeDamage - scene method not available');
+                    }
                     enemy.hasHitPlayer = true; // Mark that this attack has hit
-                    console.log(`${enemy.characterConfig.name} enemy hit player for ${enemy.playerDamage} damage!`);
+                    console.log(`💥 ${enemy.characterConfig.name} enemy hit player for ${enemy.playerDamage} damage!`);
                 }
             }
         });
@@ -171,26 +179,27 @@ class CombatManager {
     // DAMAGE HANDLING
     // ========================================
     
-    playerTakeDamage(damage, onCharacterDown, onSwitchCharacter) {
+    playerTakeDamage(damage, onCharacterDown = null, onSwitchCharacter = null) {
         const activeCharName = this.characterManager.getActiveCharacterName();
         const newHealth = this.characterManager.takeDamage(activeCharName, damage);
-        
+
         // Flash effect for player
         this.player.setTint(0xff0000);
         this.scene.time.delayedCall(ENEMY_CONFIG.playerFlashTime, () => {
             this.player.setTint(0xffffff);
         });
-        
+
         // Check for auto-switch when health is low
         const activeCharData = this.characterManager.getActiveCharacterData();
         const healthPercent = (newHealth / activeCharData.maxHealth) * 100;
+
         if (healthPercent <= this.autoSwitchThreshold) {
-            console.log(`Auto-switching due to low health: ${healthPercent}%`);
+            console.log(`🔄 Auto-switching due to low health: ${healthPercent.toFixed(1)}% (threshold: ${this.autoSwitchThreshold}%)`);
             if (onSwitchCharacter) {
                 onSwitchCharacter(true);
             }
         }
-        
+
         // Check for game over (both characters dead)
         if (newHealth <= 0) {
             if (onCharacterDown) {

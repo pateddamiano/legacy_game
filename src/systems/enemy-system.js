@@ -233,6 +233,11 @@ class Enemy {
         this.isKnockedBack = false; // True when enemy is being knocked back
         this.knockbackTimer = 0;   // Time remaining in knockback
         
+        // Wind effect tracking
+        this.isFrozenByWind = false; // True when enemy is frozen by tornado wind
+        this.windPushbackTimer = 0;  // Time remaining in wind effect
+        this.windPushbackVelocity = 0; // Velocity applied by wind pushback
+        
         // Movement bounds - read from centralized WORLD_CONFIG
         this.streetTopLimit = WORLD_CONFIG.streetTopLimit;
         this.streetBottomLimit = WORLD_CONFIG.streetBottomLimit;
@@ -268,7 +273,7 @@ class Enemy {
                 
                 // Check if animations exist and are valid
                 if (this.scene.anims.exists(walkKey) && this.scene.anims.get(walkKey).frames.length > 0) {
-                    console.log(`Playing walk animation: ${walkKey}`);
+                    // console.log(`Playing walk animation: ${walkKey}`);
                     this.sprite.anims.play(walkKey, true);
                 } else if (this.scene.anims.exists(idleKey) && this.scene.anims.get(idleKey).frames.length > 0) {
                     console.log(`Falling back to idle animation: ${idleKey}`);
@@ -329,6 +334,23 @@ class Enemy {
                 }
             }
         }
+
+        // Update wind effect timer
+        if (this.isFrozenByWind) {
+            this.windPushbackTimer -= delta;
+            // Apply wind pushback velocity
+            if (this.sprite && this.sprite.body && this.windPushbackVelocity !== 0) {
+                this.sprite.setVelocityX(this.windPushbackVelocity);
+            }
+            // Clear wind effect when timer expires
+            if (this.windPushbackTimer <= 0) {
+                this.isFrozenByWind = false;
+                this.windPushbackVelocity = 0;
+                if (this.sprite && this.sprite.body) {
+                    this.sprite.setVelocityX(0);
+                }
+            }
+        }
         
         // Update animation lock timer
         if (this.lockTimer > 0) {
@@ -362,6 +384,11 @@ class Enemy {
             }
         }
         
+        // Skip AI behavior if frozen by wind
+        if (this.isFrozenByWind) {
+            return; // Enemy is frozen, don't process AI
+        }
+
         // AI behavior based on state
         switch (this.state) {
             case ENEMY_STATES.WALKING:
@@ -375,6 +402,7 @@ class Enemy {
     
     updateWalkingBehavior(time) {
         if (this.animationLocked) return;
+        if (this.isFrozenByWind) return; // Skip if frozen by wind
         
         const distanceToPlayer = Phaser.Math.Distance.Between(
             this.sprite.x, this.sprite.y,
@@ -560,7 +588,7 @@ class Enemy {
     callForHelp() {
         // Black thugs can call for help when they first detect the player
         const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
-        console.log(`Black thug calls for help! Player detected at distance ${distance}`);
+        //console.log(`Black thug calls for help! Player detected at distance ${distance}`);
 
         // This could trigger additional enemy spawning or make nearby enemies more aggressive
         // For now, just log the behavior
@@ -570,77 +598,77 @@ class Enemy {
         // Green thugs can dodge player attacks when healthy
         // This is a placeholder for future dodge mechanics
         // For now, just log the behavior
-        const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
-        if (Math.random() < 0.1) { // 10% chance to dodge
-            console.log(`Green thug attempts to dodge! (distance: ${distance})`);
-        }
+        // const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
+        // if (Math.random() < 0.1) { // 10% chance to dodge
+        //     console.log(`Green thug attempts to dodge! (distance: ${distance})`);
+        // }
     }
 
     coordinateWithAllies() {
         // Black thugs coordinate with other black thugs
         // This is a placeholder for future cooperative behavior
         // For now, just log the behavior
-        const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
-        console.log(`Black thug coordinates with allies! (distance: ${distance})`);
+        // const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
+        // console.log(`Black thug coordinates with allies! (distance: ${distance})`);
     }
     
     checkEnvironment() {
         // Green thugs check their environment for tactical advantages
         // This is a placeholder for future environmental awareness
         // For now, just log the behavior
-        const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
-        if (Math.random() < 0.05) { // 5% chance to check environment
-            console.log(`Green thug assesses the situation! (distance: ${distance})`);
-        }
+        // const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
+        // if (Math.random() < 0.05) { // 5% chance to check environment
+        //     console.log(`Green thug assesses the situation! (distance: ${distance})`);
+        // }
     }
     
     assessPlayerState() {
         // Black thugs assess the player's current state
         // This is a placeholder for future player state assessment
         // For now, just log the behavior
-        const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
-        if (Math.random() < 0.03) { // 3% chance to assess player
-            console.log(`Black thug assesses player state! (distance: ${distance})`);
-        }
+        // const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
+        // if (Math.random() < 0.03) { // 3% chance to assess player
+        //     console.log(`Black thug assesses player state! (distance: ${distance})`);
+        // }
     }
     
     checkCrowdSize() {
         // Crackheads are more aggressive in groups
         // This is a placeholder for future crowd behavior
         // For now, just log the behavior
-        const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
-        if (Math.random() < 0.08) { // 8% chance to check crowd
-            console.log(`Crackhead checks crowd size! (distance: ${distance})`);
-        }
+        // const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
+        // if (Math.random() < 0.08) { // 8% chance to check crowd
+        //     console.log(`Crackhead checks crowd size! (distance: ${distance})`);
+        // }
     }
     
     checkExperience() {
         // Green thugs become more experienced over time
-        const timeAlive = this.scene.time.now - this.spawnTime;
-        if (timeAlive > 10000 && Math.random() < 0.02) { // After 10 seconds, 2% chance
-            const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
-            console.log(`Green thug gains experience! Time alive: ${Math.round(timeAlive/1000)}s (distance: ${distance})`);
-        }
+        // const timeAlive = this.scene.time.now - this.spawnTime;
+        // if (timeAlive > 10000 && Math.random() < 0.02) { // After 10 seconds, 2% chance
+        //     const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
+        //     console.log(`Green thug gains experience! Time alive: ${Math.round(timeAlive/1000)}s (distance: ${distance})`);
+        // }
     }
     
     checkPlayerHealth() {
         // Black thugs are more aggressive when player is low on health
         // This is a placeholder for future player health assessment
-        // For now, just log the behavior
-        const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
-        if (Math.random() < 0.04) { // 4% chance to check player health
-            console.log(`Black thug checks player health! (distance: ${distance})`);
-        }
+        // // For now, just log the behavior
+        // const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
+        // if (Math.random() < 0.04) { // 4% chance to check player health
+        //     console.log(`Black thug checks player health! (distance: ${distance})`);
+        // }
     }
     
     checkPlayerWeapons() {
         // Green thugs are more cautious when player has weapons
         // This is a placeholder for future weapon awareness
         // For now, just log the behavior
-        const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
-        if (Math.random() < 0.06) { // 6% chance to check player weapons
-            console.log(`Green thug checks player weapons! (distance: ${distance})`);
-        }
+        // const distance = Math.round(Phaser.Math.Distance.Between(this.sprite.x, this.sprite.y, this.player.x, this.player.y));
+        // if (Math.random() < 0.06) { // 6% chance to check player weapons
+        //     console.log(`Green thug checks player weapons! (distance: ${distance})`);
+        // }
     }
     
     updateAttackingBehavior() {
@@ -748,7 +776,7 @@ class Enemy {
             this.scene.audioManager.playEnemyAttack(this.characterConfig.name);
         }
         
-        console.log(`Enemy ${this.characterConfig.name} starts ${attackType} attack (${windupDelay}ms windup)`);
+        // console.log(`Enemy ${this.characterConfig.name} starts ${attackType} attack (${windupDelay}ms windup)`);
     }
     
     takeDamage(damage = 1, knockbackSource = null) {
@@ -804,7 +832,7 @@ class Enemy {
         if (this.health <= 0) {
             // Check if this enemy is protected from death
             if (this.scene.eventEnemyProtection && this.scene.eventEnemyProtection.isProtectedFromCleanup(this)) {
-                console.log(`🛡️ Death blocked for protected enemy: ${this.characterConfig.name} (health set to 1)`);
+                // console.log(`🛡️ Death blocked for protected enemy: ${this.characterConfig.name} (health set to 1)`);
                 this.health = 1; // Keep alive with minimal health
                 return;
             }

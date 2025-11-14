@@ -97,9 +97,9 @@ class DebugManager {
         
         // Position display (top-left)
         this.debugPositionText = this.scene.add.text(10, 10, '', {
-            fontSize: '14px',
+            fontSize: GAME_CONFIG.ui.fontSize.micro,
             fill: '#00ff00',
-            fontFamily: 'Arial',
+            fontFamily: GAME_CONFIG.ui.fontFamily,
             backgroundColor: '#000000',
             padding: { x: 8, y: 4 }
         });
@@ -109,9 +109,9 @@ class DebugManager {
         
         // Camera info (top-right)
         this.debugCameraText = this.scene.add.text(1190, 10, '', {
-            fontSize: '14px',
+            fontSize: GAME_CONFIG.ui.fontSize.micro,
             fill: '#00ffff',
-            fontFamily: 'Arial',
+            fontFamily: GAME_CONFIG.ui.fontFamily,
             backgroundColor: '#000000',
             padding: { x: 8, y: 4 }
         });
@@ -121,9 +121,9 @@ class DebugManager {
         
         // Instructions (bottom-left)
         this.debugInstructionsText = this.scene.add.text(10, 710, 'R: Record | D: Toggle Overlay | G: Grid', {
-            fontSize: '12px',
+            fontSize: GAME_CONFIG.ui.fontSize.mini,
             fill: '#ffffff',
-            fontFamily: 'Arial',
+            fontFamily: GAME_CONFIG.ui.fontFamily,
             backgroundColor: '#000000',
             padding: { x: 8, y: 4 }
         });
@@ -352,9 +352,9 @@ class DebugManager {
         
         // Add text label
         const label = this.scene.add.text(x, y - 20, `${this.recordedPositions.length}`, {
-            fontSize: '16px',
+            fontSize: GAME_CONFIG.ui.fontSize.tiny,
             fill: '#ffffff',
-            fontFamily: 'Arial',
+            fontFamily: GAME_CONFIG.ui.fontFamily,
             fontStyle: 'bold',
             backgroundColor: '#ff0000',
             padding: { x: 4, y: 2 }
@@ -390,7 +390,7 @@ class DebugManager {
         this.characterIndicator.setVisible(false); // Hidden by default
         
         this.characterText = this.scene.add.text(15, debugUIStartY + 20, `Character: UNKNOWN\nPress C to switch`, {
-            fontSize: '14px',
+            fontSize: GAME_CONFIG.ui.fontSize.micro,
             fill: '#ffffff'
         }).setOrigin(0, 0.5);
         this.characterText.setDepth(2001);
@@ -405,7 +405,7 @@ class DebugManager {
         this.attackIndicator.setVisible(false); // Hidden by default
         
         this.attackText = this.scene.add.text(15, debugUIStartY + 65, 'READY', {
-            fontSize: '14px',
+            fontSize: GAME_CONFIG.ui.fontSize.micro,
             fill: '#000000'
         }).setOrigin(0, 0.5);
         this.attackText.setDepth(2001);

@@ -93,8 +93,8 @@ class IntroDialogueScene extends Phaser.Scene {
             this.cameras.main.height - 50,
             'Press SPACE to continue',
             {
-                fontFamily: 'Arial',
-                fontSize: '20px',
+                fontFamily: GAME_CONFIG.ui.fontFamily,
+                fontSize: GAME_CONFIG.ui.fontSize.label,
                 color: '#888888'
             }
         ).setOrigin(0.5).setDepth(11);
@@ -180,8 +180,8 @@ class IntroDialogueScene extends Phaser.Scene {
             centerY + 140,
             '',
             {
-                fontFamily: 'Arial',
-                fontSize: '24px',
+                fontFamily: GAME_CONFIG.ui.fontFamily,
+                fontSize: GAME_CONFIG.ui.fontSize.body,
                 color: '#FFD700',
                 fontStyle: 'bold'
             }
@@ -194,8 +194,8 @@ class IntroDialogueScene extends Phaser.Scene {
             centerY + 180,
             '',
             {
-                fontFamily: 'Arial',
-                fontSize: '26px',
+                fontFamily: GAME_CONFIG.ui.fontFamily,
+                fontSize: GAME_CONFIG.ui.fontSize.body,
                 color: '#FFFFFF',
                 wordWrap: { width: 650 }
             }

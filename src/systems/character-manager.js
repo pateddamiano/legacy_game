@@ -15,7 +15,7 @@ class CharacterManager {
                 maxHealth: 100,
                 sprite: null,
                 isActive: true,
-                regenRate: 2.0, // Health per second when inactive
+                regenRate: 5.0, // Health per second when inactive (increased from 2.0)
                 lastSwitchTime: 0
             },
             tryston: {
@@ -24,14 +24,14 @@ class CharacterManager {
                 maxHealth: 100,
                 sprite: null,
                 isActive: false,
-                regenRate: 2.0, // Health per second when inactive
+                regenRate: 5.0, // Health per second when inactive (increased from 2.0)
                 lastSwitchTime: 0
             }
         };
         
         this.selectedCharacter = 'tireek';
         this.currentCharacterConfig = TIREEK_CONFIG;
-        this.autoSwitchThreshold = 25; // Auto-switch when health drops below 25%
+        this.autoSwitchThreshold = 40; // Auto-switch when health drops below 40% (increased from 25% for better responsiveness)
         this.switchCooldown = 500; // 0.5 seconds cooldown between switches (reduced from 2000ms)
         
         // References to other managers (set during initialization)
@@ -145,99 +145,166 @@ class CharacterManager {
         // Check cooldown unless forced switch
         const currentTime = this.scene.time.now;
         if (!forceSwitch && currentTime - this.characters[this.selectedCharacter].lastSwitchTime < this.switchCooldown) {
-            console.log("Character switch on cooldown");
             return false;
         }
-        
+
         // Only allow switching if not in middle of an action (unless forced)
-        // Be more lenient - allow switching during idle, run, or when animation lock is almost expired
         if (!forceSwitch && animationManager) {
             const lockAlmostExpired = animationManager.lockTimer && animationManager.lockTimer <= 200;
-            const isIdleOrRun = animationManager.currentState === 'idle' || animationManager.currentState === 'run';
-            
-            // Block switching only if:
-            // 1. Animation is locked AND we're in an attack state AND lock timer is significant
-            // 2. We're jumping AND in an attack/airkick state (not just regular jumping)
             const isInAttackAnimation = animationManager.currentState === 'attack' || animationManager.currentState === 'airkick';
             const shouldBlock = (animationManager.animationLocked && isInAttackAnimation && !lockAlmostExpired) ||
                                 (isJumping && isInAttackAnimation && !lockAlmostExpired);
-            
+
             if (shouldBlock) {
-                console.log(`Cannot switch characters during action (state: ${animationManager.currentState}, locked: ${animationManager.animationLocked}, lockTimer: ${animationManager.lockTimer}, isJumping: ${isJumping})`);
                 return false;
             }
         }
-        
+
         // Determine which character to switch to
         const currentChar = this.selectedCharacter;
         const newChar = currentChar === 'tireek' ? 'tryston' : 'tireek';
-        
+
         // Check if the other character is available (not dead)
         if (this.characters[newChar].health <= 0) {
-            console.log(`Cannot switch to ${newChar} - character is down`);
             return false;
         }
-        
-        console.log(`Switching from ${currentChar} to ${newChar}`);
-        
+
         // Get current player sprite
         const currentPlayer = this.characters[currentChar].sprite;
-        
+
         // Store current position and state
         const currentX = currentPlayer.x;
         const currentY = currentPlayer.y;
         const currentScale = currentPlayer.scaleX;
         const currentFlipX = currentPlayer.flipX;
-        // Safely get velocity (body might not exist during level transitions)
         const currentVelX = (currentPlayer.body && currentPlayer.body.velocity) ? currentPlayer.body.velocity.x : 0;
         const currentVelY = (currentPlayer.body && currentPlayer.body.velocity) ? currentPlayer.body.velocity.y : 0;
+
+        // Check if character is jumping (has upward velocity or is above ground)
+        const isCurrentlyJumping = isJumping || (currentVelY < 0) || (currentPlayer.lastGroundY && currentY < currentPlayer.lastGroundY - 10);
         
+        // If jumping, use ground position instead of current position
+        const groundY = currentPlayer.lastGroundY || currentY;
+        const finalY = isCurrentlyJumping ? groundY : currentY;
+        
+        // If jumping, reset velocities to 0 (don't carry over jump state)
+        const finalVelX = isCurrentlyJumping ? 0 : currentVelX;
+        const finalVelY = 0; // Always reset vertical velocity on switch
+
         // Hide current character
+        console.log(`👥 Starting character switch: ${currentChar} → ${newChar} (was jumping: ${isCurrentlyJumping})`);
         this.characters[currentChar].sprite.setVisible(false);
         this.characters[currentChar].isActive = false;
         this.characters[currentChar].lastSwitchTime = currentTime;
-        
-        // Show new character
-        this.characters[newChar].sprite.setVisible(true);
-        this.characters[newChar].isActive = true;
-        this.characters[newChar].lastSwitchTime = currentTime;
-        
-        // Update references
+
+        // Update references immediately for synchronous behavior
         this.selectedCharacter = newChar;
         this.currentCharacterConfig = this.characters[newChar].config;
         const newPlayer = this.characters[newChar].sprite;
-        
-        // Clear any damage tint from previous hit
-        newPlayer.clearTint();
-        
-        // Restore position and state
+
+        // Position the new character but keep it hidden initially
         newPlayer.x = currentX;
-        newPlayer.y = currentY;
+        newPlayer.y = finalY; // Use ground position if was jumping
         newPlayer.setScale(currentScale);
         newPlayer.setFlipX(currentFlipX);
-        newPlayer.lastGroundY = currentY;
-        // Safely set velocity (body might not exist during level transitions)
+        newPlayer.lastGroundY = finalY; // Set ground position
         if (newPlayer.body) {
-            newPlayer.setVelocityX(currentVelX);
-            newPlayer.setVelocityY(currentVelY);
+            newPlayer.setVelocityX(finalVelX);
+            newPlayer.setVelocityY(finalVelY); // Always 0
+            // Reset gravity to ensure character is on ground
+            if (newPlayer.setGravityY) {
+                newPlayer.setGravityY(0);
+            }
+            if (newPlayer.body) {
+                newPlayer.body.velocity.y = 0;
+                newPlayer.body.acceleration.y = 0;
+            }
         }
-        
-        // Update health bar with new character's health
-        if (this.uiManager) {
-            this.uiManager.updateHealthBar(this.characters[newChar].health, this.characters[newChar].maxHealth);
-            
-            // Update dual character health display
-            this.uiManager.updateDualCharacterHealth(
-                this.characters.tireek.health, 
-                this.characters.tryston.health, 
-                this.selectedCharacter
+        newPlayer.setVisible(false); // Keep hidden during animation
+
+        // Clear any damage tint from previous hit
+        newPlayer.clearTint();
+
+        // Spawn tornado effect using EffectSystem
+        let animationDuration = 0;
+        if (this.scene.effectSystem) {
+            const effectResult = this.scene.effectSystem.spawnTornadoEffect(
+                currentX,
+                currentY,
+                currentScale,
+                currentPlayer.depth,
+                () => {
+                    // Animation complete callback
+                    // Show new character
+                    newPlayer.setVisible(true);
+                    this.characters[newChar].isActive = true;
+                    this.characters[newChar].lastSwitchTime = currentTime;
+                    
+                    // Reset animation state to idle (in case old character was in attack/airkick)
+                    if (newPlayer.anims) {
+                        const charName = this.characters[newChar].config.name;
+                        newPlayer.anims.play(`${charName}_idle`, true);
+                    }
+                    
+                    // Ensure character is on ground and not jumping
+                    if (newPlayer.body) {
+                        newPlayer.setVelocityY(0);
+                        if (newPlayer.setGravityY) {
+                            newPlayer.setGravityY(0);
+                        }
+                        newPlayer.body.velocity.y = 0;
+                        newPlayer.body.acceleration.y = 0;
+                    }
+
+                    // Update health bar with new character's health
+                    if (this.uiManager) {
+                        this.uiManager.updateHealthBar(this.characters[newChar].health, this.characters[newChar].maxHealth);
+                        this.uiManager.updateDualCharacterHealth(
+                            this.characters.tireek.health,
+                            this.characters.tryston.health,
+                            this.selectedCharacter
+                        );
+                        this.uiManager.updateCharacterDisplay(this.currentCharacterConfig);
+                    }
+
+                    console.log(`🔄 Character switch animation complete: ${this.currentCharacterConfig.name} (${this.characters[newChar].health}/100 HP)`);
+                }
             );
+            animationDuration = effectResult.duration;
+        } else {
+            // Fallback: instant switch if effectSystem not available
+            newPlayer.setVisible(true);
+            this.characters[newChar].isActive = true;
+            this.characters[newChar].lastSwitchTime = currentTime;
             
-            // Update character text through UIManager
-            this.uiManager.updateCharacterDisplay(this.currentCharacterConfig);
+            // Reset animation state to idle (in case old character was in attack/airkick)
+            if (newPlayer.anims) {
+                const charName = this.characters[newChar].config.name;
+                newPlayer.anims.play(`${charName}_idle`, true);
+            }
+            
+            // Ensure character is on ground and not jumping
+            if (newPlayer.body) {
+                newPlayer.setVelocityY(0);
+                if (newPlayer.setGravityY) {
+                    newPlayer.setGravityY(0);
+                }
+                newPlayer.body.velocity.y = 0;
+                newPlayer.body.acceleration.y = 0;
+            }
+            
+            if (this.uiManager) {
+                this.uiManager.updateHealthBar(this.characters[newChar].health, this.characters[newChar].maxHealth);
+                this.uiManager.updateDualCharacterHealth(
+                    this.characters.tireek.health,
+                    this.characters.tryston.health,
+                    this.selectedCharacter
+                );
+                this.uiManager.updateCharacterDisplay(this.currentCharacterConfig);
+            }
         }
-        
-        console.log(`✅ Switched to character: ${this.currentCharacterConfig.name}`);
+
+        console.log(`🔄 Character switch initiated: ${currentChar} → ${newChar} (animation: ${animationDuration}ms)`);
         return { success: true, newPlayer, newCharacter: newChar };
     }
     
@@ -252,17 +319,19 @@ class CharacterManager {
     updateHealthRegeneration(delta) {
         // Regenerate health for inactive character
         let didRegenerate = false;
-        
+
         Object.keys(this.characters).forEach(charName => {
             const charData = this.characters[charName];
             if (!charData.isActive && charData.health < charData.maxHealth && charData.health > 0) {
                 // Regenerate health over time
                 const regenAmount = (charData.regenRate * delta) / 1000; // Convert to per-second
+                const oldHealth = charData.health;
                 charData.health = Math.min(charData.maxHealth, charData.health + regenAmount);
+                // console.log(`💚 ${charName} regenerating: ${oldHealth.toFixed(1)} → ${charData.health.toFixed(1)} HP (+${regenAmount.toFixed(2)})`);
                 didRegenerate = true;
             }
         });
-        
+
         // Update dual character health bars if any regeneration occurred
         if (didRegenerate && this.uiManager) {
             this.uiManager.updateDualCharacterHealth(

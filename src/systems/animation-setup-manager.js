@@ -43,7 +43,7 @@ class AnimationSetupManager {
         
         console.log(`Finished creating animations for ${charName}`);
     }
-    
+
     // ========================================
     // ANIMATION EVENT SETUP
     // ========================================

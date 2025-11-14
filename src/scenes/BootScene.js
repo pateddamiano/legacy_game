@@ -17,9 +17,9 @@ class BootScene extends Phaser.Scene {
         
         // Add simple loading text
         this.add.text(this.cameras.main.centerX, this.cameras.main.centerY, 'LOADING...', {
-            fontSize: '32px',
+            fontSize: GAME_CONFIG.ui.fontSize.heading,
             fill: '#00ff00',
-            fontFamily: 'Courier New, monospace'
+            fontFamily: GAME_CONFIG.ui.fontFamily
         }).setOrigin(0.5);
         
         // Load only the most essential assets needed for preload scene

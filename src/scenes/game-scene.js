@@ -8,7 +8,7 @@ class GameScene extends Phaser.Scene {
         super({ key: 'GameScene' });
         this.currentCharacterIndex = 0;
         this.currentCharacterConfig = ALL_CHARACTERS[this.currentCharacterIndex];
-        this.autoSwitchThreshold = 25; // Auto-switch when health drops below 25%
+        this.autoSwitchThreshold = 40; // Auto-switch when health drops below 40%
     }
 
     init(data) {
@@ -49,9 +49,13 @@ class GameScene extends Phaser.Scene {
     preload() {
         // Assets are now loaded in PreloadScene, so this is minimal
         console.log('🎯 GameScene: Assets already loaded, initializing systems...');
-        
+
         // Initialize weapon system (needs scene reference)
         this.weaponManager = new WeaponManager(this);
+        
+        // Initialize effect system (needs scene reference for loading)
+        this.effectSystem = new EffectSystem(this);
+        this.effectSystem.loadEffectAssets();
     }
     
     // Old loading methods removed - assets now loaded in PreloadScene
@@ -91,6 +95,7 @@ class GameScene extends Phaser.Scene {
         // NEW: Refactored managers
         this.characterManager = new CharacterManager(this);
         this.animationSetupManager = new AnimationSetupManager(this);
+        // Note: effectSystem initialized in preload() for asset loading
         this.levelInitializationManager = new LevelInitializationManager(
             this,
             this.worldManager,
@@ -158,12 +163,14 @@ class GameScene extends Phaser.Scene {
             ALL_CHARACTERS.forEach(characterConfig => {
                 this.animationSetupManager.createCharacterAnimations(characterConfig);
             });
-            
+
             // Create animations for enemies
             ALL_ENEMY_TYPES.forEach(enemyConfig => {
                 this.animationSetupManager.createCharacterAnimations(enemyConfig);
             });
-            
+
+            // Effect animations already created earlier (in onLevelInitializationComplete)
+
             // Start player idle animation
             this.player.anims.play(`${this.currentCharacterConfig.name}_idle`, true);
         });
@@ -361,7 +368,7 @@ class GameScene extends Phaser.Scene {
             console.error('CombatManager not initialized!');
             return;
         }
-        
+
         this.combatManager.playerTakeDamage(
             damage,
             () => this.handleCharacterDown(),
@@ -372,18 +379,22 @@ class GameScene extends Phaser.Scene {
                         this.player = result.newPlayer;
                         this.selectedCharacter = result.newCharacter;
                         this.currentCharacterConfig = this.characterManager.currentCharacterConfig;
-                        
+
                         // Ensure player sprite has characterConfig set (safety check)
                         if (!this.player.characterConfig) {
                             this.player.characterConfig = this.currentCharacterConfig;
-                            console.log('⚠️ Set characterConfig on player sprite after switch');
                         }
+
+                        // Reset jumping state (new character always starts on ground)
+                        this.isJumping = false;
                         
+                        // Update all managers with new player
                         this.animationManager = new AnimationStateManager(this.player);
                         this.animationSetupManager.setupAnimationEvents(this.currentCharacterConfig, this.player, this.animationManager, this.isJumping);
                         if (this.playerPhysicsManager) {
                             this.playerPhysicsManager.player = this.player;
                             this.playerPhysicsManager.animationManager = this.animationManager;
+                            this.playerPhysicsManager.setIsJumping(false); // Reset jumping state in physics manager
                         }
                         if (this.combatManager) {
                             this.combatManager.player = this.player;
@@ -424,6 +435,9 @@ class GameScene extends Phaser.Scene {
         
         // Update managers with new player if switched
         if (this.animationManager && this.player) {
+            // Reset jumping state (new character always starts on ground)
+            this.isJumping = false;
+            
             // Ensure player sprite has characterConfig set (safety check)
             if (!this.player.characterConfig) {
                 this.player.characterConfig = this.currentCharacterConfig;
@@ -437,6 +451,7 @@ class GameScene extends Phaser.Scene {
             if (this.playerPhysicsManager) {
                 this.playerPhysicsManager.player = this.player;
                 this.playerPhysicsManager.animationManager = this.animationManager;
+                this.playerPhysicsManager.setIsJumping(false); // Reset jumping state in physics manager
             }
             if (this.combatManager) {
                 this.combatManager.player = this.player;
@@ -899,6 +914,23 @@ class GameScene extends Phaser.Scene {
         // Initialize animation state manager now that player exists
         this.animationManager = new AnimationStateManager(this.player);
         console.log('🎯 Animation manager initialized');
+
+        // Create effect animations immediately (before character switch can happen)
+        if (this.effectSystem) {
+            this.effectSystem.createEffectAnimations();
+            
+            // Ensure crisp pixel-art filtering for effect spritesheets
+            try {
+                if (this.textures.exists('tornado')) {
+                    const tex = this.textures.get('tornado');
+                    if (tex && tex.setFilter) {
+                        tex.setFilter(Phaser.Textures.FilterMode.NEAREST);
+                    }
+                }
+            } catch (e) {
+                console.warn('Could not set pixel filter for tornado spritesheet:', e);
+            }
+        }
         
         // Set up animation complete listeners for current character
         this.animationSetupManager.setupAnimationEvents(

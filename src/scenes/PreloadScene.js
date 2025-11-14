@@ -103,17 +103,17 @@ class PreloadScene extends Phaser.Scene {
         
         // Game title/logo
         this.add.text(centerX, centerY - 150, 'LEGACY GAME', {
-            fontSize: '48px',
+            fontSize: GAME_CONFIG.ui.fontSize.title,
             fill: '#00ff00',
-            fontFamily: 'Courier New, monospace',
+            fontFamily: GAME_CONFIG.ui.fontFamily,
             fontWeight: 'bold'
         }).setOrigin(0.5);
         
         // Loading text
         this.loadingText = this.add.text(centerX, centerY + 100, 'Loading...', {
-            fontSize: '24px',
+            fontSize: GAME_CONFIG.ui.fontSize.body,
             fill: '#ffffff',
-            fontFamily: 'Courier New, monospace'
+            fontFamily: GAME_CONFIG.ui.fontFamily
         }).setOrigin(0.5);
         
         // Progress bar background
@@ -126,9 +126,9 @@ class PreloadScene extends Phaser.Scene {
         
         // Percentage text
         this.percentText = this.add.text(centerX, centerY + 80, '0%', {
-            fontSize: '16px',
+            fontSize: GAME_CONFIG.ui.fontSize.tiny,
             fill: '#00ff00',
-            fontFamily: 'Courier New, monospace'
+            fontFamily: GAME_CONFIG.ui.fontFamily
         }).setOrigin(0.5);
     }
     
@@ -215,7 +215,9 @@ class PreloadScene extends Phaser.Scene {
         
         // Load item pickup assets
         this.load.image('goldenMicrophone', 'assets/pickups/GoldenMicrophone_64x64.png');
-        
+
+        // Note: Effect assets (like tornado) are now loaded by EffectSystem in GameScene
+
         // Load audio assets
         this.loadAudioAssets();
         

@@ -12,7 +12,8 @@ class UIManager {
         this.debugMode = false;
         
         // UI elements will be created by methods
-        this.healthBarGraphics = null;
+        this.healthBarGraphics = null; // Legacy - kept for compatibility
+        this.futuristicHealthBar = null; // New futuristic health bar system
         this.debugText = null;
         this.debugGraphics = null;
         this.characterIndicator = null;
@@ -63,7 +64,7 @@ class UIManager {
     createDebugText() {
         // Add visual debug text on screen - positioned below health bar to avoid overlap
         this.debugText = this.scene.add.text(10, 55, 'Debug: OFF (Press D to toggle)', {
-            fontSize: '16px',
+            fontSize: GAME_CONFIG.ui.fontSize.tiny,
             fill: '#ff0000',
             backgroundColor: '#ffffff',
             padding: { x: 10, y: 5 }
@@ -85,7 +86,7 @@ class UIManager {
         this.characterIndicator.setVisible(false); // Hidden by default
         
         this.characterText = this.scene.add.text(15, debugUIStartY + 20, '', {
-            fontSize: '14px',
+            fontSize: GAME_CONFIG.ui.fontSize.micro,
             fill: '#ffffff'
         }).setOrigin(0, 0.5);
         this.characterText.setDepth(2001);
@@ -100,7 +101,7 @@ class UIManager {
         this.attackIndicator.setVisible(false); // Hidden by default
         
         this.attackText = this.scene.add.text(15, debugUIStartY + 65, 'READY', {
-            fontSize: '14px',
+            fontSize: GAME_CONFIG.ui.fontSize.micro,
             fill: '#000000'
         }).setOrigin(0, 0.5);
         this.attackText.setDepth(2001);
@@ -113,37 +114,35 @@ class UIManager {
     // ========================================
     
     createHealthBar() {
-        // OLD LARGE HEALTH BAR REMOVED - Using only dual character health bars now
-        
-        // Create dual character health display (small bars for both characters)
-        this.createDualCharacterHealthDisplay();
+        // Create new futuristic health bar system
+        if (typeof FuturisticHealthBar !== 'undefined') {
+            this.futuristicHealthBar = new FuturisticHealthBar(this.scene);
+            this.futuristicHealthBar.create();
+        } else {
+            console.warn('⚠️ FuturisticHealthBar not loaded, falling back to legacy system');
+            // Fallback to old system if module not loaded
+            this.createDualCharacterHealthDisplay();
+        }
     }
     
+    // Legacy method - kept for fallback only
     createDualCharacterHealthDisplay() {
         const displayX = 20;
-        const displayY = 20; // Top left corner (was 60, moved up since large bar removed)
-        const barWidth = 160; // Increased from 120
-        const barHeight = 20; // Increased from 15
+        const displayY = 20;
+        const barWidth = 160;
+        const barHeight = 20;
         const spacing = 10;
         
         // Tireek health bar
         this.tireekHealthBorder = this.scene.add.rectangle(
-            displayX, 
-            displayY, 
-            barWidth + 4, 
-            barHeight + 4, 
-            0x2a2a2a
+            displayX, displayY, barWidth + 4, barHeight + 4, 0x2a2a2a
         );
         this.tireekHealthBorder.setOrigin(0, 0);
         this.tireekHealthBorder.setDepth(2000);
         this.tireekHealthBorder.setScrollFactor(0);
         
         this.tireekHealthBg = this.scene.add.rectangle(
-            displayX + 2, 
-            displayY + 2, 
-            barWidth, 
-            barHeight, 
-            0x404040
+            displayX + 2, displayY + 2, barWidth, barHeight, 0x404040
         );
         this.tireekHealthBg.setOrigin(0, 0);
         this.tireekHealthBg.setDepth(2001);
@@ -155,22 +154,14 @@ class UIManager {
         
         // Tryston health bar
         this.trystonHealthBorder = this.scene.add.rectangle(
-            displayX + barWidth + spacing, 
-            displayY, 
-            barWidth + 4, 
-            barHeight + 4, 
-            0x2a2a2a
+            displayX + barWidth + spacing, displayY, barWidth + 4, barHeight + 4, 0x2a2a2a
         );
         this.trystonHealthBorder.setOrigin(0, 0);
         this.trystonHealthBorder.setDepth(2000);
         this.trystonHealthBorder.setScrollFactor(0);
         
         this.trystonHealthBg = this.scene.add.rectangle(
-            displayX + barWidth + spacing + 2, 
-            displayY + 2, 
-            barWidth, 
-            barHeight, 
-            0x404040
+            displayX + barWidth + spacing + 2, displayY + 2, barWidth, barHeight, 0x404040
         );
         this.trystonHealthBg.setOrigin(0, 0);
         this.trystonHealthBg.setDepth(2001);
@@ -182,18 +173,18 @@ class UIManager {
         
         // Character labels
         this.tireekLabel = this.scene.add.text(displayX + 5, displayY - 25, 'TIREEK', {
-            fontSize: '14px', // Increased from 12px
+            fontSize: GAME_CONFIG.ui.fontSize.micro,
             fill: '#FFD700',
-            fontFamily: 'Arial',
+            fontFamily: GAME_CONFIG.ui.fontFamily,
             fontWeight: 'bold'
         });
         this.tireekLabel.setDepth(2003);
         this.tireekLabel.setScrollFactor(0);
         
         this.trystonLabel = this.scene.add.text(displayX + barWidth + spacing + 5, displayY - 25, 'TRYSTON', {
-            fontSize: '14px', // Increased from 12px
+            fontSize: GAME_CONFIG.ui.fontSize.micro,
             fill: '#FFD700',
-            fontFamily: 'Arial',
+            fontFamily: GAME_CONFIG.ui.fontFamily,
             fontWeight: 'bold'
         });
         this.trystonLabel.setDepth(2003);
@@ -209,12 +200,18 @@ class UIManager {
     }
     
     updateHealthBar(currentHealth, maxHealth) {
-        // OLD LARGE HEALTH BAR REMOVED - Using only dual character health bars now
-        // This method is kept for compatibility but does nothing
+        // Legacy method - kept for compatibility but does nothing
+        // Health updates now go through updateDualCharacterHealth
     }
     
     updateDualCharacterHealth(tireekHealth, trystonHealth, activeCharacter) {
-        // Skip if UI elements not initialized yet
+        // Use new futuristic health bar if available
+        if (this.futuristicHealthBar) {
+            this.futuristicHealthBar.update(tireekHealth, trystonHealth, activeCharacter);
+            return;
+        }
+        
+        // Fallback to legacy system
         if (!this.tireekHealthGraphics || !this.trystonHealthGraphics) return;
         
         // Update Tireek health bar
@@ -227,7 +224,7 @@ class UIManager {
             this.trystonBarX, this.trystonBarY, this.dualBarWidth, this.dualBarHeight,
             activeCharacter === 'tryston');
         
-        // Update labels to show active character (only if UI elements are initialized)
+        // Update labels to show active character
         if (this.tireekLabel && this.trystonLabel) {
             if (activeCharacter === 'tireek') {
                 this.tireekLabel.setStyle({ fill: '#FFD700', fontWeight: 'bold' });
@@ -239,45 +236,38 @@ class UIManager {
         }
     }
     
+    // Legacy method - kept for fallback only
     updateCharacterHealthBar(graphics, currentHealth, maxHealth, x, y, width, height, isActive) {
         if (!graphics) return;
         
-        // Clear previous graphics
         graphics.clear();
         
-        // Calculate health percentage
         const healthPercent = currentHealth / maxHealth;
         const currentWidth = width * healthPercent;
         
-        // Color based on health and active status
         let healthColor;
         if (isActive) {
-            // Active character - brighter colors
             if (healthPercent > 0.6) {
-                healthColor = 0xFF8C00; // Bright orange
+                healthColor = 0xFF8C00;
             } else if (healthPercent > 0.3) {
-                healthColor = 0xFF7F00; // Standard orange
+                healthColor = 0xFF7F00;
             } else {
-                healthColor = 0xFF4500; // Dark orange/red
+                healthColor = 0xFF4500;
             }
         } else {
-            // Inactive character - dimmer colors
             if (healthPercent > 0.6) {
-                healthColor = 0xCC7000; // Dimmed orange
+                healthColor = 0xCC7000;
             } else if (healthPercent > 0.3) {
-                healthColor = 0xCC5F00; // Dimmed orange
+                healthColor = 0xCC5F00;
             } else {
-                healthColor = 0xCC3500; // Dimmed red
+                healthColor = 0xCC3500;
             }
         }
         
-        // Draw the health bar
         if (currentWidth > 0) {
-            // Main health bar fill
             graphics.fillStyle(healthColor);
             graphics.fillRect(x, y, currentWidth, height);
             
-            // Add highlight for active character
             if (isActive) {
                 graphics.fillStyle(0xffffff, 0.3);
                 graphics.fillRect(x, y, currentWidth, height * 0.4);
@@ -291,15 +281,15 @@ class UIManager {
     
     createScoreDisplay() {
         // Create container for score display elements
-        this.scoreContainer = this.scene.add.container(this.scene.cameras.main.width - 20, 20);
+        this.scoreContainer = this.scene.add.container(this.scene.cameras.main.width - 100,100);
         this.scoreContainer.setDepth(2003);
         this.scoreContainer.setScrollFactor(0);
         
         // Create the score text first (positioned to the left)
         this.scoreText = this.scene.add.text(-10, 0, '0', {
-            fontSize: '32px', // Increased from 24px
+            fontSize: GAME_CONFIG.ui.fontSize.golden_microphone_count,
             fill: '#FFD700',  // Golden color
-            fontFamily: 'Courier New, monospace',
+            fontFamily: GAME_CONFIG.ui.fontFamily,
             fontWeight: 'bold',
             stroke: '#000000',
             strokeThickness: 3, // Increased from 2
@@ -315,12 +305,52 @@ class UIManager {
         this.scoreText.setOrigin(1, 0.5); // Right-aligned, vertically centered
         
         // Create the golden microphone sprite (positioned to the right of the text)
-        this.scoreMicrophone = this.scene.add.sprite(-75, 0, 'goldenMicrophone');
+        this.scoreMicrophone = this.scene.add.sprite(-100, 0, 'goldenMicrophone');
         this.scoreMicrophone.setScale(0.8); // Increased from 0.5 (64x64 image to ~51x51)
         this.scoreMicrophone.setOrigin(0, 0.5); // Left-aligned, vertically centered
         
-        // Add both elements to the container
-        this.scoreContainer.add([this.scoreMicrophone, this.scoreText]);
+        // Calculate bounding box of both elements to center the circle
+        // Microphone: at (-100, 0) with origin (0, 0.5), scale 0.8, original size 64x64
+        const micWidth = 64 * 0.8; // 51.2
+        const micHeight = 64 * 0.8; // 51.2
+        const micLeft = -100; // Left edge (origin is at left)
+        const micRight = micLeft + micWidth; // -48.8
+        const micTop = 0 - (micHeight / 2); // -25.6 (origin is at vertical center)
+        const micBottom = 0 + (micHeight / 2); // 25.6
+        
+        // Text: at (-10, 0) with origin (1, 0.5), so right edge is at -10
+        const textWidth = this.scoreText.width;
+        const textHeight = this.scoreText.height;
+        const textRight = -10; // Right edge (origin is at right)
+        const textLeft = textRight - textWidth;
+        const textTop = 0 - (textHeight / 2); // (origin is at vertical center)
+        const textBottom = 0 + (textHeight / 2);
+        
+        // Find the overall bounding box
+        const minX = Math.min(micLeft, textLeft);
+        const maxX = Math.max(micRight, textRight);
+        const minY = Math.min(micTop, textTop);
+        const maxY = Math.max(micBottom, textBottom);
+        
+        // Calculate center point
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        
+        // Calculate radius (distance from center to farthest corner, plus padding)
+        const width = maxX - minX;
+        const height = maxY - minY;
+        const diagonal = Math.sqrt(width * width + height * height);
+        const padding = 15; // Padding around the elements
+        const circleRadius = (diagonal / 2) + padding;
+        
+        // Create background circle to separate from background
+        this.scoreCircle = this.scene.add.graphics();
+        this.scoreCircle.fillStyle(0x000000, 0.50); // Black with low opacity
+        this.scoreCircle.fillCircle(centerX, centerY, circleRadius); // Centered on the elements
+        this.scoreCircle.setDepth(0); // Behind other elements
+        
+        // Add all elements to the container (circle first so it's behind)
+        this.scoreContainer.add([this.scoreCircle, this.scoreMicrophone, this.scoreText]);
         
         console.log('🎤 Score display with golden microphone created');
     }
@@ -567,9 +597,9 @@ Legend:
         
         // Boss name text
         this.bossNameText = this.scene.add.text(barX, barY - 30, '', {
-            fontSize: '24px',
+            fontSize: GAME_CONFIG.ui.fontSize.body,
             fill: '#FFD700',
-            fontFamily: 'Arial',
+            fontFamily: GAME_CONFIG.ui.fontFamily,
             fontWeight: 'bold',
             stroke: '#000000',
             strokeThickness: 3
@@ -717,6 +747,9 @@ Legend:
         }
         if (this.bossHealthBarGraphics) {
             this.bossHealthBarGraphics.destroy();
+        }
+        if (this.futuristicHealthBar) {
+            this.futuristicHealthBar.destroy();
         }
         
         console.log('🗑️ UIManager destroyed');

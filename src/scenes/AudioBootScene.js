@@ -82,9 +82,9 @@ class AudioBootScene extends Phaser.Scene {
         const centerY = this.cameras.main.centerY;
         
         this.add.text(centerX, centerY, 'Loading Level...', {
-            fontSize: '24px',
+            fontSize: GAME_CONFIG.ui.fontSize.body,
             fill: '#00ff00',
-            fontFamily: 'Arial',
+            fontFamily: GAME_CONFIG.ui.fontFamily,
             fontStyle: 'bold'
         }).setOrigin(0.5);
         
@@ -248,6 +248,9 @@ class AudioBootScene extends Phaser.Scene {
         // Item pickup sounds
         this.load.audio('healthPickup', 'assets/audio/sfx/item_health_item_pickup.mp3');
         this.load.audio('microphonePickup', 'assets/audio/sfx/item_golden_microphone_pickup.mp3');
+        
+        // Effect sounds
+        this.load.audio('tornadoWind', 'assets/audio/sfx/tornado_wind.mp3');
         
         console.log('🎵 All audio assets configured for loading');
     }
@@ -447,9 +450,9 @@ class AudioBootScene extends Phaser.Scene {
 
         // Loading text
         this.loadingText = this.add.text(centerX, centerY + 100, 'LOADING...', {
-            fontSize: '32px',
+            fontSize: GAME_CONFIG.ui.fontSize.heading,
             fill: '#FFD700',
-            fontFamily: 'Arial Black, Arial',
+            fontFamily: GAME_CONFIG.ui.fontFamily,
             fontWeight: 'bold',
             stroke: '#B8860B',
             strokeThickness: 3,
@@ -468,9 +471,9 @@ class AudioBootScene extends Phaser.Scene {
 
         // Percentage text
         this.percentText = this.add.text(centerX, centerY + 190, '0%', {
-            fontSize: '20px',
+            fontSize: GAME_CONFIG.ui.fontSize.label,
             fill: '#ffffff',
-            fontFamily: 'Arial Black, Arial',
+            fontFamily: GAME_CONFIG.ui.fontFamily,
             fontWeight: 'bold',
             stroke: '#000000',
             strokeThickness: 2
