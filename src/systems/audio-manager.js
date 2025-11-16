@@ -134,29 +134,63 @@ class AudioManager {
     }
     
     stopBackgroundMusic(fadeOut = true) {
-        if (!this.currentBackgroundMusic || !this.currentBackgroundMusic.isPlaying) {
+        if (!this.currentBackgroundMusic) {
             return;
         }
         
+        // Check if playing (with null check)
+        if (!this.currentBackgroundMusic.isPlaying) {
+            // Clean up if not playing
+            try {
+                this.currentBackgroundMusic.destroy();
+            } catch (e) {
+                // Ignore errors if already destroyed
+            }
+            this.currentBackgroundMusic = null;
+            return;
+        }
+        
+        // Store reference to avoid null issues during async operations
+        const musicToStop = this.currentBackgroundMusic;
+        this.currentBackgroundMusic = null; // Clear reference immediately to prevent double-stop
+        
         if (fadeOut) {
             // Fade out then stop
-            this.scene.tweens.add({
-                targets: this.currentBackgroundMusic,
-                volume: 0,
-                duration: this.config.backgroundMusic.fadeOutDuration,
-                ease: 'Linear',
-                onComplete: () => {
-                    if (this.currentBackgroundMusic) {
-                        this.currentBackgroundMusic.stop();
-                        this.currentBackgroundMusic.destroy();
-                        this.currentBackgroundMusic = null;
+            try {
+                this.scene.tweens.add({
+                    targets: musicToStop,
+                    volume: 0,
+                    duration: this.config.backgroundMusic.fadeOutDuration,
+                    ease: 'Linear',
+                    onComplete: () => {
+                        try {
+                            if (musicToStop && musicToStop.isPlaying) {
+                                musicToStop.stop();
+                            }
+                            musicToStop.destroy();
+                        } catch (e) {
+                            // Ignore errors if already destroyed
+                        }
                     }
+                });
+            } catch (error) {
+                console.warn('🎵 Error fading out music:', error);
+                // Fallback to immediate stop
+                try {
+                    musicToStop.stop();
+                    musicToStop.destroy();
+                } catch (e) {
+                    // Ignore errors
                 }
-            });
+            }
         } else {
-            this.currentBackgroundMusic.stop();
-            this.currentBackgroundMusic.destroy();
-            this.currentBackgroundMusic = null;
+            // Immediate stop
+            try {
+                musicToStop.stop();
+                musicToStop.destroy();
+            } catch (error) {
+                console.warn('🎵 Error stopping music:', error);
+            }
         }
         
         console.log('🎵 Background music stopped');

@@ -95,6 +95,10 @@ class GameScene extends Phaser.Scene {
         // NEW: Refactored managers
         this.characterManager = new CharacterManager(this);
         this.animationSetupManager = new AnimationSetupManager(this);
+        
+        // Initialize checkpoint and lives systems
+        this.checkpointManager = new CheckpointManager(this);
+        this.livesManager = new LivesManager(this);
         // Note: effectSystem initialized in preload() for asset loading
         this.levelInitializationManager = new LevelInitializationManager(
             this,
@@ -105,6 +109,21 @@ class GameScene extends Phaser.Scene {
             this.eventManager,
             this.audioManager
         );
+        
+        // Initialize level transition manager (needs all other managers)
+        this.levelTransitionManager = new LevelTransitionManager(this);
+        this.levelTransitionManager.initialize({
+            livesManager: this.livesManager,
+            characterManager: this.characterManager,
+            enemySpawnManager: this.enemySpawnManager,
+            weaponManager: this.weaponManager,
+            itemPickupManager: this.itemPickupManager,
+            eventManager: this.eventManager,
+            audioManager: this.audioManager,
+            levelInitializationManager: this.levelInitializationManager,
+            worldManager: this.worldManager,
+            uiManager: this.uiManager
+        });
         
         console.log('🎮 All managers initialized');
     }
@@ -200,12 +219,19 @@ class GameScene extends Phaser.Scene {
         this.uiManager.initializeUI();
         
         // Initialize DebugManager if in test mode or debug mode
+        // Always initialize for checkpoint navigation (developer feature)
         if (this.isTestMode || window.DEBUG_MODE) {
+            console.log('🔍 [GameScene] Creating DebugManager (test/debug mode)');
             this.debugManager = new DebugManager(this);
             this.debugManager.initialize(this.isTestMode, this.coordinateRecordingEnabled, this.debugOverlayVisible);
             // Create debug graphics for hitbox visualization
             this.debugGraphics = this.add.graphics();
             this.debugManager.setDebugGraphics(this.debugGraphics);
+        } else {
+            // Still create debug manager for checkpoint navigation even if not in debug mode
+            console.log('🔍 [GameScene] Creating DebugManager for checkpoint navigation (developer feature)');
+            this.debugManager = new DebugManager(this);
+            this.debugManager.initialize(false, false, false); // Not in test mode, but still get checkpoint nav
         }
         
         // Initialize health bar with full health (fix: bar wasn't showing initially)
@@ -224,6 +250,10 @@ class GameScene extends Phaser.Scene {
         
         // Initialize score display
         this.uiManager.updateScoreDisplay(this.playerScore);
+        
+        // Initialize lives system
+        this.livesManager.initialize();
+        this.uiManager.updateLivesDisplay(this.livesManager.getLives());
         
         // Initialize weapon system
         this.weaponManager.createWeaponAnimations();
@@ -472,8 +502,8 @@ class GameScene extends Phaser.Scene {
             this.characterManager.update(delta);
         }
         
-        // Update world manager
-        if (this.worldManager && this.player) {
+        // Update world manager (skip during level transitions)
+        if (this.worldManager && this.player && !this.levelTransitionManager?.isTransitioning) {
             this.worldManager.updateWorld(this.player.x);
         }
         
@@ -490,7 +520,8 @@ class GameScene extends Phaser.Scene {
             this.handleInput();
             
             // Use PlayerPhysicsManager for movement, jumping, and animations
-            if (this.playerPhysicsManager) {
+            // Skip if disabled (e.g., during level transitions)
+            if (this.playerPhysicsManager && !this.playerPhysicsManager.disabled) {
                 this.playerPhysicsManager.update(delta);
                 // Update isJumping reference
                 this.isJumping = this.playerPhysicsManager.getIsJumping();
@@ -551,6 +582,12 @@ class GameScene extends Phaser.Scene {
                 x: worldBounds.x,
                 width: worldBounds.width
             }, this.cameras.main);
+        }
+        
+        // Update checkpoint progress
+        if (this.checkpointManager && this.player && this.physics && this.physics.world && this.physics.world.bounds) {
+            const worldBounds = this.physics.world.bounds;
+            this.checkpointManager.checkProgress(this.player.x, worldBounds);
         }
         
         // Enforce player bounds if set by event system
@@ -906,14 +943,112 @@ class GameScene extends Phaser.Scene {
             this.extrasManager.setStreetBounds(this.streetTopLimit, this.streetBottomLimit);
         }
         
-        // Get player from character manager
+        // CRITICAL: Update player reference FIRST before any position checks or camera operations
+        // This ensures we're working with the correct player sprite from the new level
         this.player = this.characterManager.getActiveCharacter();
         this.currentCharacterConfig = this.characterManager.currentCharacterConfig;
         this.selectedCharacter = this.characterManager.getActiveCharacterName();
+        console.log(`🎯 Player reference updated: ${this.selectedCharacter} at (${this.player?.x || 'N/A'}, ${this.player?.y || 'N/A'})`);
+        
+        // CRITICAL: Get spawn point and reset player position BEFORE any camera operations
+        // This prevents the old camera scroll position from affecting player positioning
+        const spawnPoint = this.worldManager.getSpawnPoint();
+        console.log(`🎯 Spawn point for new level: (${spawnPoint.x}, ${spawnPoint.y})`);
+        
+        // Stop camera follow immediately to prevent interference
+        this.cameras.main.stopFollow();
+        
+        // CRITICAL: Reset player position to spawn point BEFORE camera operations
+        // This ensures player is at the correct spawn position regardless of previous level state
+        if (this.player) {
+            const playerX = this.player.x;
+            const playerY = this.player.y;
+            console.log(`🎯 Player position before reset: (${playerX}, ${playerY})`);
+            
+            // Always reset player to spawn point (don't just check, force it)
+            this.player.x = spawnPoint.x;
+            this.player.y = spawnPoint.y;
+            this.player.setPosition(spawnPoint.x, spawnPoint.y);
+            this.player.setVelocity(0, 0);
+            
+            if (this.player.body) {
+                this.player.body.x = spawnPoint.x;
+                this.player.body.y = spawnPoint.y;
+                this.player.body.reset(spawnPoint.x, spawnPoint.y);
+                this.player.body.setVelocity(0, 0);
+                this.player.body.setAcceleration(0, 0);
+            }
+            
+            console.log(`🎯 Player position after reset: (${this.player.x}, ${this.player.y})`);
+            
+            // Also reset all character sprites to spawn point
+            if (this.characterManager) {
+                Object.values(this.characterManager.characters).forEach(charData => {
+                    if (charData.sprite) {
+                        charData.sprite.x = spawnPoint.x;
+                        charData.sprite.y = spawnPoint.y;
+                        charData.sprite.setPosition(spawnPoint.x, spawnPoint.y);
+                        charData.sprite.setVelocity(0, 0);
+                        if (charData.sprite.body) {
+                            charData.sprite.body.x = spawnPoint.x;
+                            charData.sprite.body.y = spawnPoint.y;
+                            charData.sprite.body.reset(spawnPoint.x, spawnPoint.y);
+                            charData.sprite.body.setVelocity(0, 0);
+                            charData.sprite.body.setAcceleration(0, 0);
+                        }
+                    }
+                });
+            }
+        }
+        
+        // CRITICAL: Reset camera scroll position to spawn point BEFORE any other camera operations
+        // This prevents the old camera position from affecting the new level
+        const worldBounds = this.physics && this.physics.world && this.physics.world.bounds 
+            ? this.physics.world.bounds 
+            : { x: 0, width: 1200 };
+        const minCameraX = worldBounds.x;
+        const maxCameraX = worldBounds.x + worldBounds.width - this.cameras.main.width;
+        const cameraTargetX = Math.max(minCameraX, Math.min(maxCameraX, spawnPoint.x - this.cameras.main.width / 2));
+        
+        console.log(`🎯 Resetting camera scroll from (${this.cameras.main.scrollX}, ${this.cameras.main.scrollY}) to (${cameraTargetX}, 0)`);
+        this.cameras.main.setScroll(cameraTargetX, 0);
+        console.log(`🎯 Camera positioned at spawn: scrollX=${cameraTargetX}, player at (${spawnPoint.x}, ${spawnPoint.y}), world bounds: x=${worldBounds.x}, width=${worldBounds.width}`);
+        
+        // Initialize checkpoint system with level config and world bounds
+        if (this.checkpointManager && this.physics && this.physics.world && this.physics.world.bounds) {
+            const levelConfig = this.levelManager?.currentLevelConfig || this.selectedLevelConfig;
+            const worldBounds = this.physics.world.bounds;
+            this.checkpointManager.initialize(levelConfig, worldBounds);
+            console.log('📍 Checkpoint system initialized');
+        }
         
         // Initialize animation state manager now that player exists
         this.animationManager = new AnimationStateManager(this.player);
         console.log('🎯 Animation manager initialized');
+        
+        // Start camera following player LAST (only if not locked by event system)
+        // This ensures player position is correct before camera starts following
+        if (!this.eventCameraLocked) {
+            this.cameras.main.startFollow(this.player, true, 0.1, 0);
+            console.log(`🎯 Camera following player at (${Math.round(this.player.x)}, ${Math.round(this.player.y)})`);
+        }
+        
+        // Check if any events should trigger immediately (player already past trigger)
+        // Skip during level transitions - transition manager will handle this
+        if (this.eventManager && this.player && !this.levelTransitionManager?.isTransitioning) {
+            this.eventManager.checkInitialTriggers();
+        }
+        
+        // Update debug manager references if it exists
+        if (this.debugManager) {
+            this.debugManager.setReferences(
+                this.player,
+                this.enemies,
+                this.streetTopLimit,
+                this.streetBottomLimit,
+                () => this.combatManager?.getPlayerAttackHitbox?.() || null
+            );
+        }
 
         // Create effect animations immediately (before character switch can happen)
         if (this.effectSystem) {
@@ -965,6 +1100,13 @@ class GameScene extends Phaser.Scene {
             this.streetBottomLimit,
             this.audioManager
         );
+        
+        // CRITICAL: If we're in a level transition, keep physics manager disabled
+        // This prevents the player from moving during the settle delay
+        if (this.levelTransitionManager?.isTransitioning) {
+            this.playerPhysicsManager.disabled = true;
+            console.log('🔧 PlayerPhysicsManager disabled during level transition');
+        }
         
         // Initialize EnemySpawnManager references
         this.enemySpawnManager.setReferences(

@@ -245,7 +245,7 @@ class ItemPickup {
                 
                 const tireekHealth = this.scene.characterManager.characters.tireek.health;
                 const trystonHealth = this.scene.characterManager.characters.tryston.health;
-                console.log(`💚 Both characters healed! Tireek: ${tireekHealth}/100, Tryston: ${trystonHealth}/100`);
+                // console.log(`💚 Both characters healed! Tireek: ${tireekHealth}/100, Tryston: ${trystonHealth}/100`);
             } else {
                 console.warn('⚠️ CharacterManager not found, cannot heal player!');
             }
@@ -479,7 +479,7 @@ class ItemPickupManager {
         // Clear all item pickups
         this.pickups.forEach(pickup => pickup.destroy());
         this.pickups = [];
-        console.log('✨ Cleared all item pickups');
+        //console.log('✨ Cleared all item pickups');
     }
     
     getPickupCounts() {

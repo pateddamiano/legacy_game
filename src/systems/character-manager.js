@@ -75,6 +75,16 @@ class CharacterManager {
     createCharacters() {
         console.log('👥 Creating both character sprites...');
         
+        // Destroy existing sprites if they exist (e.g., from previous level)
+        Object.keys(this.characters).forEach(charName => {
+            const charData = this.characters[charName];
+            if (charData.sprite) {
+                console.log(`👥 Destroying existing ${charName} sprite before creating new one`);
+                charData.sprite.destroy();
+                charData.sprite = null;
+            }
+        });
+        
         // Get spawn point from world manager
         const spawnPoint = this.worldManager.getSpawnPoint();
         
@@ -138,6 +148,43 @@ class CharacterManager {
     }
     
     // ========================================
+    // POSITION VALIDATION
+    // ========================================
+    
+    validateCharacterPosition(x, y) {
+        // Get current world bounds and spawn point for validation
+        const spawnPoint = this.worldManager?.getSpawnPoint();
+        const worldBounds = this.scene.physics?.world?.bounds;
+        
+        let validX = x;
+        let validY = y;
+        
+        // If we have world bounds, ensure position is within reasonable range
+        if (worldBounds && spawnPoint) {
+            const maxDistance = 1000; // Maximum allowed distance from spawn during transitions
+            const distanceFromSpawn = Math.abs(x - spawnPoint.x);
+            
+            // If position is too far from spawn point, use spawn point instead
+            if (distanceFromSpawn > maxDistance) {
+                console.log(`👥 🔧 VALIDATION: Position (${x}, ${y}) is ${distanceFromSpawn}px from spawn, using spawn point`);
+                validX = spawnPoint.x;
+                validY = spawnPoint.y;
+            }
+            
+            // Ensure position is within world bounds
+            if (validX < worldBounds.x) {
+                console.log(`👥 🔧 VALIDATION: X position ${validX} below world minimum ${worldBounds.x}, clamping`);
+                validX = worldBounds.x + 50; // Small buffer
+            } else if (validX > worldBounds.x + worldBounds.width) {
+                console.log(`👥 🔧 VALIDATION: X position ${validX} above world maximum ${worldBounds.x + worldBounds.width}, clamping`);
+                validX = worldBounds.x + worldBounds.width - 50; // Small buffer
+            }
+        }
+        
+        return { x: validX, y: validY };
+    }
+    
+    // ========================================
     // CHARACTER SWITCHING
     // ========================================
     
@@ -173,8 +220,30 @@ class CharacterManager {
         const currentPlayer = this.characters[currentChar].sprite;
 
         // Store current position and state
-        const currentX = currentPlayer.x;
-        const currentY = currentPlayer.y;
+        // CRITICAL FIX: During level transitions, don't use old position from previous level
+        // Check if we're in a level transition or if characters were recently created at spawn
+        const isLevelTransition = this.scene.levelTransitionManager?.isTransitioning;
+        const spawnPoint = this.worldManager?.getSpawnPoint();
+        
+        let currentX = currentPlayer.x;
+        let currentY = currentPlayer.y;
+        
+        // Robust position validation: If current position is far from spawn point during transitions,
+        // or if we detect we're in a transition, use spawn point instead
+        if (isLevelTransition || (spawnPoint && Math.abs(currentX - spawnPoint.x) > 1000)) {
+            console.log(`👥 🔧 POSITION FIX: Detected invalid position during transition`);
+            console.log(`👥 🔧   Current position: (${currentX}, ${currentY})`);
+            console.log(`👥 🔧   Spawn point: (${spawnPoint?.x || 'N/A'}, ${spawnPoint?.y || 'N/A'})`);
+            console.log(`👥 🔧   Is transitioning: ${isLevelTransition}`);
+            
+            if (spawnPoint) {
+                currentX = spawnPoint.x;
+                currentY = spawnPoint.y;
+                console.log(`👥 🔧   Using spawn point: (${currentX}, ${currentY})`);
+            } else {
+                console.warn(`👥 🔧   ⚠️ No spawn point available, keeping current position`);
+            }
+        }
         const currentScale = currentPlayer.scaleX;
         const currentFlipX = currentPlayer.flipX;
         const currentVelX = (currentPlayer.body && currentPlayer.body.velocity) ? currentPlayer.body.velocity.x : 0;
@@ -203,11 +272,13 @@ class CharacterManager {
         const newPlayer = this.characters[newChar].sprite;
 
         // Position the new character but keep it hidden initially
-        newPlayer.x = currentX;
-        newPlayer.y = finalY; // Use ground position if was jumping
+        // Additional safeguard: Validate position before setting
+        const validatedPosition = this.validateCharacterPosition(currentX, finalY);
+        newPlayer.x = validatedPosition.x;
+        newPlayer.y = validatedPosition.y; // Use ground position if was jumping
         newPlayer.setScale(currentScale);
         newPlayer.setFlipX(currentFlipX);
-        newPlayer.lastGroundY = finalY; // Set ground position
+        newPlayer.lastGroundY = validatedPosition.y; // Set ground position
         if (newPlayer.body) {
             newPlayer.setVelocityX(finalVelX);
             newPlayer.setVelocityY(finalVelY); // Always 0
@@ -229,8 +300,8 @@ class CharacterManager {
         let animationDuration = 0;
         if (this.scene.effectSystem) {
             const effectResult = this.scene.effectSystem.spawnTornadoEffect(
-                currentX,
-                currentY,
+                validatedPosition.x,
+                validatedPosition.y,
                 currentScale,
                 currentPlayer.depth,
                 () => {
@@ -427,19 +498,140 @@ class CharacterManager {
     
     handleGameOver(onGameOver) {
         console.log("Game Over! Both characters are down!");
-        // Add game over effects here later
-        // For now, just reset both characters after a delay
-        this.scene.time.delayedCall(3000, () => {
-            this.characters.tireek.health = this.characters.tireek.maxHealth;
-            this.characters.tryston.health = this.characters.tryston.maxHealth;
-            if (this.uiManager) {
-                this.uiManager.updateHealthBar(this.characters[this.selectedCharacter].health, this.characters[this.selectedCharacter].maxHealth);
+        
+        // Check if we have lives manager and checkpoint manager
+        const livesManager = this.scene.livesManager;
+        const checkpointManager = this.scene.checkpointManager;
+        
+        if (!livesManager || !checkpointManager) {
+            console.warn("⚠️ LivesManager or CheckpointManager not available, using fallback respawn");
+            // Fallback to old behavior
+            this.scene.time.delayedCall(3000, () => {
+                this.characters.tireek.health = this.characters.tireek.maxHealth;
+                this.characters.tryston.health = this.characters.tryston.maxHealth;
+                if (this.uiManager) {
+                    this.uiManager.updateHealthBar(this.characters[this.selectedCharacter].health, this.characters[this.selectedCharacter].maxHealth);
+                }
+                console.log("Both characters respawned!");
+                if (onGameOver) {
+                    onGameOver();
+                }
+            });
+            return;
+        }
+        
+        // Lose a life
+        const remainingLives = livesManager.loseLife();
+        
+        // Update lives display
+        if (this.uiManager) {
+            this.uiManager.updateLivesDisplay(remainingLives);
+        }
+        
+        // Determine respawn behavior
+        if (remainingLives > 0) {
+            // Respawn at last checkpoint
+            console.log(`❤️ Respawn at checkpoint (${remainingLives} lives remaining)`);
+            this.scene.time.delayedCall(2000, () => {
+                this.respawnAtCheckpoint(checkpointManager, onGameOver);
+            });
+        } else {
+            // No lives left - restart level from beginning
+            console.log("💀 No lives remaining - restarting level");
+            this.scene.time.delayedCall(2000, () => {
+                this.restartLevel(onGameOver);
+            });
+        }
+    }
+    
+    respawnAtCheckpoint(checkpointManager, onGameOver) {
+        const checkpoint = checkpointManager.getLastCheckpoint();
+        if (!checkpoint) {
+            console.warn("⚠️ No checkpoint available, using spawn point");
+            // Fallback to level spawn
+            const levelConfig = this.scene.levelManager?.currentLevelConfig || this.scene.selectedLevelConfig;
+            if (levelConfig && levelConfig.spawn) {
+                this.respawnAtPosition(levelConfig.spawn.x, levelConfig.spawn.y, onGameOver);
             }
-            console.log("Both characters respawned!");
-            if (onGameOver) {
-                onGameOver();
+            return;
+        }
+        
+        this.respawnAtPosition(checkpoint.x, checkpoint.y, onGameOver);
+    }
+    
+    respawnAtPosition(x, y, onGameOver) {
+        // Restore both characters to full health
+        this.characters.tireek.health = this.characters.tireek.maxHealth;
+        this.characters.tryston.health = this.characters.tryston.maxHealth;
+        
+        // Clear all enemies
+        if (this.scene.enemySpawnManager) {
+            this.scene.enemySpawnManager.destroyAll();
+        }
+        
+        // Reset both character sprites to checkpoint position
+        Object.values(this.characters).forEach(charData => {
+            if (charData.sprite) {
+                charData.sprite.setPosition(x, y);
+                if (charData.sprite.body) {
+                    charData.sprite.body.reset(x, y);
+                    charData.sprite.body.setVelocity(0, 0);
+                }
             }
         });
+        
+        // Reset active player position
+        if (this.scene.player) {
+            this.scene.player.x = x;
+            this.scene.player.y = y;
+            if (this.scene.player.body) {
+                this.scene.player.body.reset(x, y);
+                this.scene.player.body.setVelocity(0, 0);
+            }
+        }
+        
+        // Reset camera to checkpoint position
+        if (this.scene.cameras && this.scene.cameras.main) {
+            this.scene.cameras.main.setScroll(x - this.scene.cameras.main.width / 2, 0);
+        }
+        
+        // Update health display
+        if (this.uiManager) {
+            this.uiManager.updateDualCharacterHealth(
+                this.characters.tireek.health,
+                this.characters.tryston.health,
+                this.selectedCharacter
+            );
+        }
+        
+        console.log(`📍 Respawned at checkpoint (${x}, ${y})`);
+        
+        if (onGameOver) {
+            onGameOver();
+        }
+    }
+    
+    restartLevel(onGameOver) {
+        // Reset lives
+        if (this.scene.livesManager) {
+            this.scene.livesManager.reset();
+            if (this.uiManager) {
+                this.uiManager.updateLivesDisplay(this.scene.livesManager.getLives());
+            }
+        }
+        
+        // Reset checkpoints
+        if (this.scene.checkpointManager) {
+            this.scene.checkpointManager.reset();
+        }
+        
+        // Get level spawn point
+        const levelConfig = this.scene.levelManager?.currentLevelConfig || this.scene.selectedLevelConfig;
+        if (levelConfig && levelConfig.spawn) {
+            this.respawnAtPosition(levelConfig.spawn.x, levelConfig.spawn.y, onGameOver);
+        } else {
+            console.warn("⚠️ No level spawn point available");
+        }
     }
     
     // ========================================

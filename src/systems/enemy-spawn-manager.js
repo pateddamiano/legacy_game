@@ -112,8 +112,8 @@ class EnemySpawnManager {
                 }
                 
                 // LEGACY: Skip cleanup for enemies managed by the event system
-                // Check if enemy is paused by events or is in the eventEnemyMap
-                const isEventManaged = enemy.eventPaused === true;
+                // Only skip cleanup for enemies that are actually event-managed (in eventEnemyMap or have eventId)
+                // OR if there's an active event and the enemy is paused (to prevent cleanup during events)
                 const hasEventId = enemy.eventId !== undefined;
                 
                 // Check if this enemy index is in the eventEnemyMap (more robust check)
@@ -128,9 +128,19 @@ class EnemySpawnManager {
                     }
                 }
                 
-                if (isEventManaged || isInEventMap || hasEventId) {
+                // Check if there's an active event and enemy is paused (temporary pause during event)
+                const isPausedDuringEvent = enemy.eventPaused === true && 
+                    this.scene.eventManager && 
+                    this.scene.eventManager.activeEvent !== null;
+                
+                // Only skip cleanup for actually event-managed enemies OR enemies paused during active events
+                if (isInEventMap || hasEventId || isPausedDuringEvent) {
                     // Don't cleanup event-managed enemies - let the event system handle them
-                    console.log(`🧹 Skipping cleanup for event-managed enemy: eventPaused=${isEventManaged}, hasEventId=${hasEventId}, inEventMap=${isInEventMap}`);
+                    // Also don't cleanup enemies that are paused during an active event
+                    if (isInEventMap || hasEventId) {
+                        // Only log for actually event-managed enemies to reduce spam
+                        console.log(`🧹 Skipping cleanup for event-managed enemy: hasEventId=${hasEventId}, inEventMap=${isInEventMap}`);
+                    }
                     return;
                 }
                 

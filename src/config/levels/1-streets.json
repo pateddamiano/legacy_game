@@ -24,7 +24,7 @@
       "id": "level_1_intro",
       "trigger": { "type": "position", "value": 185, "tolerance": 40, "once": true },
       "actions": [
-        { "type": "pause", "targets": ["player"] },
+        { "type": "pause", "targets": ["player", "enemies"] },
         { "type": "camera", "stopFollow": true },
         { "type": "spawnExtra", "name": "rozotadi", "position": { "x": 542, "y": 513 }, "id": "extra_rozotadi", "matchPlayer": true, "multiplier": 1.0 },
         { "type": "flip", "target": "extra_rozotadi", "flipX": true },
@@ -33,7 +33,7 @@
         { "type": "dialogue", "dialogue": { "speaker": "Rozotadi", "text": "Go get that drive back!", "dimBackground": false } },
         { "type": "destroyExtra", "target": "extra_rozotadi" },
         { "type": "camera", "follow": "player" },
-        { "type": "resume", "targets": ["player"] }
+        { "type": "resume", "targets": ["player", "enemies"] }
       ]
     },
     {
@@ -56,6 +56,7 @@
         { "type": "waitForEnemyDestroy", "target": "enemy_critic" },
         { "type": "dialogue", "dialogue": { "speaker": "Narrator", "text": "Survive the fight to go after The Critic!" } },
         { "type": "wait", "duration": 500 },
+        { "type": "clearAllEnemies", "excludeIds": [] },
         { "type": "resume", "targets": ["player", "enemies"] },
         { "type": "camera", "stopFollow": true },
         { "type": "setPlayerBounds", "bounds": { "minX": 7850, "maxX": 9040, "minY": 410, "maxY": 650 } },
@@ -63,7 +64,9 @@
         { "type": "wait", "duration": 20000 },
         { "type": "stopEnemySpawning", "clearEnemies": false },
         { "type": "waitForEnemiesCleared" },
+        { "type": "pause", "targets": ["player", "enemies"] },
         { "type": "dialogue", "dialogue": { "speaker": "Narrator", "text": "Enter the subway to chase The Critic!" } },
+        { "type": "resume", "targets": ["player", "enemies"] },
         { "type": "waitForZone", "zone": { "x1": 8550, "x2": 8753, "y1": 380, "y2": 440 } },
         { "type": "fade", "direction": "out", "duration": 1000, "color": { "r": 0, "g": 0, "b": 0 } },
         { "type": "loadLevel", "levelId": 2 }

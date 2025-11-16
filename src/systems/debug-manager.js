@@ -32,6 +32,7 @@ class DebugManager {
         this.recordKeyCooldown = 0;
         this.debugToggleKey = null;
         this.gridToggleKey = null;
+        this.checkpointKeysPreviousState = {}; // Track previous state for manual JustDown detection
         
         // References (set during initialization)
         this.player = null;
@@ -52,10 +53,24 @@ class DebugManager {
         this.coordinateRecordingEnabled = coordinateRecordingEnabled || false;
         this.debugOverlayVisible = debugOverlayVisible || false;
         
+        console.log('🔍 [DebugManager] initialize() called:', {
+            isTestMode: this.isTestMode,
+            DEBUG_MODE: window.DEBUG_MODE,
+            coordinateRecordingEnabled: this.coordinateRecordingEnabled,
+            debugOverlayVisible: this.debugOverlayVisible
+        });
+        
         if (this.isTestMode || window.DEBUG_MODE) {
+            console.log('🔍 [DebugManager] Setting up debug features...');
             this.createDebugOverlay();
             this.setupCoordinateRecording();
             this.createDebugUI();
+            this.setupCheckpointNavigation();
+        } else {
+            console.log('🔍 [DebugManager] Debug mode not enabled - skipping debug features');
+            // Still set up checkpoint navigation for developers
+            console.log('🔍 [DebugManager] Setting up checkpoint navigation anyway (developer feature)');
+            this.setupCheckpointNavigation();
         }
     }
     
@@ -76,6 +91,58 @@ class DebugManager {
             this.updateCoordinateRecording();
             this.updateDebugOverlay();
         }
+        // Always update checkpoint navigation (developer feature)
+        this.updateCheckpointNavigation();
+    }
+    
+    updateCheckpointNavigation() {
+        // Debug: Check if checkpointKeys exists
+        if (!this.checkpointKeys) {
+            console.log('🔍 [Checkpoint Nav] checkpointKeys not initialized');
+            return;
+        }
+        
+        // Debug: Check if checkpointManager exists
+        if (!this.scene.checkpointManager) {
+            console.log('🔍 [Checkpoint Nav] checkpointManager not available on scene');
+            return;
+        }
+        
+        // Check for keys 1-9 pressed
+        for (let i = 1; i <= 9; i++) {
+            if (this.checkpointKeys[i]) {
+                const isDown = this.checkpointKeys[i].isDown;
+                const wasDown = this.checkpointKeysPreviousState[i] || false;
+                
+                // Debug: Log key state changes (only for keys 1-4 to reduce spam)
+                if (i <= 4 && (isDown || wasDown)) {
+                    console.log(`🔍 [Checkpoint Nav] Key ${i}: isDown=${isDown}, wasDown=${wasDown}, keyCode=${48 + i}`);
+                }
+                
+                // Check if key was just pressed (transition from up to down)
+                if (isDown && !wasDown) {
+                    console.log(`🔍 [Checkpoint Nav] Key ${i} just pressed!`);
+                    const checkpointIndex = i - 1; // Convert to 0-based index
+                    const checkpointCount = this.scene.checkpointManager.getCheckpointCount();
+                    console.log(`🔍 [Checkpoint Nav] Requesting checkpoint ${checkpointIndex} (total checkpoints: ${checkpointCount})`);
+                    
+                    if (checkpointIndex < checkpointCount) {
+                        console.log(`🔍 [Checkpoint Nav] Calling jumpToCheckpoint(${checkpointIndex})`);
+                        this.jumpToCheckpoint(checkpointIndex);
+                    } else {
+                        console.warn(`⚠️ Checkpoint ${i} not available (only ${checkpointCount} checkpoints)`);
+                    }
+                }
+                
+                // Update previous state
+                this.checkpointKeysPreviousState[i] = isDown;
+            } else {
+                // Debug: Log if key object doesn't exist
+                if (i <= 4) {
+                    console.log(`🔍 [Checkpoint Nav] Key ${i} object not found in checkpointKeys`);
+                }
+            }
+        }
     }
     
     // ========================================
@@ -95,37 +162,37 @@ class DebugManager {
         this.debugOverlayContainer.setDepth(20000);
         this.debugOverlayContainer.setScrollFactor(0); // Fixed to screen
         
-        // Position display (top-left)
+        // Position display (top-left) - smaller font
         this.debugPositionText = this.scene.add.text(10, 10, '', {
-            fontSize: GAME_CONFIG.ui.fontSize.micro,
+            fontSize: '10px', // Much smaller
             fill: '#00ff00',
             fontFamily: GAME_CONFIG.ui.fontFamily,
             backgroundColor: '#000000',
-            padding: { x: 8, y: 4 }
+            padding: { x: 4, y: 2 }
         });
         this.debugPositionText.setOrigin(0, 0);
         this.debugPositionText.setScrollFactor(0);
         this.debugPositionText.setDepth(20001);
         
-        // Camera info (top-right)
+        // Camera info (top-right) - smaller font
         this.debugCameraText = this.scene.add.text(1190, 10, '', {
-            fontSize: GAME_CONFIG.ui.fontSize.micro,
+            fontSize: '10px', // Much smaller
             fill: '#00ffff',
             fontFamily: GAME_CONFIG.ui.fontFamily,
             backgroundColor: '#000000',
-            padding: { x: 8, y: 4 }
+            padding: { x: 4, y: 2 }
         });
         this.debugCameraText.setOrigin(1, 0);
         this.debugCameraText.setScrollFactor(0);
         this.debugCameraText.setDepth(20001);
         
-        // Instructions (bottom-left)
-        this.debugInstructionsText = this.scene.add.text(10, 710, 'R: Record | D: Toggle Overlay | G: Grid', {
-            fontSize: GAME_CONFIG.ui.fontSize.mini,
+        // Instructions (bottom-left) - smaller font
+        this.debugInstructionsText = this.scene.add.text(10, 710, 'R: Record | D: Toggle | G: Grid | 1-9: Checkpoints', {
+            fontSize: '10px', // Much smaller
             fill: '#ffffff',
             fontFamily: GAME_CONFIG.ui.fontFamily,
             backgroundColor: '#000000',
-            padding: { x: 8, y: 4 }
+            padding: { x: 4, y: 2 }
         });
         this.debugInstructionsText.setOrigin(0, 1);
         this.debugInstructionsText.setScrollFactor(0);
@@ -182,11 +249,7 @@ class DebugManager {
         const percentage = ((this.player.x - worldBounds.x) / worldBounds.width * 100).toFixed(2);
         
         this.debugPositionText.setText(
-            `Player Position\n` +
-            `X: ${Math.round(this.player.x)}\n` +
-            `Y: ${Math.round(this.player.y)}\n` +
-            `Progress: ${percentage}%\n` +
-            `Recorded: ${this.recordedPositions.length}`
+            `Pos: (${Math.round(this.player.x)}, ${Math.round(this.player.y)}) | ${percentage}% | Rec: ${this.recordedPositions.length}`
         );
         
         // Update camera display
@@ -196,11 +259,7 @@ class DebugManager {
         const atEnd = cameraRightEdge >= worldRightEdge - 10;
         
         this.debugCameraText.setText(
-            `Camera\n` +
-            `X: ${Math.round(camera.scrollX)}\n` +
-            `Right: ${Math.round(cameraRightEdge)}\n` +
-            `World End: ${Math.round(worldRightEdge)}\n` +
-            `At End: ${atEnd ? 'YES' : 'NO'}`
+            `Cam: ${Math.round(camera.scrollX)} | End: ${atEnd ? 'YES' : 'NO'}`
         );
         
         // Update grid overlay
@@ -276,6 +335,75 @@ class DebugManager {
         this.recordKeyCooldown = 0;
         
         console.log('🧪 Coordinate recording ready! Press R to record position.');
+    }
+    
+    setupCheckpointNavigation() {
+        console.log('🧪 Setting up checkpoint navigation...');
+        
+        // Create keyboard handlers for keys 1-9
+        // Track previous state for manual JustDown detection
+        this.checkpointKeys = {};
+        this.checkpointKeysPreviousState = {};
+        
+        for (let i = 1; i <= 9; i++) {
+            const keyCode = 48 + i; // 49-57 for keys 1-9
+            this.checkpointKeys[i] = this.scene.input.keyboard.addKey(keyCode);
+            this.checkpointKeysPreviousState[i] = false;
+            console.log(`🧪 [Checkpoint Nav] Registered key ${i} with keyCode ${keyCode}`, this.checkpointKeys[i]);
+        }
+        
+        console.log('🧪 Checkpoint navigation ready! Press 1-9 to jump to checkpoints.');
+        console.log('🧪 [Checkpoint Nav] checkpointKeys object:', this.checkpointKeys);
+    }
+    
+    jumpToCheckpoint(index) {
+        console.log(`🔍 [JumpToCheckpoint] Called with index ${index}`);
+        
+        if (!this.scene.checkpointManager) {
+            console.warn('⚠️ [JumpToCheckpoint] CheckpointManager not available on scene');
+            return;
+        }
+        
+        // Get player from scene directly (more reliable than stored reference)
+        const player = this.scene.player || this.player;
+        if (!player) {
+            console.warn('⚠️ [JumpToCheckpoint] Player not available (checked scene.player and this.player)');
+            return;
+        }
+        
+        console.log(`🔍 [JumpToCheckpoint] Getting checkpoint at index ${index}`);
+        const checkpoint = this.scene.checkpointManager.getCheckpointByIndex(index);
+        if (!checkpoint) {
+            console.warn(`⚠️ [JumpToCheckpoint] Checkpoint ${index} not available`);
+            return;
+        }
+        
+        console.log(`🔍 [JumpToCheckpoint] Checkpoint found:`, checkpoint);
+        console.log(`🔍 [JumpToCheckpoint] Current player position: (${player.x}, ${player.y})`);
+        
+        // Teleport player to checkpoint
+        player.x = checkpoint.x;
+        player.y = checkpoint.y;
+        if (player.body) {
+            player.body.reset(checkpoint.x, checkpoint.y);
+            player.body.setVelocity(0, 0);
+            console.log(`🔍 [JumpToCheckpoint] Player body reset to (${checkpoint.x}, ${checkpoint.y})`);
+        }
+        
+        // Update camera position
+        if (this.scene.cameras && this.scene.cameras.main) {
+            const cameraX = checkpoint.x - this.scene.cameras.main.width / 2;
+            this.scene.cameras.main.setScroll(cameraX, 0);
+            console.log(`🔍 [JumpToCheckpoint] Camera set to scrollX: ${cameraX}`);
+        }
+        
+        // Update checkpoint progress
+        if (this.scene.checkpointManager && this.scene.physics && this.scene.physics.world) {
+            const worldBounds = this.scene.physics.world.bounds;
+            this.scene.checkpointManager.checkProgress(checkpoint.x, worldBounds);
+        }
+        
+        console.log(`📍 [JumpToCheckpoint] Successfully jumped to checkpoint ${index} at (${checkpoint.x}, ${checkpoint.y})`);
     }
     
     updateCoordinateRecording() {

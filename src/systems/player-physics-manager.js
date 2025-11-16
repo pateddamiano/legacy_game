@@ -37,6 +37,11 @@ class PlayerPhysicsManager {
     // ========================================
     
     update(delta) {
+        // Skip updates if disabled (e.g., during level transitions)
+        if (this.disabled) {
+            return;
+        }
+        
         this.handleMovement();
         this.handleJumping();
         this.handleAnimations();
@@ -109,7 +114,7 @@ class PlayerPhysicsManager {
     
     handleJumping() {
         // Skip if player not initialized yet
-        if (!this.player) return;
+        if (!this.player || !this.player.body) return;
         
         // Handle landing from jump
         if (this.isJumping) {
@@ -197,7 +202,7 @@ class PlayerPhysicsManager {
     
     handleAnimations() {
         // Skip if animation manager or player not initialized yet
-        if (!this.animationManager || !this.player) return;
+        if (!this.animationManager || !this.player || !this.player.body) return;
         
         const charName = this.player.characterConfig.name;
         
@@ -233,6 +238,9 @@ class PlayerPhysicsManager {
     // ========================================
     
     updatePerspective() {
+        // Skip if player not initialized yet
+        if (!this.player || !this.player.characterConfig) return;
+        
         // Calculate scale based on Y position (perspective effect) with baseScale multiplier from config
         // Get perspective scales from character config (defaults if not specified)
         const perspectiveScales = this.player.characterConfig.perspectiveScales || {minScale: 3.0, maxScale: 4.0};

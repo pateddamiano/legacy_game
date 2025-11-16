@@ -80,10 +80,17 @@ class LevelInitializationManager {
         characterManager.createCharacters();
         console.log(`🎯 Both characters created, active: ${characterManager.getActiveCharacterName()}`);
         
-        // Update camera bounds to match the loaded world
-        const worldWidth = (this.scene.physics && this.scene.physics.world && this.scene.physics.world.bounds) ? this.scene.physics.world.bounds.width : 1200;
-        const worldHeight = (this.scene.physics && this.scene.physics.world && this.scene.physics.world.bounds) ? this.scene.physics.world.bounds.height : 720;
-        this.scene.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
+        // Update camera bounds to match the loaded world (use actual physics world bounds)
+        if (this.scene.physics && this.scene.physics.world && this.scene.physics.world.bounds) {
+            const worldBounds = this.scene.physics.world.bounds;
+            this.scene.cameras.main.setBounds(worldBounds.x, worldBounds.y, worldBounds.width, worldBounds.height);
+            console.log(`🎯 Camera bounds set to match physics world: x=${worldBounds.x}, y=${worldBounds.y}, width=${worldBounds.width}, height=${worldBounds.height}`);
+        } else {
+            // Fallback if physics world bounds not available
+            const worldWidth = 1200;
+            const worldHeight = 720;
+            this.scene.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
+        }
         
         return { streetTopLimit, streetBottomLimit };
     }

@@ -789,7 +789,7 @@ class Enemy {
         }
         
         this.health -= damage;
-        console.log(`Enemy ${this.characterConfig.name} takes ${damage} damage (${this.health}/${this.maxHealth} HP)`);
+        //console.log(`Enemy ${this.characterConfig.name} takes ${damage} damage (${this.health}/${this.maxHealth} HP)`);
         
         // Apply knockback if source is provided
         if (knockbackSource && this.sprite && this.sprite.body) {
@@ -804,7 +804,7 @@ class Enemy {
             // Apply knockback velocity
             this.sprite.setVelocityX(knockbackVelocity);
             
-            console.log(`💥 Knockback applied to ${this.characterConfig.name}: ${knockbackVelocity}px/s for ${ENEMY_CONFIG.knockbackDuration}ms`);
+            // console.log(`💥 Knockback applied to ${this.characterConfig.name}: ${knockbackVelocity}px/s for ${ENEMY_CONFIG.knockbackDuration}ms`);
             
             // Clear knockback after duration
             this.scene.time.delayedCall(ENEMY_CONFIG.knockbackDuration, () => {

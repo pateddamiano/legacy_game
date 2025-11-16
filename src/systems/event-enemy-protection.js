@@ -76,16 +76,21 @@ class EventEnemyProtection {
     /**
      * Unregister an enemy from protection
      * @param {string} enemyId - Enemy identifier to unregister
+     * @returns {boolean} True if unregistered, false if already unregistered (idempotent)
      */
     unregisterEnemy(enemyId) {
         const registration = this.protectedEnemies.get(enemyId);
         if (!registration) {
-            console.warn(`🛡️ Cannot unregister enemy: ${enemyId} not found in registry`);
+            // Idempotent: safe to call multiple times - just return silently if already unregistered
+            // Only log at debug level to reduce console spam
+            // console.log(`🛡️ Enemy ${enemyId} not found in registry (may already be unregistered)`);
             return false;
         }
         
-        // Remove from both maps
-        this.enemyLookup.delete(registration.enemy);
+        // Remove from both maps (both operations are safe even if key doesn't exist)
+        if (registration.enemy) {
+            this.enemyLookup.delete(registration.enemy);
+        }
         this.protectedEnemies.delete(enemyId);
         this.stats.unregistered++;
         

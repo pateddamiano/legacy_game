@@ -33,6 +33,11 @@ class UIManager {
         this.bossHealthBarVisible = false;
         this.currentBoss = null;
         
+        // Lives display elements
+        this.livesContainer = null;
+        this.livesBox = null;
+        this.livesPlusSymbols = [];
+        
         console.log('🎨 UIManager initialized!');
     }
     
@@ -53,6 +58,9 @@ class UIManager {
         
         // Create health bar UI
         this.createHealthBar();
+        
+        // Create lives display
+        this.createLivesDisplay();
         
         // Create score display
         this.createScoreDisplay();
@@ -271,6 +279,112 @@ class UIManager {
             if (isActive) {
                 graphics.fillStyle(0xffffff, 0.3);
                 graphics.fillRect(x, y, currentWidth, height * 0.4);
+            }
+        }
+    }
+    
+    // ========================================
+    // LIVES DISPLAY SYSTEM
+    // ========================================
+    
+    createLivesDisplay() {
+        // Position below health bar (FuturisticHealthBar is at y:60, height ~84px, so lives at y:160 for spacing)
+        const livesX = 70;
+        const livesY = 160; // Moved down from 120 to avoid overlap
+        const boxWidth = 120;
+        const boxHeight = 40;
+        const plusSize = 32; // Increased from 24 to 32
+        const plusSpacing = 32; // Adjusted spacing for bigger symbols
+        
+        // Create container for lives display
+        this.livesContainer = this.scene.add.container(livesX, livesY);
+        this.livesContainer.setDepth(2000);
+        this.livesContainer.setScrollFactor(0);
+        
+        // Create gray box background with bezel
+        // Outer border (bezel effect)
+        const bezelGraphics = this.scene.add.graphics();
+        bezelGraphics.fillStyle(0x000000, 0.6); // Dark outer border
+        bezelGraphics.fillRoundedRect(0, 0, boxWidth, boxHeight, 4);
+        bezelGraphics.setDepth(0);
+        this.livesContainer.add(bezelGraphics);
+        
+        // Inner box (gray background)
+        this.livesBox = this.scene.add.rectangle(
+            boxWidth / 2,
+            boxHeight / 2,
+            boxWidth - 4,
+            boxHeight - 4,
+            0x2a2a2a
+        );
+        this.livesBox.setOrigin(0.5, 0.5);
+        this.livesBox.setDepth(1);
+        this.livesContainer.add(this.livesBox);
+        
+        // Calculate centered position for plus symbols
+        // We have 3 symbols with spacing between their centers
+        // Total span from first to last center: 2 * spacing (2 gaps between 3 symbols)
+        const totalSpan = 2 * plusSpacing; // Distance from first to last symbol center
+        const plusStartX = (boxWidth - totalSpan) / 2; // Center the group horizontally
+        const plusY = boxHeight / 2; // Center vertically in box
+        
+        // Create 3 plus symbols with drop shadows
+        this.livesPlusSymbols = [];
+        for (let i = 0; i < 3; i++) {
+            const plusX = plusStartX + (i * plusSpacing); // Relative to container, centered
+            
+            // Drop shadow (offset slightly down and right)
+            const shadow = this.scene.add.text(plusX + 2, plusY + 2, '+', {
+                fontSize: `${plusSize}px`,
+                fontFamily: GAME_CONFIG.ui.fontFamily,
+                fontWeight: 'bold',
+                fill: '#000000',
+                alpha: 0.5
+            });
+            shadow.setOrigin(0.5, 0.5);
+            shadow.setDepth(2);
+            this.livesContainer.add(shadow);
+            
+            // Plus symbol (yellow)
+            const plusSymbol = this.scene.add.text(plusX, plusY, '+', {
+                fontSize: `${plusSize}px`,
+                fontFamily: GAME_CONFIG.ui.fontFamily,
+                fontWeight: 'bold',
+                fill: '#FFD700' // Yellow
+            });
+            plusSymbol.setOrigin(0.5, 0.5);
+            plusSymbol.setDepth(3);
+            this.livesContainer.add(plusSymbol);
+            
+            this.livesPlusSymbols.push({
+                symbol: plusSymbol,
+                shadow: shadow
+            });
+        }
+        
+        console.log('❤️ Lives display created');
+    }
+    
+    updateLivesDisplay(lives) {
+        if (!this.livesPlusSymbols || this.livesPlusSymbols.length === 0) {
+            return;
+        }
+        
+        // Update each plus symbol based on remaining lives
+        for (let i = 0; i < this.livesPlusSymbols.length; i++) {
+            const life = this.livesPlusSymbols[i];
+            const isActive = i < lives;
+            
+            if (isActive) {
+                // Active life: yellow with visible shadow
+                life.symbol.setFill('#FFD700');
+                life.symbol.setAlpha(1.0);
+                life.shadow.setAlpha(0.5);
+            } else {
+                // Lost life: greyed out
+                life.symbol.setFill('#666666');
+                life.symbol.setAlpha(0.5);
+                life.shadow.setAlpha(0.2);
             }
         }
     }

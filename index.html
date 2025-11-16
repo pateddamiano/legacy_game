@@ -77,7 +77,20 @@
     <script src="src/systems/boss-system.js?v=1.0.0"></script>
     <script src="src/systems/extras-manager.js?v=1.0.0"></script>
     <script src="src/systems/event-enemy-protection.js?v=1.0.0"></script>
-    <script src="src/systems/event-manager.js?v=1.0.1"></script>
+    
+    <!-- Event Manager Modules - Load in dependency order -->
+    <script src="src/systems/event-utilities.js?v=1.0.0"></script>
+    <script src="src/systems/event-entity-manager.js?v=1.0.0"></script>
+    <script src="src/systems/event-cinematic-manager.js?v=1.0.0"></script>
+    <script src="src/systems/event-actions/enemy-actions.js?v=1.0.0"></script>
+    <script src="src/systems/event-actions/boss-actions.js?v=1.0.0"></script>
+    <script src="src/systems/event-actions/camera-actions.js?v=1.0.0"></script>
+    <script src="src/systems/event-actions/movement-actions.js?v=1.0.0"></script>
+    <script src="src/systems/event-actions/scene-actions.js?v=1.0.0"></script>
+    <script src="src/systems/event-actions/spawning-actions.js?v=1.0.0"></script>
+    <script src="src/systems/event-actions/extras-actions.js?v=1.0.0"></script>
+    <script src="src/systems/event-actions/special-actions.js?v=1.0.0"></script>
+    <script src="src/systems/event-manager.js?v=2.0.0"></script>
     <script src="src/systems/item-pickup-system.js?v=6.7.0"></script>
     <script src="src/systems/level-manager.js?v=2.0.0"></script>
     
@@ -90,6 +103,9 @@
     <script src="src/systems/effect-system.js?v=1.0.0"></script>
     <script src="src/systems/debug-manager.js?v=1.0.0"></script>
     <script src="src/systems/level-initialization-manager.js?v=1.0.0"></script>
+    <script src="src/systems/level-transition-manager.js?v=1.0.0"></script>
+    <script src="src/systems/checkpoint-manager.js?v=1.0.0"></script>
+    <script src="src/systems/lives-manager.js?v=1.0.0"></script>
 
     <!-- JSON-based Level System -->
     <script src="src/systems/level/LevelRegistry.js?v=1.0.0"></script>

@@ -21,19 +21,51 @@ class LevelAssetLoader {
                 }
             });
 
-            // Background metadata for segmented types will be handled by WorldFactory
-            // but we can pre-queue here to reduce latency
+            // Background metadata for segmented types - load metadata first, then segments
             if (levelJson.background && levelJson.background.type === 'segmented') {
                 const metaKey = this.getMetadataKey(levelJson);
+                const worldId = `level_${levelJson.id}`;
+                
+                // Load metadata if not already cached
                 if (!scene.cache.json.exists(metaKey)) {
-                    scene.load.json(metaKey, levelJson.background.metadata);
-                    this.log('Queue metadata', metaKey, levelJson.background.metadata);
+                    await new Promise((metaResolve) => {
+                        scene.load.json(metaKey, levelJson.background.metadata);
+                        scene.load.once('filecomplete-json-' + metaKey, () => {
+                            this.log('Metadata loaded', metaKey);
+                            metaResolve();
+                        });
+                        if (!scene.load.isLoading()) scene.load.start();
+                    });
+                }
+                
+                // Now load segment images if not already cached
+                const metadata = scene.cache.json.get(metaKey);
+                if (metadata && metadata.segments) {
+                    metadata.segments.forEach(segment => {
+                        const segmentKey = `${worldId}_segment_${segment.index.toString().padStart(3, '0')}`;
+                        if (!scene.textures.exists(segmentKey)) {
+                            const segmentPath = `${levelJson.background.dir}/${segment.filename}`;
+                            scene.load.image(segmentKey, segmentPath);
+                            this.log('Queue segment', segmentKey, segmentPath);
+                        }
+                    });
                 }
             }
 
-            if (scene.load.list.size === 0) { resolve(true); return; }
-            scene.load.once('complete', () => resolve(true));
-            if (!scene.load.isLoading()) scene.load.start();
+            // Wait for all queued assets to load
+            if (scene.load.list.size === 0) { 
+                resolve(true); 
+                return; 
+            }
+            
+            scene.load.once('complete', () => {
+                this.log('All assets loaded for level', levelJson.id);
+                resolve(true);
+            });
+            
+            if (!scene.load.isLoading()) {
+                scene.load.start();
+            }
         });
     }
 
