@@ -70,13 +70,15 @@ class UIManager {
     }
     
     createDebugText() {
-        // Add visual debug text on screen - positioned below health bar to avoid overlap
-        this.debugText = this.scene.add.text(10, 55, 'Debug: OFF (Press D to toggle)', {
-            fontSize: GAME_CONFIG.ui.fontSize.tiny,
+        // Add visual debug text on screen - positioned in bottom left corner
+        const screenHeight = 720; // Game screen height
+        this.debugText = this.scene.add.text(10, screenHeight - 10, 'Debug: OFF (Press D to toggle)', {
+            fontSize: '10px', // Smaller font size
             fill: '#ff0000',
             backgroundColor: '#ffffff',
-            padding: { x: 10, y: 5 }
+            padding: { x: 8, y: 4 }
         });
+        this.debugText.setOrigin(0, 1); // Anchor to bottom-left
         this.debugText.setDepth(2000);
         this.debugText.setScrollFactor(0);
         this.debugText.setVisible(false); // Hidden by default

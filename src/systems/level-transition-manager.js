@@ -146,21 +146,57 @@ class LevelTransitionManager {
             this.debugLog('Player velocity and acceleration cleared');
         }
         
+        // Clear event player bounds from previous level
+        if (this.scene.eventPlayerBounds) {
+            this.debugLog('Clearing eventPlayerBounds from previous level');
+            this.scene.eventPlayerBounds = null;
+        }
+        
         // Preserve current state
         this.preserveState();
         
-        // Fade out camera
+        // Fade out camera (only if not already faded or fading)
         const camera = this.scene.cameras.main;
-        this.debugLog(`Fading out camera (duration: ${fadeDuration}ms)`);
-        camera.fadeOut(fadeDuration, 0, 0, 0);
         
-        // Wait for fade out to complete
-        await new Promise((resolve) => {
-            camera.once('camerafadeoutcomplete', () => {
-                this.debugLog('Fade out complete');
-                resolve();
+        // Check if camera is already faded out or currently fading
+        // In Phaser 3, _fadeAlpha tracks the fade overlay alpha (0 = transparent, 1 = fully opaque)
+        const fadeAlpha = camera._fadeAlpha !== undefined ? camera._fadeAlpha : 0;
+        const isAlreadyFaded = fadeAlpha >= 0.99; // Close enough to fully faded
+        
+        if (isAlreadyFaded) {
+            this.debugLog(`Camera already faded out (alpha: ${fadeAlpha.toFixed(2)}), skipping fade`);
+            // Wait for any existing fade to complete, or just proceed if already fully faded
+            await new Promise((resolve) => {
+                // Check if there's an active fade effect
+                const hasActiveFade = camera._fadeEffect && 
+                                     camera._fadeEffect.isRunning && 
+                                     typeof camera._fadeEffect.isRunning === 'function' &&
+                                     camera._fadeEffect.isRunning();
+                
+                if (hasActiveFade) {
+                    // Wait for the existing fade to complete
+                    camera.once('camerafadeoutcomplete', () => {
+                        this.debugLog('Existing fade out complete');
+                        resolve();
+                    });
+                } else {
+                    // Already fully faded, proceed immediately
+                    this.debugLog('Camera fully faded, proceeding immediately');
+                    setTimeout(resolve, 50);
+                }
             });
-        });
+        } else {
+            this.debugLog(`Fading out camera (duration: ${fadeDuration}ms, current alpha: ${fadeAlpha.toFixed(2)})`);
+            camera.fadeOut(fadeDuration, 0, 0, 0);
+            
+            // Wait for fade out to complete
+            await new Promise((resolve) => {
+                camera.once('camerafadeoutcomplete', () => {
+                    this.debugLog('Fade out complete');
+                    resolve();
+                });
+            });
+        }
         
         // Cleanup previous level
         this.debugLog('Cleaning up previous level...');
@@ -203,6 +239,16 @@ class LevelTransitionManager {
         this.scene.selectedLevelId = levelId;
         this.debugLog(`Updated selectedLevelId to: ${levelId}`);
         
+        // CRITICAL: Clear old player reference BEFORE loading new level
+        // This prevents the old player sprite from interfering with new level setup
+        const oldPlayerBeforeLoad = this.scene.player;
+        if (oldPlayerBeforeLoad) {
+            this.debugLog(`Clearing old player reference before loading new level. Old player was at: (${oldPlayerBeforeLoad.x}, ${oldPlayerBeforeLoad.y})`);
+            // Don't destroy the sprite here - character manager will handle that
+            // But clear the reference so we don't accidentally use it
+            this.scene.player = null;
+        }
+        
         // Initialize level via LevelInitializationManager
         this.debugLog('Calling levelInitializationManager.initializeLevel...');
         await new Promise((resolve) => {
@@ -242,8 +288,7 @@ class LevelTransitionManager {
         // we need to call it manually
         if (this.scene.onLevelInitializationComplete) {
             this.debugLog('Calling onLevelInitializationComplete...');
-            const oldPlayer = this.scene.player;
-            this.debugLog(`Player before onLevelInitializationComplete: ${oldPlayer ? `(${oldPlayer.x}, ${oldPlayer.y})` : 'null'}`);
+            this.debugLog(`Player reference before onLevelInitializationComplete: ${this.scene.player ? `(${this.scene.player.x}, ${this.scene.player.y})` : 'null'}`);
             
             this.scene.onLevelInitializationComplete();
             
@@ -283,31 +328,10 @@ class LevelTransitionManager {
             });
         });
         
-        // CRITICAL: Lock player position immediately after Phase 2
-        // Something is moving the player between Phase 2 and Phase 3
-        const spawnPoint = this.worldManager.getSpawnPoint();
+        // Log player position after Phase 2 for debugging
         const playerAfterPhase2 = this.scene.player;
         if (playerAfterPhase2) {
-            const playerX = playerAfterPhase2.x;
-            const playerY = playerAfterPhase2.y;
-            this.debugLog(`Phase 2 complete. Player at: (${playerX}, ${playerY})`);
-            
-            // If player moved away from spawn, force it back
-            if (Math.abs(playerX - spawnPoint.x) > 10) {
-                this.debugWarn(`⚠️ Player moved during Phase 2! Was at spawn (379), now at (${playerX}). Forcing back to spawn.`);
-                playerAfterPhase2.x = spawnPoint.x;
-                playerAfterPhase2.y = spawnPoint.y;
-                playerAfterPhase2.setPosition(spawnPoint.x, spawnPoint.y);
-                playerAfterPhase2.setVelocity(0, 0);
-                if (playerAfterPhase2.body) {
-                    playerAfterPhase2.body.x = spawnPoint.x;
-                    playerAfterPhase2.body.y = spawnPoint.y;
-                    playerAfterPhase2.body.reset(spawnPoint.x, spawnPoint.y);
-                    playerAfterPhase2.body.setVelocity(0, 0);
-                    playerAfterPhase2.body.setAcceleration(0, 0);
-                }
-                this.debugLog(`Player forced back to spawn: (${playerAfterPhase2.x}, ${playerAfterPhase2.y})`);
-            }
+            this.debugLog(`Phase 2 complete. Player at: (${playerAfterPhase2.x}, ${playerAfterPhase2.y})`);
         }
     }
     
@@ -321,50 +345,70 @@ class LevelTransitionManager {
         
         // Log spawn point at start of Phase 3 to verify it's correct for new level
         const spawnPointPhase3Start = this.worldManager.getSpawnPoint();
-        this.debugLog(`Spawn point at Phase 3 start: (${spawnPointPhase3Start.x}, ${spawnPointPhase3Start.y})`);
-        this.debugLog(`Camera scroll at Phase 3 start: (${this.scene.cameras.main.scrollX}, ${this.scene.cameras.main.scrollY})`);
+        this.debugLog(`[playerpos] Spawn point at Phase 3 start: (${spawnPointPhase3Start.x}, ${spawnPointPhase3Start.y})`);
+        this.debugLog(`[campos] Camera scroll at Phase 3 start: (${this.scene.cameras.main.scrollX}, ${this.scene.cameras.main.scrollY})`);
         
         // Disable checkpoint checking during transition
         if (this.scene.checkpointManager) {
             this.scene.checkpointManager.isTransitioning = true;
-            this.debugLog('Checkpoint checking disabled');
+            this.debugLog('[playerpos] Checkpoint checking disabled');
         }
         
         // Restore preserved state (this may switch characters)
-        this.debugLog('Restoring preserved state...');
+        this.debugLog('[playerpos] Restoring preserved state...');
         this.restoreState();
-        this.debugLog(`Player after restore: (${this.scene.player?.x || 'N/A'}, ${this.scene.player?.y || 'N/A'})`);
+        this.debugLog(`[playerpos] Player after restore: (${this.scene.player?.x || 'N/A'}, ${this.scene.player?.y || 'N/A'})`);
         
         // CRITICAL: Position player at spawn point AFTER state restoration
         // This ensures we're positioning the correct active character
-        this.debugLog('Positioning player at spawn point...');
+        this.debugLog('[playerpos] Positioning player at spawn point...');
         const spawnPointBeforePosition = this.worldManager.getSpawnPoint();
-        this.debugLog(`Spawn point before positioning: (${spawnPointBeforePosition.x}, ${spawnPointBeforePosition.y})`);
+        this.debugLog(`[playerpos] Spawn point before positioning: (${spawnPointBeforePosition.x}, ${spawnPointBeforePosition.y})`);
         this.positionPlayerAtSpawn();
+        
+        // Log player position immediately after positioning
+        const spawnPointAfterPosition = this.worldManager.getSpawnPoint();
+        const currentPlayerAfterPosition = this.scene.player;
+        this.debugLog(`[playerpos] IMMEDIATE CHECK: player at (${currentPlayerAfterPosition?.x || 'N/A'}, ${currentPlayerAfterPosition?.y || 'N/A'}), spawn at (${spawnPointAfterPosition.x}, ${spawnPointAfterPosition.y})`);
+        if (currentPlayerAfterPosition?.body) {
+            this.debugLog(`[playerpos] IMMEDIATE CHECK body: (${currentPlayerAfterPosition.body.x}, ${currentPlayerAfterPosition.body.y})`);
+        }
+        
+        // Check if eventPlayerBounds is set (could interfere)
+        if (this.scene.eventPlayerBounds) {
+            this.debugWarn(`[playerpos] ⚠️ eventPlayerBounds is set: ${JSON.stringify(this.scene.eventPlayerBounds)}`);
+        }
         
         // Wait a frame to ensure position is set
         this.debugLog('Waiting 10ms for position to settle...');
         await new Promise((resolve) => {
             this.scene.time.delayedCall(10, () => {
+                // Check position again after delay
+                const playerAfterDelay = this.scene.player;
+                this.debugLog(`[playerpos] AFTER DELAY: player at (${playerAfterDelay?.x || 'N/A'}, ${playerAfterDelay?.y || 'N/A'})`);
+                if (playerAfterDelay?.body) {
+                    this.debugLog(`[playerpos] AFTER DELAY body: (${playerAfterDelay.body.x}, ${playerAfterDelay.body.y})`);
+                }
                 resolve();
             });
         });
         
-        // Verify player position is correct
+        // Log player position for debugging
         const spawnPoint = this.worldManager.getSpawnPoint();
         const currentPlayer = this.scene.player;
-        this.debugLog(`Position verification: player at (${currentPlayer?.x || 'N/A'}, ${currentPlayer?.y || 'N/A'}), spawn at (${spawnPoint.x}, ${spawnPoint.y})`);
-        this.debugLog(`Spawn point retrieved for verification: (${spawnPoint.x}, ${spawnPoint.y})`);
+        this.debugLog(`Position after positioning: player at (${currentPlayer?.x || 'N/A'}, ${currentPlayer?.y || 'N/A'}), spawn at (${spawnPoint.x}, ${spawnPoint.y})`);
         
-        if (currentPlayer && Math.abs(currentPlayer.x - spawnPoint.x) > 10) {
-            this.debugWarn(`⚠️ Player position incorrect after positioning! Player at ${currentPlayer.x}, spawn at ${spawnPoint.x}. Forcing reset.`);
+        // If position changed, force it back to spawn
+        if (currentPlayer && (Math.abs(currentPlayer.x - spawnPoint.x) > 10 || Math.abs(currentPlayer.y - spawnPoint.y) > 10)) {
+            this.debugWarn(`[playerpos] ⚠️ Position changed during delay! Forcing back to spawn...`);
+            currentPlayer.x = spawnPoint.x;
+            currentPlayer.y = spawnPoint.y;
             currentPlayer.setPosition(spawnPoint.x, spawnPoint.y);
-            currentPlayer.setVelocity(0, 0);
             if (currentPlayer.body) {
+                currentPlayer.body.x = spawnPoint.x;
+                currentPlayer.body.y = spawnPoint.y;
                 currentPlayer.body.reset(spawnPoint.x, spawnPoint.y);
-                currentPlayer.body.setVelocity(0, 0);
             }
-            this.debugLog(`Position after force reset: (${currentPlayer.x}, ${currentPlayer.y})`);
         }
         
         // Position camera at spawn point (after player is positioned)
@@ -379,36 +423,11 @@ class LevelTransitionManager {
         this.debugLog('Setting up enemy spawner...');
         await this.setupEnemySpawner(levelId);
         
-        // Final position verification and reset
-        this.debugLog('Performing final position verification...');
+        // Log final player position for debugging
         const finalSpawnPoint = this.worldManager.getSpawnPoint();
-        this.debugLog(`Final spawn point retrieved: (${finalSpawnPoint.x}, ${finalSpawnPoint.y})`);
         const finalPlayer = this.scene.player;
         if (finalPlayer) {
-            const finalPlayerX = finalPlayer.x;
-            const finalPlayerY = finalPlayer.y;
-            this.debugLog(`Final check: player at (${finalPlayerX}, ${finalPlayerY}), spawn at (${finalSpawnPoint.x}, ${finalSpawnPoint.y})`);
-            this.debugLog(`Position difference: X=${Math.abs(finalPlayerX - finalSpawnPoint.x)}, Y=${Math.abs(finalPlayerY - finalSpawnPoint.y)}`);
-            
-            if (Math.abs(finalPlayerX - finalSpawnPoint.x) > 10) {
-                this.debugWarn(`⚠️ FINAL POSITION CHECK FAILED! Player at ${finalPlayerX}, spawn at ${finalSpawnPoint.x}. Forcing reset.`);
-                finalPlayer.x = finalSpawnPoint.x;
-                finalPlayer.y = finalSpawnPoint.y;
-                finalPlayer.setPosition(finalSpawnPoint.x, finalSpawnPoint.y);
-                finalPlayer.setVelocity(0, 0);
-                if (finalPlayer.body) {
-                    finalPlayer.body.x = finalSpawnPoint.x;
-                    finalPlayer.body.y = finalSpawnPoint.y;
-                    finalPlayer.body.reset(finalSpawnPoint.x, finalSpawnPoint.y);
-                    finalPlayer.body.setVelocity(0, 0);
-                    finalPlayer.body.setAcceleration(0, 0);
-                }
-                this.debugLog(`Position after final reset: (${finalPlayer.x}, ${finalPlayer.y})`);
-            } else {
-                this.debugLog(`✓ Final position verified: Player correctly at spawn`);
-            }
-        } else {
-            this.debugWarn('⚠️ No player found for final position check!');
+            this.debugLog(`Final position: player at (${finalPlayer.x}, ${finalPlayer.y}), spawn at (${finalSpawnPoint.x}, ${finalSpawnPoint.y})`);
         }
         
         // Re-enable checkpoint checking
@@ -429,21 +448,10 @@ class LevelTransitionManager {
             this.debugLog('Physics manager re-enabled');
         }
         
-        // CRITICAL: Ensure player is still at spawn point before re-enabling systems
+        // Log player position before re-enabling systems
         const finalSpawnCheck = this.worldManager.getSpawnPoint();
-        if (finalSpawnCheck && this.scene.player && Math.abs(this.scene.player.x - finalSpawnCheck.x) > 10) {
-            this.debugWarn(`⚠️ Final spawn check failed! Player at (${this.scene.player.x}, ${this.scene.player.y}), spawn at (${finalSpawnCheck.x}, ${finalSpawnCheck.y})`);
-            this.scene.player.x = finalSpawnCheck.x;
-            this.scene.player.y = finalSpawnCheck.y;
-            this.scene.player.setPosition(finalSpawnCheck.x, finalSpawnCheck.y);
-            if (this.scene.player.body) {
-                this.scene.player.body.x = finalSpawnCheck.x;
-                this.scene.player.body.y = finalSpawnCheck.y;
-                this.scene.player.body.reset(finalSpawnCheck.x, finalSpawnCheck.y);
-                this.scene.player.body.setVelocity(0, 0);
-                this.scene.player.body.setAcceleration(0, 0);
-            }
-            this.debugLog(`Final position corrected to: (${this.scene.player.x}, ${this.scene.player.y})`);
+        if (this.scene.player) {
+            this.debugLog(`Before re-enabling systems: player at (${this.scene.player.x}, ${this.scene.player.y}), spawn at (${finalSpawnCheck.x}, ${finalSpawnCheck.y})`);
         }
         
         // Check for events that should trigger immediately (after player is positioned)
@@ -556,70 +564,15 @@ class LevelTransitionManager {
             }
         }
         
-        // Switch to saved active character if different
-        if (this.characterManager && this.preservedState.activeCharacter) {
+        // Use whatever character is currently active - don't switch during transitions
+        if (this.characterManager) {
             const currentActive = this.characterManager.getActiveCharacterName();
-            this.debugLog(`Current active: ${currentActive}, Preserved active: ${this.preservedState.activeCharacter}`);
+            this.debugLog(`Using current active character: ${currentActive}`);
             
-            if (currentActive !== this.preservedState.activeCharacter) {
-                this.debugLog(`⚠️ Character mismatch! Switching to preserved active character: ${this.preservedState.activeCharacter}`);
-                this.debugLog(`  Player before switch: (${this.scene.player?.x || 'N/A'}, ${this.scene.player?.y || 'N/A'})`);
-                
-                // Use character manager's switch method to properly update all systems
-                const result = this.characterManager.switchCharacter(
-                    true, // force switch
-                    this.scene.animationManager,
-                    this.scene.isJumping || false,
-                    this.scene.eventCameraLocked || false
-                );
-                
-                if (result && result.success) {
-                    this.debugLog(`  ✓ Character switch successful`);
-                    // Update player reference and related systems
-                    this.scene.player = result.newPlayer;
-                    this.scene.selectedCharacter = result.newCharacter;
-                    this.scene.currentCharacterConfig = this.characterManager.currentCharacterConfig;
-                    this.debugLog(`  Player after switch: (${this.scene.player.x}, ${this.scene.player.y})`);
-                    
-                    // CRITICAL: Ensure player is at spawn point after character switch during transition
-                    const spawnPoint = this.worldManager.getSpawnPoint();
-                    if (spawnPoint && Math.abs(this.scene.player.x - spawnPoint.x) > 10) {
-                        this.debugWarn(`  ⚠️ Player position incorrect after switch! Correcting...`);
-                        this.debugLog(`    Before correction: (${this.scene.player.x}, ${this.scene.player.y})`);
-                        this.scene.player.x = spawnPoint.x;
-                        this.scene.player.y = spawnPoint.y;
-                        this.scene.player.setPosition(spawnPoint.x, spawnPoint.y);
-                        if (this.scene.player.body) {
-                            this.scene.player.body.x = spawnPoint.x;
-                            this.scene.player.body.y = spawnPoint.y;
-                            this.scene.player.body.reset(spawnPoint.x, spawnPoint.y);
-                        }
-                        this.debugLog(`    After correction: (${this.scene.player.x}, ${this.scene.player.y})`);
-                    }
-                    
-                    // Update animation manager
-                    if (this.scene.player) {
-                        this.scene.animationManager = new AnimationStateManager(this.scene.player);
-                        
-                        // Update physics manager
-                        if (this.scene.playerPhysicsManager) {
-                            this.scene.playerPhysicsManager.player = this.scene.player;
-                            this.scene.playerPhysicsManager.animationManager = this.scene.animationManager;
-                            this.scene.playerPhysicsManager.setIsJumping(false);
-                        }
-                        
-                        // Update combat manager
-                        if (this.scene.combatManager) {
-                            this.scene.combatManager.player = this.scene.player;
-                            this.scene.combatManager.animationManager = this.scene.animationManager;
-                        }
-                    }
-                } else {
-                    this.debugWarn(`  ⚠️ Character switch failed!`);
-                }
-            } else {
-                this.debugLog(`✓ Active character matches preserved state`);
-            }
+            // Ensure player reference is set to the currently active character
+            this.scene.player = this.characterManager.getActiveCharacter();
+            this.scene.selectedCharacter = currentActive;
+            this.scene.currentCharacterConfig = this.characterManager.currentCharacterConfig;
         }
         
         this.debugLog(`State restored. Player at: (${this.scene.player?.x || 'N/A'}, ${this.scene.player?.y || 'N/A'})`);
@@ -732,114 +685,77 @@ class LevelTransitionManager {
     }
     
     positionPlayerAtSpawn() {
-        this.debugLog('Positioning player at spawn point...');
+        this.debugLog('[playerpos] Positioning player at spawn point...');
         
         if (!this.worldManager) {
-            this.debugWarn('Cannot position player: worldManager not available');
+            this.debugWarn('[playerpos] Cannot position player: worldManager not available');
             return;
         }
         
         const spawnPoint = this.worldManager.getSpawnPoint();
-        this.debugLog(`Spawn point retrieved in positionPlayerAtSpawn: (${spawnPoint.x}, ${spawnPoint.y})`);
-        this.debugLog(`Current level ID: ${this.scene.selectedLevelId}`);
+        this.debugLog(`[playerpos] Spawn point retrieved in positionPlayerAtSpawn: (${spawnPoint.x}, ${spawnPoint.y})`);
+        this.debugLog(`[playerpos] Current level ID: ${this.scene.selectedLevelId}`);
         
         // Get the current active player (may have changed after state restoration)
         const currentPlayer = this.scene.player;
         if (!currentPlayer) {
-            this.debugWarn('Cannot position player: player not available');
+            this.debugWarn('[playerpos] Cannot position player: player not available');
             return;
         }
         
-        this.debugLog(`Current player position before reset: (${currentPlayer.x}, ${currentPlayer.y})`);
-        this.debugLog(`Player sprite active: ${currentPlayer.active}, visible: ${currentPlayer.visible}`);
+        this.debugLog(`[playerpos] Current player position before reset: (${currentPlayer.x}, ${currentPlayer.y})`);
+        this.debugLog(`[playerpos] Player sprite active: ${currentPlayer.active}, visible: ${currentPlayer.visible}`);
         
         // Stop camera follow before positioning
         this.scene.cameras.main.stopFollow();
         this.debugLog('Camera follow stopped');
         
-        // Reset player position - use multiple methods to ensure it sticks
-        this.debugLog('Setting player position via multiple methods...');
+        // Set player position to spawn point - use multiple methods to ensure it sticks
+        this.debugLog('[playerpos] Setting player position to spawn point...');
+        
+        // Direct position assignment first
         currentPlayer.x = spawnPoint.x;
         currentPlayer.y = spawnPoint.y;
+        
+        // Then use setPosition
         currentPlayer.setPosition(spawnPoint.x, spawnPoint.y);
         currentPlayer.setVelocity(0, 0);
-        this.debugLog(`  After setPosition: (${currentPlayer.x}, ${currentPlayer.y})`);
         
         if (currentPlayer.body) {
-            this.debugLog(`  Resetting physics body...`);
-            // Disable physics temporarily to prevent updates
-            const wasEnabled = currentPlayer.body.enable;
-            if (currentPlayer.body.setEnable) {
-                currentPlayer.body.setEnable(false);
-            }
+            // Temporarily disable physics updates to prevent interference
+            const wasImmovable = currentPlayer.body.immovable;
+            currentPlayer.body.setImmovable(true);
             
-            // Set position multiple ways to ensure it sticks
+            // Reset body position - this is critical
             currentPlayer.body.x = spawnPoint.x;
             currentPlayer.body.y = spawnPoint.y;
             currentPlayer.body.reset(spawnPoint.x, spawnPoint.y);
             currentPlayer.body.setVelocity(0, 0);
             currentPlayer.body.setAcceleration(0, 0);
             
-            // Re-enable physics
-            if (currentPlayer.body.setEnable) {
-                currentPlayer.body.setEnable(true);
-            }
+            // Force sync body position again after reset
+            currentPlayer.body.x = spawnPoint.x;
+            currentPlayer.body.y = spawnPoint.y;
             
-            // Verify body position
-            const bodyX = currentPlayer.body.x;
-            const bodyY = currentPlayer.body.y;
-            this.debugLog(`  Body position after reset: (${bodyX}, ${bodyY})`);
-            
-            // If body position is wrong, force it again
-            if (Math.abs(bodyX - spawnPoint.x) > 1 || Math.abs(bodyY - spawnPoint.y) > 1) {
-                this.debugWarn(`  ⚠️ Body position incorrect! Forcing correction...`);
-                currentPlayer.body.x = spawnPoint.x;
-                currentPlayer.body.y = spawnPoint.y;
-                currentPlayer.x = spawnPoint.x;
-                currentPlayer.y = spawnPoint.y;
-                this.debugLog(`  Body position after force: (${currentPlayer.body.x}, ${currentPlayer.body.y})`);
-            }
-        } else {
-            this.debugWarn('  ⚠️ Player body not available!');
+            // Re-enable immovable state (restore original)
+            currentPlayer.body.setImmovable(wasImmovable);
         }
         
-        // Reset both character sprites if character manager exists
-        if (this.characterManager) {
-            this.debugLog('Resetting all character sprites...');
-            Object.values(this.characterManager.characters).forEach((charData, index) => {
-                if (charData.sprite) {
-                    const charName = Object.keys(this.characterManager.characters)[index];
-                    this.debugLog(`  ${charName}: (${charData.sprite.x}, ${charData.sprite.y}) -> (${spawnPoint.x}, ${spawnPoint.y})`);
-                    charData.sprite.x = spawnPoint.x;
-                    charData.sprite.y = spawnPoint.y;
-                    charData.sprite.setPosition(spawnPoint.x, spawnPoint.y);
-                    charData.sprite.setVelocity(0, 0);
-                    if (charData.sprite.body) {
-                        charData.sprite.body.x = spawnPoint.x;
-                        charData.sprite.body.y = spawnPoint.y;
-                        charData.sprite.body.reset(spawnPoint.x, spawnPoint.y);
-                        charData.sprite.body.setVelocity(0, 0);
-                        charData.sprite.body.setAcceleration(0, 0);
-                    }
-                }
-            });
+        // Verify position immediately after setting
+        this.debugLog(`[playerpos] Player positioned at: (${currentPlayer.x}, ${currentPlayer.y}), spawn: (${spawnPoint.x}, ${spawnPoint.y})`);
+        if (currentPlayer.body) {
+            this.debugLog(`[playerpos] Body position after reset: (${currentPlayer.body.x}, ${currentPlayer.body.y})`);
         }
-        
-        // Final verification
-        const finalX = currentPlayer.x;
-        const finalY = currentPlayer.y;
-        this.debugLog(`✓ Player positioned. Final position: (${finalX}, ${finalY}), spawn: (${spawnPoint.x}, ${spawnPoint.y})`);
-        
-        if (Math.abs(finalX - spawnPoint.x) > 1 || Math.abs(finalY - spawnPoint.y) > 1) {
-            this.debugWarn(`⚠️ Position mismatch detected! Difference: X=${Math.abs(finalX - spawnPoint.x)}, Y=${Math.abs(finalY - spawnPoint.y)}`);
-        }
+        this.debugLog(`[playerpos] Player sprite ID/reference: ${currentPlayer.name || 'no name'}, active: ${currentPlayer.active}`);
+        this.debugLog(`[playerpos] this.scene.player reference: ${this.scene.player ? 'exists' : 'null'}`);
+        this.debugLog(`[playerpos] Are they the same? ${currentPlayer === this.scene.player}`);
     }
     
     positionCameraAtSpawn() {
-        this.debugLog('Positioning camera at spawn point...');
+        this.debugLog('[campos] Positioning camera at spawn point...');
         
         if (!this.worldManager || !this.scene.player) {
-            this.debugWarn('Cannot position camera: worldManager or player not available');
+            this.debugWarn('[campos] Cannot position camera: worldManager or player not available');
             return;
         }
         
@@ -847,29 +763,15 @@ class LevelTransitionManager {
         const camera = this.scene.cameras.main;
         const currentPlayer = this.scene.player;
         
-        this.debugLog(`Camera before positioning: scrollX=${camera.scrollX}, scrollY=${camera.scrollY}`);
-        this.debugLog(`Player position: (${currentPlayer.x}, ${currentPlayer.y})`);
-        this.debugLog(`Spawn point: (${spawnPoint.x}, ${spawnPoint.y})`);
+        this.debugLog(`[campos] Camera before positioning: scrollX=${camera.scrollX}, scrollY=${camera.scrollY}`);
+        this.debugLog(`[campos] Player position: (${currentPlayer.x}, ${currentPlayer.y})`);
+        this.debugLog(`[campos] Player sprite ID/reference: ${currentPlayer.name || 'no name'}, active: ${currentPlayer.active}`);
+        this.debugLog(`[campos] Spawn point: (${spawnPoint.x}, ${spawnPoint.y})`);
+        this.debugLog(`[campos] Player body position: (${currentPlayer.body?.x || 'N/A'}, ${currentPlayer.body?.y || 'N/A'})`);
         
         // Stop camera follow temporarily
         camera.stopFollow();
-        this.debugLog('Camera follow stopped');
-        
-        // Verify player position one more time before positioning camera
-        const playerX = currentPlayer.x;
-        const playerY = currentPlayer.y;
-        if (Math.abs(playerX - spawnPoint.x) > 10) {
-            this.debugWarn(`⚠️ Camera positioning: Player position mismatch! Player at ${playerX}, spawn at ${spawnPoint.x}. Forcing reset.`);
-            currentPlayer.x = spawnPoint.x;
-            currentPlayer.y = spawnPoint.y;
-            currentPlayer.setPosition(spawnPoint.x, spawnPoint.y);
-            if (currentPlayer.body) {
-                currentPlayer.body.x = spawnPoint.x;
-                currentPlayer.body.y = spawnPoint.y;
-                currentPlayer.body.reset(spawnPoint.x, spawnPoint.y);
-            }
-            this.debugLog(`Player position after reset: (${currentPlayer.x}, ${currentPlayer.y})`);
-        }
+        this.debugLog('[campos] Camera follow stopped');
         
         // Calculate camera target X, accounting for world bounds
         const worldBounds = this.scene.physics && this.scene.physics.world && this.scene.physics.world.bounds 
@@ -878,25 +780,25 @@ class LevelTransitionManager {
         const minCameraX = worldBounds.x;
         const maxCameraX = worldBounds.x + worldBounds.width - camera.width;
         
-        this.debugLog(`World bounds: x=${worldBounds.x}, width=${worldBounds.width}`);
-        this.debugLog(`Camera bounds: minX=${minCameraX}, maxX=${maxCameraX}, camera width=${camera.width}`);
+        this.debugLog(`[campos] World bounds: x=${worldBounds.x}, width=${worldBounds.width}`);
+        this.debugLog(`[campos] Camera bounds: minX=${minCameraX}, maxX=${maxCameraX}, camera width=${camera.width}`);
         
         // Use actual player position (should be at spawn)
         const targetPlayerX = currentPlayer.x;
         const cameraTargetX = Math.max(minCameraX, Math.min(maxCameraX, targetPlayerX - camera.width / 2));
         
-        this.debugLog(`Calculated camera target: ${cameraTargetX} (player at ${targetPlayerX}, camera center offset: ${camera.width / 2})`);
+        this.debugLog(`[campos] Calculated camera target: ${cameraTargetX} (player at ${targetPlayerX}, camera center offset: ${camera.width / 2})`);
         
         camera.setScroll(cameraTargetX, 0);
-        this.debugLog(`Camera positioned: scrollX=${camera.scrollX}, scrollY=${camera.scrollY}`);
-        this.debugLog(`Player at: (${currentPlayer.x}, ${currentPlayer.y}), spawn at: (${spawnPoint.x}, ${spawnPoint.y})`);
+        this.debugLog(`[campos] Camera positioned: scrollX=${camera.scrollX}, scrollY=${camera.scrollY}`);
+        this.debugLog(`[campos] Player at: (${currentPlayer.x}, ${currentPlayer.y}), spawn at: (${spawnPoint.x}, ${spawnPoint.y})`);
         
         // Start camera following player (only if not locked by event system)
         if (!this.scene.eventCameraLocked) {
             camera.startFollow(currentPlayer, true, 0.1, 0);
-            this.debugLog(`Camera following player at (${Math.round(currentPlayer.x)}, ${Math.round(currentPlayer.y)})`);
+            this.debugLog(`[campos] Camera following player at (${Math.round(currentPlayer.x)}, ${Math.round(currentPlayer.y)})`);
         } else {
-            this.debugLog('Camera follow disabled (event camera locked)');
+            this.debugLog('[campos] Camera follow disabled (event camera locked)');
         }
     }
 }

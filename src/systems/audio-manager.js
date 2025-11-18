@@ -24,6 +24,8 @@ class AudioManager {
         // Sound effect spam prevention
         this.lastFocusTime = Date.now();
         this.isFocused = true;
+        this.sfxMutedByFocusLoss = false; // Track if SFX was muted due to focus loss
+        this.sfxMutedStateBeforeBlur = false; // Store original muted state before blur
 
         // Set up focus/blur event listeners to prevent sound spam when tabbing back
         this.setupFocusHandling();
@@ -331,7 +333,28 @@ class AudioManager {
     handleBlur() {
         this.isFocused = false;
         this.lastFocusTime = Date.now();
-        console.log('🎵 Game lost focus');
+        
+        // Mute sound effects when game loses focus to prevent audio pop when returning
+        if (!this.sfxMuted) {
+            // Only mute if not already muted by user
+            this.sfxMutedStateBeforeBlur = false; // Store that it wasn't muted
+            this.sfxMuted = true;
+            this.sfxMutedByFocusLoss = true;
+            
+            // Pause looping sound effects to prevent them from continuing
+            if (this.runningSoundEffect && this.runningSoundEffect.isPlaying) {
+                this.runningSoundEffect.pause();
+            }
+            if (this.ambianceSoundEffect && this.ambianceSoundEffect.isPlaying) {
+                this.ambianceSoundEffect.pause();
+            }
+            
+            console.log('🎵 Game lost focus - muting sound effects');
+        } else {
+            // Already muted, just track that we didn't mute it
+            this.sfxMutedStateBeforeBlur = true;
+            this.sfxMutedByFocusLoss = false;
+        }
     }
 
     handleFocus() {
@@ -341,6 +364,21 @@ class AudioManager {
         this.isFocused = true;
         this.lastFocusTime = now;
 
+        // Restore sound effects if we muted them due to focus loss
+        if (this.sfxMutedByFocusLoss) {
+            this.sfxMuted = this.sfxMutedStateBeforeBlur;
+            this.sfxMutedByFocusLoss = false;
+            
+            // Resume looping sound effects if they were paused
+            if (this.runningSoundEffect && this.runningSoundEffect.isPaused) {
+                this.runningSoundEffect.resume();
+            }
+            if (this.ambianceSoundEffect && this.ambianceSoundEffect.isPaused) {
+                this.ambianceSoundEffect.resume();
+            }
+            
+            console.log('🎵 Game regained focus - unmuting sound effects');
+        }
 
         // If we were away for more than the focus cooldown, apply cooldown
         if (timeAway > this.config.focusCooldown) {

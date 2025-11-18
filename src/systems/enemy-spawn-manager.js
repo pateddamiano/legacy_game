@@ -75,8 +75,20 @@ class EnemySpawnManager {
             return;
         }
         
-        // Don't spawn enemies while loading
-        if (!this.isLoading) {
+        // Don't spawn enemies while loading or while enemies are paused by event system
+        // Check if enemies are paused OR if there's an active event (which may have paused enemies)
+        const hasActiveEvent = this.scene.eventManager && this.scene.eventManager.activeEvent !== null;
+        const enemiesPausedByEvent = this.scene.eventManager && 
+                                     this.scene.eventManager.pausedEntities && 
+                                     this.scene.eventManager.pausedEntities.enemies.length > 0;
+        const playerPausedByEvent = this.scene.eventManager && 
+                                    this.scene.eventManager.pausedEntities && 
+                                    this.scene.eventManager.pausedEntities.player === true;
+        
+        // Block spawning if enemies are paused, or if there's an active event with player paused (indicating event control)
+        const shouldBlockSpawning = enemiesPausedByEvent || (hasActiveEvent && playerPausedByEvent);
+        
+        if (!this.isLoading && !shouldBlockSpawning) {
             // Update spawn timer
             this.enemySpawnTimer += delta;
             

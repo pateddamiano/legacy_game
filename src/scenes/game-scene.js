@@ -590,39 +590,54 @@ class GameScene extends Phaser.Scene {
             this.checkpointManager.checkProgress(this.player.x, worldBounds);
         }
         
-        // Enforce player bounds if set by event system
-        if (this.eventPlayerBounds && this.player) {
+        // Enforce player bounds if set by event system (skip during level transitions)
+        if (this.eventPlayerBounds && this.player && !this.levelTransitionManager?.isTransitioning) {
             const bounds = this.eventPlayerBounds;
             const playerX = this.player.x;
             const playerY = this.player.y;
-            
+
+            // Log current bounds and player position
+            // console.log('[bounds-playerpos] Checking player bounds:', bounds);
+            // console.log(`[bounds-playerpos] Player position before clamp: x=${playerX}, y=${playerY}`);
+
             // Clamp X position
             if (bounds.minX !== null && playerX < bounds.minX) {
+                // console.log(`[bounds-playerpos] Player x (${playerX}) < minX (${bounds.minX}) - clamping`);
                 this.player.x = bounds.minX;
                 if (this.player.body) {
                     this.player.body.setVelocityX(0);
+                    // console.log('[bounds-playerpos] setVelocityX(0)');
                 }
             }
             if (bounds.maxX !== null && playerX > bounds.maxX) {
+                // console.log(`[bounds-playerpos] Player x (${playerX}) > maxX (${bounds.maxX}) - clamping`);
                 this.player.x = bounds.maxX;
                 if (this.player.body) {
                     this.player.body.setVelocityX(0);
+                    // console.log('[bounds-playerpos] setVelocityX(0)');
                 }
             }
-            
+
             // Clamp Y position
             if (bounds.minY !== null && playerY < bounds.minY) {
+                // console.log(`[bounds-playerpos] Player y (${playerY}) < minY (${bounds.minY}) - clamping`);
                 this.player.y = bounds.minY;
                 if (this.player.body) {
                     this.player.body.setVelocityY(0);
+                    // console.log('[bounds-playerpos] setVelocityY(0)');
                 }
             }
             if (bounds.maxY !== null && playerY > bounds.maxY) {
+                // console.log(`[bounds-playerpos] Player y (${playerY}) > maxY (${bounds.maxY}) - clamping`);
                 this.player.y = bounds.maxY;
                 if (this.player.body) {
                     this.player.body.setVelocityY(0);
+                    // console.log('[bounds-playerpos] setVelocityY(0)');
                 }
             }
+
+            // Log new player position after clamp
+            // console.log(`[bounds-playerpos] Player position after clamp: x=${this.player.x}, y=${this.player.y}`);
         }
         
         // Check combat interactions using CombatManager
@@ -945,60 +960,42 @@ class GameScene extends Phaser.Scene {
         
         // CRITICAL: Update player reference FIRST before any position checks or camera operations
         // This ensures we're working with the correct player sprite from the new level
-        this.player = this.characterManager.getActiveCharacter();
+        // Get the new player from character manager (characters were just created)
+        const newPlayer = this.characterManager.getActiveCharacter();
+        if (!newPlayer) {
+            console.error('🎯 ERROR: No active character found after character creation!');
+            return;
+        }
+        
+        // CRITICAL: Verify this is actually a new player sprite, not the old one
+        // Check if player reference changed or if we need to update it
+        if (this.player && this.player === newPlayer) {
+            console.log(`🎯 Player reference unchanged, but verifying it's the correct sprite...`);
+        } else {
+            console.log(`🎯 Updating player reference from ${this.player ? 'old' : 'null'} to new sprite`);
+        }
+        
+        this.player = newPlayer;
         this.currentCharacterConfig = this.characterManager.currentCharacterConfig;
         this.selectedCharacter = this.characterManager.getActiveCharacterName();
-        console.log(`🎯 Player reference updated: ${this.selectedCharacter} at (${this.player?.x || 'N/A'}, ${this.player?.y || 'N/A'})`);
+        console.log(`🎯 Player reference updated: ${this.selectedCharacter}`);
+        console.log(`🎯 New player sprite position: (${this.player.x}, ${this.player.y})`);
+        console.log(`🎯 New player sprite active: ${this.player.active}, visible: ${this.player.visible}`);
         
         // CRITICAL: Get spawn point and reset player position BEFORE any camera operations
         // This prevents the old camera scroll position from affecting player positioning
         const spawnPoint = this.worldManager.getSpawnPoint();
         console.log(`🎯 Spawn point for new level: (${spawnPoint.x}, ${spawnPoint.y})`);
+        console.log(`🎯 Player position vs spawn: player at (${this.player.x}, ${this.player.y}), spawn at (${spawnPoint.x}, ${spawnPoint.y})`);
         
         // Stop camera follow immediately to prevent interference
         this.cameras.main.stopFollow();
         
-        // CRITICAL: Reset player position to spawn point BEFORE camera operations
-        // This ensures player is at the correct spawn position regardless of previous level state
-        if (this.player) {
-            const playerX = this.player.x;
-            const playerY = this.player.y;
-            console.log(`🎯 Player position before reset: (${playerX}, ${playerY})`);
-            
-            // Always reset player to spawn point (don't just check, force it)
-            this.player.x = spawnPoint.x;
-            this.player.y = spawnPoint.y;
-            this.player.setPosition(spawnPoint.x, spawnPoint.y);
-            this.player.setVelocity(0, 0);
-            
-            if (this.player.body) {
-                this.player.body.x = spawnPoint.x;
-                this.player.body.y = spawnPoint.y;
-                this.player.body.reset(spawnPoint.x, spawnPoint.y);
-                this.player.body.setVelocity(0, 0);
-                this.player.body.setAcceleration(0, 0);
-            }
-            
-            console.log(`🎯 Player position after reset: (${this.player.x}, ${this.player.y})`);
-            
-            // Also reset all character sprites to spawn point
-            if (this.characterManager) {
-                Object.values(this.characterManager.characters).forEach(charData => {
-                    if (charData.sprite) {
-                        charData.sprite.x = spawnPoint.x;
-                        charData.sprite.y = spawnPoint.y;
-                        charData.sprite.setPosition(spawnPoint.x, spawnPoint.y);
-                        charData.sprite.setVelocity(0, 0);
-                        if (charData.sprite.body) {
-                            charData.sprite.body.x = spawnPoint.x;
-                            charData.sprite.body.y = spawnPoint.y;
-                            charData.sprite.body.reset(spawnPoint.x, spawnPoint.y);
-                            charData.sprite.body.setVelocity(0, 0);
-                            charData.sprite.body.setAcceleration(0, 0);
-                        }
-                    }
-                });
-            }
+        // Log player position (characters were just created at spawn point)
+        console.log(`🎯 Player position after character creation: (${this.player.x}, ${this.player.y})`);
+        console.log(`🎯 Spawn point: (${spawnPoint.x}, ${spawnPoint.y})`);
+        if (this.player.body) {
+            console.log(`🎯 Player body position: (${this.player.body.x}, ${this.player.body.y})`);
         }
         
         // CRITICAL: Reset camera scroll position to spawn point BEFORE any other camera operations
@@ -1026,11 +1023,23 @@ class GameScene extends Phaser.Scene {
         this.animationManager = new AnimationStateManager(this.player);
         console.log('🎯 Animation manager initialized');
         
-        // Start camera following player LAST (only if not locked by event system)
+        // Log player position before starting camera follow
+        const finalSpawnCheck = this.worldManager.getSpawnPoint();
+        console.log(`🎯 Before camera follow: player at (${this.player?.x || 'N/A'}, ${this.player?.y || 'N/A'}), spawn at (${finalSpawnCheck.x}, ${finalSpawnCheck.y})`);
+        
+        // Start camera following player LAST (only if not locked by event system AND not in transition)
+        // During transitions, the transition manager will handle camera positioning
         // This ensures player position is correct before camera starts following
-        if (!this.eventCameraLocked) {
+        if (!this.eventCameraLocked && !this.levelTransitionManager?.isTransitioning) {
+            console.log(`🎯 Starting camera follow on player at (${Math.round(this.player.x)}, ${Math.round(this.player.y)})`);
             this.cameras.main.startFollow(this.player, true, 0.1, 0);
-            console.log(`🎯 Camera following player at (${Math.round(this.player.x)}, ${Math.round(this.player.y)})`);
+            console.log(`🎯 Camera follow started. Camera scroll: (${this.cameras.main.scrollX}, ${this.cameras.main.scrollY})`);
+        } else {
+            if (this.levelTransitionManager?.isTransitioning) {
+                console.log(`🎯 Camera follow skipped (level transition in progress - transition manager will handle)`);
+            } else {
+                console.log(`🎯 Camera follow skipped (event camera locked)`);
+            }
         }
         
         // Check if any events should trigger immediately (player already past trigger)

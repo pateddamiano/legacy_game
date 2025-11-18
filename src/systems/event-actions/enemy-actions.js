@@ -543,7 +543,14 @@ class EnemyActions {
             }
         }
         
-        // Filter enemies - clear all except excluded ones
+        // Get camera bounds for on-screen check
+        const camera = this.scene.cameras.main;
+        const cameraLeft = camera.scrollX;
+        const cameraRight = camera.scrollX + camera.width;
+        const cameraTop = camera.scrollY;
+        const cameraBottom = camera.scrollY + camera.height;
+        
+        // Filter enemies - clear all except excluded ones and enemies on screen
         this.scene.enemies.forEach((enemy, index) => {
             if (!enemy || !enemy.sprite) return;
             
@@ -574,6 +581,26 @@ class EnemyActions {
             if (excludeIds.includes(`enemy_${index}`)) {
                 console.log(`🎬 ✅ Excluding enemy_${index} from cleanup (explicit index)`);
                 return;
+            }
+            
+            // FIFTH: Check if enemy is on screen (within camera view) - preserve on-screen enemies
+            if (enemy.sprite && enemy.sprite.active) {
+                const enemyX = enemy.sprite.x;
+                const enemyY = enemy.sprite.y;
+                const enemyWidth = enemy.sprite.width || 0;
+                const enemyHeight = enemy.sprite.height || 0;
+                
+                // Check if enemy sprite is within camera bounds (with some margin for partial visibility)
+                const margin = 50; // Allow enemies slightly off-screen to be considered "on screen"
+                const isOnScreen = enemyX + enemyWidth >= cameraLeft - margin &&
+                                  enemyX <= cameraRight + margin &&
+                                  enemyY + enemyHeight >= cameraTop - margin &&
+                                  enemyY <= cameraBottom + margin;
+                
+                if (isOnScreen) {
+                    console.log(`🎬 ✅ Preserving enemy at index ${index} from cleanup (on screen at x=${Math.round(enemyX)}, y=${Math.round(enemyY)})`);
+                    return;
+                }
             }
             
             console.log(`🎬 ❌ Marking enemy at index ${index} for removal`);

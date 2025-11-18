@@ -152,25 +152,15 @@ class CharacterManager {
     // ========================================
     
     validateCharacterPosition(x, y) {
-        // Get current world bounds and spawn point for validation
-        const spawnPoint = this.worldManager?.getSpawnPoint();
+        // Get current world bounds for validation
         const worldBounds = this.scene.physics?.world?.bounds;
         
         let validX = x;
         let validY = y;
         
-        // If we have world bounds, ensure position is within reasonable range
-        if (worldBounds && spawnPoint) {
-            const maxDistance = 1000; // Maximum allowed distance from spawn during transitions
-            const distanceFromSpawn = Math.abs(x - spawnPoint.x);
-            
-            // If position is too far from spawn point, use spawn point instead
-            if (distanceFromSpawn > maxDistance) {
-                console.log(`👥 🔧 VALIDATION: Position (${x}, ${y}) is ${distanceFromSpawn}px from spawn, using spawn point`);
-                validX = spawnPoint.x;
-                validY = spawnPoint.y;
-            }
-            
+        // Only validate world bounds - don't check distance from spawn during normal gameplay
+        // Distance validation should only happen during level transitions
+        if (worldBounds) {
             // Ensure position is within world bounds
             if (validX < worldBounds.x) {
                 console.log(`👥 🔧 VALIDATION: X position ${validX} below world minimum ${worldBounds.x}, clamping`);
@@ -218,31 +208,25 @@ class CharacterManager {
 
         // Get current player sprite
         const currentPlayer = this.characters[currentChar].sprite;
-
-        // Store current position and state
-        // CRITICAL FIX: During level transitions, don't use old position from previous level
-        // Check if we're in a level transition or if characters were recently created at spawn
-        const isLevelTransition = this.scene.levelTransitionManager?.isTransitioning;
-        const spawnPoint = this.worldManager?.getSpawnPoint();
         
-        let currentX = currentPlayer.x;
-        let currentY = currentPlayer.y;
+        // Log what we're about to do
+        console.log(`👥 switchCharacter called: ${currentChar} → ${newChar}`);
+        console.log(`👥   Current player sprite position: (${currentPlayer.x}, ${currentPlayer.y})`);
         
-        // Robust position validation: If current position is far from spawn point during transitions,
-        // or if we detect we're in a transition, use spawn point instead
-        if (isLevelTransition || (spawnPoint && Math.abs(currentX - spawnPoint.x) > 1000)) {
-            console.log(`👥 🔧 POSITION FIX: Detected invalid position during transition`);
-            console.log(`👥 🔧   Current position: (${currentX}, ${currentY})`);
-            console.log(`👥 🔧   Spawn point: (${spawnPoint?.x || 'N/A'}, ${spawnPoint?.y || 'N/A'})`);
-            console.log(`👥 🔧   Is transitioning: ${isLevelTransition}`);
-            
-            if (spawnPoint) {
-                currentX = spawnPoint.x;
-                currentY = spawnPoint.y;
-                console.log(`👥 🔧   Using spawn point: (${currentX}, ${currentY})`);
-            } else {
-                console.warn(`👥 🔧   ⚠️ No spawn point available, keeping current position`);
-            }
+        // Check if we're in a level transition - if so, use spawn point instead of current position
+        const isLevelTransition = this.scene.levelTransitionManager?.isTransitioning || false;
+        let currentX, currentY;
+        
+        if (isLevelTransition && this.worldManager) {
+            // During level transitions, always use spawn point
+            const spawnPoint = this.worldManager.getSpawnPoint();
+            currentX = spawnPoint.x;
+            currentY = spawnPoint.y;
+            console.log(`👥   ⚠️ [leveltransition-playerpos] Level transition detected - using spawn point (${currentX}, ${currentY}) instead of current position`);
+        } else {
+            // Read position from sprite - character switching should always use current position
+            currentX = currentPlayer.x;
+            currentY = currentPlayer.y;
         }
         const currentScale = currentPlayer.scaleX;
         const currentFlipX = currentPlayer.flipX;
@@ -272,22 +256,34 @@ class CharacterManager {
         const newPlayer = this.characters[newChar].sprite;
 
         // Position the new character but keep it hidden initially
-        // Additional safeguard: Validate position before setting
+        // Use calculated position with validation
         const validatedPosition = this.validateCharacterPosition(currentX, finalY);
-        newPlayer.x = validatedPosition.x;
-        newPlayer.y = validatedPosition.y; // Use ground position if was jumping
+        const finalPositionX = validatedPosition.x;
+        const finalPositionY = validatedPosition.y;
+        
+        console.log(`👥   Final position for new character: (${finalPositionX}, ${finalPositionY})`);
+        
+        newPlayer.x = finalPositionX;
+        newPlayer.y = finalPositionY;
+        newPlayer.setPosition(finalPositionX, finalPositionY);
         newPlayer.setScale(currentScale);
         newPlayer.setFlipX(currentFlipX);
-        newPlayer.lastGroundY = validatedPosition.y; // Set ground position
+        newPlayer.lastGroundY = finalPositionY; // Set ground position
         if (newPlayer.body) {
-            newPlayer.setVelocityX(finalVelX);
-            newPlayer.setVelocityY(finalVelY); // Always 0
+            newPlayer.setVelocityX(0); // Always 0 during transitions
+            newPlayer.setVelocityY(0); // Always 0
             // Reset gravity to ensure character is on ground
             if (newPlayer.setGravityY) {
                 newPlayer.setGravityY(0);
             }
             if (newPlayer.body) {
+                // CRITICAL: Reset body position properly
+                newPlayer.body.x = finalPositionX;
+                newPlayer.body.y = finalPositionY;
+                newPlayer.body.reset(finalPositionX, finalPositionY);
+                newPlayer.body.velocity.x = 0;
                 newPlayer.body.velocity.y = 0;
+                newPlayer.body.acceleration.x = 0;
                 newPlayer.body.acceleration.y = 0;
             }
         }
@@ -300,8 +296,8 @@ class CharacterManager {
         let animationDuration = 0;
         if (this.scene.effectSystem) {
             const effectResult = this.scene.effectSystem.spawnTornadoEffect(
-                validatedPosition.x,
-                validatedPosition.y,
+                finalPositionX,
+                finalPositionY,
                 currentScale,
                 currentPlayer.depth,
                 () => {
