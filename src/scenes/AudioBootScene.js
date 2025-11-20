@@ -218,6 +218,8 @@ class AudioBootScene extends Phaser.Scene {
         
         // Ambient sounds
         this.load.audio('streetAmbiance', 'assets/audio/sfx/street_ambiance.mp3');
+        this.load.audio('subwayAmbiance', 'assets/audio/sfx/subway_ambiance.mp3');
+        this.load.audio('subwayPassing', 'assets/audio/sfx/subway_passing.mp3');
         
         // Player attack sounds
         this.load.audio('mainPunch', 'assets/audio/sfx/main_punch.mp3');

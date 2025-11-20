@@ -630,7 +630,9 @@ class LevelTransitionManager {
             if (levelJson && levelJson.audio && this.audioManager) {
                 // Start background music if specified
                 if (levelJson.audio.music) {
-                    this.audioManager.playBackgroundMusic(levelJson.audio.music);
+                    const musicVolume = levelJson.audio.musicVolume !== undefined ? 
+                        levelJson.audio.musicVolume : null; // null = use default
+                    this.audioManager.playBackgroundMusic(levelJson.audio.music, true, musicVolume);
                 }
                 
                 // Start ambiance if specified

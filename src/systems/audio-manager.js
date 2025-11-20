@@ -20,6 +20,7 @@ class AudioManager {
         // Looping SFX (like running sound and ambient sounds)
         this.runningSoundEffect = null;
         this.ambianceSoundEffect = null;
+        this.subwayPassingSound = null;
 
         // Sound effect spam prevention
         this.lastFocusTime = Date.now();
@@ -71,19 +72,27 @@ class AudioManager {
     // BACKGROUND MUSIC METHODS
     // ========================================
     
-    playBackgroundMusic(musicKey, fadeIn = true) {
+    playBackgroundMusic(musicKey, fadeIn = true, customVolume = null) {
         // Check if the same music is already playing in the global sound manager - if so, don't restart it
         const existingSound = this.scene.sound.sounds.find(sound => sound.key === musicKey && sound.isPlaying);
         if (existingSound) {
             console.log(`🎵 Music '${musicKey}' is already playing globally, continuing...`);
             // Store reference to existing sound
             this.currentBackgroundMusic = existingSound;
+            // Update volume if custom volume provided
+            if (customVolume !== null) {
+                existingSound.setVolume(customVolume);
+            }
             return;
         }
         
         // Check if our local reference is playing
         if (this.currentBackgroundMusic && this.currentBackgroundMusic.isPlaying && this.currentBackgroundMusic.key === musicKey) {
             console.log(`🎵 Music '${musicKey}' is already playing, continuing...`);
+            // Update volume if custom volume provided
+            if (customVolume !== null) {
+                this.currentBackgroundMusic.setVolume(customVolume);
+            }
             return;
         }
         
@@ -111,9 +120,12 @@ class AudioManager {
             return;
         }
         
+        // Determine volume: use custom volume if provided, otherwise use default config volume
+        const targetVolume = customVolume !== null ? customVolume : this.config.backgroundMusic.volume;
+        
         // Play the new music
         this.currentBackgroundMusic = this.sound.add(musicKey, {
-            volume: this.config.backgroundMusic.volume,
+            volume: targetVolume,
             loop: this.config.backgroundMusic.loop
         });
         
@@ -124,7 +136,7 @@ class AudioManager {
             
             this.scene.tweens.add({
                 targets: this.currentBackgroundMusic,
-                volume: this.config.backgroundMusic.volume,
+                volume: targetVolume,
                 duration: this.config.backgroundMusic.fadeInDuration,
                 ease: 'Linear'
             });
@@ -132,7 +144,7 @@ class AudioManager {
             this.currentBackgroundMusic.play();
         }
         
-        console.log(`🎵 Playing background music: ${musicKey}`);
+        console.log(`🎵 Playing background music: ${musicKey} at volume ${Math.round(targetVolume * 100)}%`);
     }
     
     stopBackgroundMusic(fadeOut = true) {
@@ -348,6 +360,9 @@ class AudioManager {
             if (this.ambianceSoundEffect && this.ambianceSoundEffect.isPlaying) {
                 this.ambianceSoundEffect.pause();
             }
+            if (this.subwayPassingSound && this.subwayPassingSound.isPlaying) {
+                this.subwayPassingSound.pause();
+            }
             
             console.log('🎵 Game lost focus - muting sound effects');
         } else {
@@ -375,6 +390,9 @@ class AudioManager {
             }
             if (this.ambianceSoundEffect && this.ambianceSoundEffect.isPaused) {
                 this.ambianceSoundEffect.resume();
+            }
+            if (this.subwayPassingSound && this.subwayPassingSound.isPaused) {
+                this.subwayPassingSound.resume();
             }
             
             console.log('🎵 Game regained focus - unmuting sound effects');
@@ -431,6 +449,9 @@ class AudioManager {
 
         // Stop ambiance sound effect
         this.stopAmbiance();
+
+        // Stop subway passing sound
+        this.stopSubwayPassing();
 
         console.log('🗑️ AudioManager destroyed');
     }
@@ -531,6 +552,105 @@ class AudioManager {
             this.ambianceSoundEffect.destroy();
             this.ambianceSoundEffect = null;
             console.log('🔊 Stopped ambiance');
+        }
+    }
+    
+    // Subway Passing Sound (looping while subway cars are visible)
+    // Volume should be passed from level config, not hardcoded
+    startSubwayPassing(targetVolume) {
+        if (targetVolume === undefined || targetVolume === null) {
+            console.warn('🔊 startSubwayPassing called without volume - should be set from level config');
+            targetVolume = 0.1; // Safe fallback
+        }
+        // Don't start if already playing
+        if (this.subwayPassingSound && this.subwayPassingSound.isPlaying) {
+            return;
+        }
+        
+        // Don't start if SFX is muted
+        if (this.sfxMuted || !this.config.soundEffects.enabled) {
+            return;
+        }
+        
+        // Check if sound exists in cache
+        if (!this.scene.cache.audio.has('subwayPassing')) {
+            console.warn('🔊 Subway passing sound not found: subwayPassing');
+            return;
+        }
+        
+        // Store target volume for fade operations
+        this.subwayPassingTargetVolume = targetVolume;
+        
+        // Create and play looping subway passing sound at volume 0 (will fade in)
+        this.subwayPassingSound = this.sound.add('subwayPassing', {
+            volume: 0, // Start at 0, will fade in
+            loop: true
+        });
+        this.subwayPassingSound.play();
+        console.log('🔊 Started subway passing sound (will fade in)');
+    }
+    
+    fadeInSubwayPassing(duration = 1000) {
+        if (!this.subwayPassingSound || !this.subwayPassingSound.isPlaying) {
+            return;
+        }
+        
+        // Use stored target volume (set from level config)
+        const targetVolume = this.subwayPassingTargetVolume;
+        if (targetVolume === undefined || targetVolume === null) {
+            console.warn('🔊 fadeInSubwayPassing: No target volume set');
+            return;
+        }
+        this.scene.tweens.add({
+            targets: this.subwayPassingSound,
+            volume: targetVolume,
+            duration: duration,
+            ease: 'Linear',
+            onComplete: () => {
+                console.log('🔊 Subway passing sound faded in');
+            }
+        });
+    }
+    
+    fadeOutSubwayPassing(duration = 1000, stopAfterFade = true) {
+        if (!this.subwayPassingSound || !this.subwayPassingSound.isPlaying) {
+            return;
+        }
+        
+        const soundToFade = this.subwayPassingSound;
+        this.scene.tweens.add({
+            targets: soundToFade,
+            volume: 0,
+            duration: duration,
+            ease: 'Linear',
+            onComplete: () => {
+                console.log('🔊 Subway passing sound faded out');
+                if (stopAfterFade) {
+                    this.stopSubwayPassing();
+                }
+            }
+        });
+    }
+    
+    stopSubwayPassing() {
+        if (this.subwayPassingSound) {
+            // Stop any active fade tweens
+            if (this.subwayPassingSound._fadeTween) {
+                this.scene.tweens.killTweensOf(this.subwayPassingSound);
+            }
+            this.subwayPassingSound.stop();
+            this.subwayPassingSound.destroy();
+            this.subwayPassingSound = null;
+            this.subwayPassingTargetVolume = null;
+            console.log('🔊 Stopped subway passing sound');
+        }
+    }
+    
+    setSubwayPassingVolume(volume) {
+        if (this.subwayPassingSound && this.subwayPassingSound.isPlaying) {
+            const clampedVolume = Phaser.Math.Clamp(volume, 0, 1);
+            this.subwayPassingSound.setVolume(clampedVolume);
+            console.log(`🔊 Subway passing volume set to: ${Math.round(clampedVolume * 100)}%`);
         }
     }
     

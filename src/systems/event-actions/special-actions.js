@@ -7,6 +7,8 @@ class SpecialActions {
     constructor(eventManager) {
         this.eventManager = eventManager;
         this.scene = eventManager.scene;
+        // Track active subway cars for sound management
+        this.activeSubwayCars = new Set();
     }
     
     advanceAction() {
@@ -23,6 +25,20 @@ class SpecialActions {
     
     getEntity(target) {
         return this.eventManager.getEntity(target);
+    }
+    
+    // Get subway passing volume from level config (centralized)
+    getSubwayPassingVolume(levelConfig) {
+        if (levelConfig && levelConfig.audio && levelConfig.audio.subwayPassingVolume !== undefined) {
+            return levelConfig.audio.subwayPassingVolume;
+        }
+        // Fallback: try to get from current level manager
+        const currentConfig = this.scene.levelManager ? this.scene.levelManager.getCurrentLevelConfig() : null;
+        if (currentConfig && currentConfig.audio && currentConfig.audio.subwayPassingVolume !== undefined) {
+            return currentConfig.audio.subwayPassingVolume;
+        }
+        // Final fallback (should rarely be needed)
+        return 0.1;
     }
     
     executePause(action) {
@@ -110,26 +126,111 @@ class SpecialActions {
         entity.subwayMovementActive = true;
         entity.subwaySpeed = speed;
 
-        // Set up continuous monitoring to destroy when off-screen
+        // Set up continuous monitoring to destroy when off-screen, update panning, and handle fade in/out
+        const FADE_DISTANCE = 400; // Distance in pixels for fade in/out zones
+        let carFadeState = 'fadingIn'; // 'fadingIn', 'onScreen', 'fadingOut', 'offScreen'
+
         const checkOffScreen = () => {
             if (!entity || !entity.active || !entity.subwayMovementActive) {
                 return; // Already destroyed or movement stopped
             }
 
             const camera = this.scene.cameras.main;
+            const cameraLeft = camera.scrollX;
             const cameraRight = camera.scrollX + camera.width;
+            const cameraCenterX = camera.scrollX + camera.width / 2;
+
+            // Calculate fade zones
+            const fadeInStart = cameraLeft - FADE_DISTANCE;
+            const fadeInEnd = cameraLeft;
+            const fadeOutStart = cameraRight;
+            const fadeOutEnd = cameraRight + FADE_DISTANCE;
+
+            // Update panning based on car position relative to camera center
+            if (this.scene.audioManager && this.scene.audioManager.subwayPassingSound) {
+                // Calculate pan: -1 (left) to 1 (right) based on car position
+                const screenWidth = camera.width;
+                const relativeX = entity.x - cameraCenterX;
+                const panRange = screenWidth * 0.6; // Use 60% of screen width for panning range
+                const pan = Phaser.Math.Clamp(relativeX / panRange, -1, 1);
+                this.scene.audioManager.subwayPassingSound.setPan(pan);
+            }
+
+            // Calculate volume contribution for this car based on position
+            // Store it on the entity so we can find the max volume across all cars
+            // Get target volume from AudioManager (set from level config)
+            const targetVolume = this.scene.audioManager ? 
+                (this.scene.audioManager.subwayPassingTargetVolume || 0.1) : 0.1;
+            let carVolume = 0;
+
+            if (entity.x < fadeInStart) {
+                // Before fade-in zone - volume 0
+                carFadeState = 'fadingIn';
+                carVolume = 0;
+            } else if (entity.x >= fadeInStart && entity.x <= fadeInEnd) {
+                // In fade-in zone - gradually increase volume
+                carFadeState = 'fadingIn';
+                const fadeProgress = (entity.x - fadeInStart) / (fadeInEnd - fadeInStart);
+                carVolume = targetVolume * fadeProgress;
+            } else if (entity.x > fadeInEnd && entity.x < fadeOutStart) {
+                // On screen - full volume
+                carFadeState = 'onScreen';
+                carVolume = targetVolume;
+            } else if (entity.x >= fadeOutStart && entity.x <= fadeOutEnd) {
+                // In fade-out zone - gradually decrease volume
+                carFadeState = 'fadingOut';
+                const fadeProgress = (entity.x - fadeOutStart) / (fadeOutEnd - fadeOutStart);
+                carVolume = targetVolume * (1 - fadeProgress);
+            } else {
+                // Past fade-out zone - volume 0
+                carFadeState = 'offScreen';
+                carVolume = 0;
+            }
+
+            // Store volume contribution on entity
+            entity.subwayVolumeContribution = carVolume;
+
+            // Update audio manager with maximum volume from all active cars
+            if (this.scene.audioManager && this.scene.audioManager.subwayPassingSound) {
+                // Find maximum volume contribution from all active subway cars
+                let maxVolume = 0;
+                this.activeSubwayCars.forEach(carId => {
+                    const carEntity = this.getEntity(carId);
+                    if (carEntity && carEntity.subwayVolumeContribution !== undefined) {
+                        maxVolume = Math.max(maxVolume, carEntity.subwayVolumeContribution);
+                    }
+                });
+                
+                // Update volume to the maximum (so multiple cars don't cancel each other out)
+                this.scene.audioManager.setSubwayPassingVolume(maxVolume);
+            }
 
             // Destroy if subway car has moved well past the right edge of camera
-            if (entity.x > cameraRight + 400) {
+            if (entity.x > fadeOutEnd + 200) {
                 console.log(`🎬 Subway car ${target} went off-screen, destroying`);
                 entity.subwayMovementActive = false;
                 entity.setVelocityX(0);
+                
+                // Remove from active cars
+                this.activeSubwayCars.delete(target);
+                
+                // If this was the last car, check if we need to stop the sound
+                // (volume should already be 0 from fade-out, but ensure cleanup)
+                if (this.activeSubwayCars.size === 0 && this.scene.audioManager) {
+                    // Small delay to ensure fade-out completes, then stop
+                    this.scene.time.delayedCall(500, () => {
+                        if (this.activeSubwayCars.size === 0 && this.scene.audioManager) {
+                            this.scene.audioManager.stopSubwayPassing();
+                        }
+                    });
+                }
+                
                 this.scene.extrasManager.destroyExtraById(target);
                 return;
             }
 
             // Continue checking
-            this.scene.time.delayedCall(100, checkOffScreen);
+            this.scene.time.delayedCall(50, checkOffScreen); // Check more frequently for smoother fades
         };
 
         // Start the monitoring loop
@@ -155,6 +256,17 @@ class SpecialActions {
 
             if (extra) {
                 console.log(`🎬 Spawned subway car: ${carId}`);
+
+                // Add to active cars set
+                this.activeSubwayCars.add(carId);
+                
+                // Start subway passing sound if this is the first car
+                if (this.activeSubwayCars.size === 1 && this.scene.audioManager) {
+                    // Get volume from level config (centralized)
+                    const levelConfig = this.scene.levelManager ? this.scene.levelManager.getCurrentLevelConfig() : null;
+                    const volume = this.getSubwayPassingVolume(levelConfig);
+                    this.scene.audioManager.startSubwayPassing(volume);
+                }
 
                 // Start movement
                 this.executeStartSubwayMovement({

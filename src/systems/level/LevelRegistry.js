@@ -45,10 +45,56 @@ class LevelRegistry {
         return scene.cache.json.get(this.indexKey);
     }
 
-    ensureLevelLoaded(scene, levelId) {
+    clearLevelCache(levelId = null, scene = null) {
+        if (levelId === null) {
+            // Clear all levels
+            this.levelCache.clear();
+            this.log('Cleared all level cache');
+            // Also clear Phaser cache for all level JSONs
+            if (scene && scene.cache && scene.cache.json) {
+                // Clear all level_json_* entries
+                const keysToRemove = [];
+                scene.cache.json.entries.forEach((entry, key) => {
+                    if (key.startsWith('level_json_')) {
+                        keysToRemove.push(key);
+                    }
+                });
+                keysToRemove.forEach(key => {
+                    scene.cache.json.remove(key);
+                    this.log('Removed from Phaser cache:', key);
+                });
+            }
+        } else {
+            // Clear specific level
+            this.levelCache.delete(levelId);
+            this.log('Cleared cache for level', levelId);
+            // Also clear from Phaser cache
+            if (scene && scene.cache && scene.cache.json) {
+                const jsonKey = `level_json_${levelId}`;
+                if (scene.cache.json.exists(jsonKey)) {
+                    scene.cache.json.remove(jsonKey);
+                    this.log('Removed from Phaser cache:', jsonKey);
+                }
+            }
+        }
+    }
+
+    ensureLevelLoaded(scene, levelId, forceReload = false) {
         return new Promise(async (resolve) => {
             await this.ensureIndexLoaded(scene);
-            if (this.levelCache.has(levelId)) {
+            
+            // In development/debug mode, always force reload to pick up JSON changes
+            const isDevelopment = window.DEBUG_MODE || window.LEVEL_DEBUG || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+            if (isDevelopment) {
+                forceReload = true;
+            }
+            
+            // Clear cache if force reload is requested
+            if (forceReload) {
+                this.clearLevelCache(levelId, scene);
+            }
+            
+            if (this.levelCache.has(levelId) && !forceReload) {
                 resolve(this.levelCache.get(levelId));
                 return;
             }
@@ -60,13 +106,15 @@ class LevelRegistry {
                 return;
             }
             const jsonKey = `level_json_${levelId}`;
-            if (scene.cache.json.exists(jsonKey)) {
+            if (scene.cache.json.exists(jsonKey) && !forceReload) {
                 const data = scene.cache.json.get(jsonKey);
                 this.levelCache.set(levelId, data);
                 resolve(data);
                 return;
             }
-            scene.load.json(jsonKey, entry.path);
+            // Add cache-busting query parameter if force reload
+            const path = forceReload ? `${entry.path}?t=${Date.now()}` : entry.path;
+            scene.load.json(jsonKey, path);
             scene.load.once('filecomplete-json-' + jsonKey, () => {
                 const data = scene.cache.json.get(jsonKey);
                 this.levelCache.set(levelId, data);

@@ -151,7 +151,7 @@ const EXTRAS_REGISTRY = {
         key: 'extra_misfit',
         path: 'assets/characters/extras/Misfit.png',
         scale: 3.00,  // Legacy static scale (used if perspective scaling disabled)
-        baseScale: 1.0,  // Base size multiplier for perspective scaling
+        baseScale: 0.7,  // Base size multiplier for perspective scaling
         perspectiveScales: {minScale: 3.0, maxScale: 4.0}  // Perspective scaling range
     },
     subwaycar: {

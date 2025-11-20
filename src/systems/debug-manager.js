@@ -122,6 +122,21 @@ class DebugManager {
                 // Check if key was just pressed (transition from up to down)
                 if (isDown && !wasDown) {
                     console.log(`🔍 [Checkpoint Nav] Key ${i} just pressed!`);
+                    
+                    // Special case: Key 5 transitions to next level
+                    if (i === 5) {
+                        const currentLevelId = this.scene.selectedLevelId || 1;
+                        const nextLevelId = currentLevelId + 1;
+                        console.log(`🔍 [Checkpoint Nav] Key 5 pressed - transitioning to next level (${currentLevelId} -> ${nextLevelId})`);
+                        
+                        if (this.scene.levelTransitionManager) {
+                            this.scene.levelTransitionManager.transitionToLevel(nextLevelId);
+                        } else {
+                            console.error('🔍 [Checkpoint Nav] LevelTransitionManager not available');
+                        }
+                        return; // Exit early, don't process as checkpoint
+                    }
+                    
                     const checkpointIndex = i - 1; // Convert to 0-based index
                     const checkpointCount = this.scene.checkpointManager.getCheckpointCount();
                     console.log(`🔍 [Checkpoint Nav] Requesting checkpoint ${checkpointIndex} (total checkpoints: ${checkpointCount})`);
@@ -187,7 +202,7 @@ class DebugManager {
         this.debugCameraText.setDepth(20001);
         
         // Instructions (bottom-left) - smaller font
-        this.debugInstructionsText = this.scene.add.text(10, 710, 'R: Record | D: Toggle | G: Grid | 1-9: Checkpoints', {
+        this.debugInstructionsText = this.scene.add.text(10, 710, 'R: Record | D: Toggle | G: Grid | 1-4,6-9: Checkpoints | 5: Next Level', {
             fontSize: '10px', // Much smaller
             fill: '#ffffff',
             fontFamily: GAME_CONFIG.ui.fontFamily,

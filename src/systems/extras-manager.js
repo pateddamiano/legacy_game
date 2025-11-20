@@ -37,6 +37,7 @@ class ExtrasManager {
         }
 
         const sprite = this.scene.physics.add.image(Math.round(x), Math.round(y), def.key);
+        console.log(`🎭 [ExtrasManager] Sprite created at: x=${sprite.x}, y=${sprite.y} (requested: x=${x}, y=${y})`);
 
         // Disable gravity and world bounds collision for background elements
         sprite.setGravityY(0);

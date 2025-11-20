@@ -7,8 +7,14 @@
     "metadata": "assets/backgrounds/level_2_segments/metadata.json"
   },
   "world": { "top": 350, "bottom": 527 },
-  "spawn": { "x": 379, "y": 410 },
-  "audio": { "music": "streetAmbiance" },
+  "spawn": { "x": 290, "y": 410 },
+  "audio": { 
+    "music": "casinoMusic",
+    "musicVolume": 0.5,
+    "ambiance": "subwayAmbiance",
+    "ambianceVolume": 0.1,
+    "subwayPassingVolume": 0.1
+  },
   "enemies": {
     "spawnRate": 1200,
     "max": 4,
@@ -24,11 +30,11 @@
   "events": [
     {
       "id": "level_2_intro",
-      "trigger": { "type": "position", "value": 185, "tolerance": 40, "once": true },
+      "trigger": { "type": "position", "value": 290, "tolerance": 40, "once": true },
       "actions": [
         { "type": "pause", "targets": ["player"] },
         { "type": "camera", "stopFollow": true },
-        { "type": "spawnExtra", "name": "misfit", "position": { "x": 183, "y": 410 }, "id": "extra_misfit", "matchPlayer": false, "multiplier": 1.0 },
+        { "type": "spawnExtra", "name": "misfit", "position": { "x": 490, "y": 390 }, "id": "extra_misfit", "matchPlayer": false, "multiplier": 1.0 },
         { "type": "dialogue", "dialogue": { "speaker": "Misfit", "text": "I heard The Critic went this way. Stay sharp." } },
         { "type": "destroyExtra", "target": "extra_misfit" },
         { "type": "camera", "follow": "player" },

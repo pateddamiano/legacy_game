@@ -118,7 +118,9 @@ class LevelInitializationManager {
         
         // Start music
         if (this.audioManager && levelJson.audio && levelJson.audio.music) {
-            this.audioManager.playBackgroundMusic(levelJson.audio.music);
+            const musicVolume = levelJson.audio.musicVolume !== undefined ? 
+                levelJson.audio.musicVolume : null; // null = use default
+            this.audioManager.playBackgroundMusic(levelJson.audio.music, true, musicVolume);
         }
         
         console.log(`🎯 LEVEL ${levelJson.id} LOADED SUCCESSFULLY`);

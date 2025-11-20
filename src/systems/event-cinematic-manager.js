@@ -185,11 +185,11 @@ class EventCinematicManager {
             if (dialogueManager.overlay.originalAlpha === undefined) {
                 dialogueManager.overlay.originalAlpha = dialogueManager.overlay.alpha;
             }
-            // Keep overlay visible but at minimal alpha (just for subtle effect, not darkening)
+            // Keep overlay visible but completely transparent (no dimming effect)
             // The actual darkening is done by darkening enemies directly
             dialogueManager.overlay.setVisible(true);
-            dialogueManager.overlay.setAlpha(0.1); // Very subtle, just for slight dimming, not darkening
-            console.log(`[CINEMA-DARKEN] Overlay set to minimal alpha 0.1 (darkening done via enemy alpha/tint only)`);
+            dialogueManager.overlay.setAlpha(0.0); // Completely transparent - darkening done via enemy alpha/tint only
+            console.log(`[CINEMA-DARKEN] Overlay set to alpha 0.0 (completely transparent - darkening done via enemy alpha/tint only)`);
             console.log(`[CINEMA-DARKEN] Player depth: ${this.scene.player ? this.scene.player.depth : 'N/A'}, should be 10001`);
             if (this.scene.extrasManager) {
                 const extras = this.scene.extrasManager.extras || [];

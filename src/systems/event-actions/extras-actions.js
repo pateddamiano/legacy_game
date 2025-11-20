@@ -18,6 +18,9 @@ class ExtrasActions {
     }
     
     executeSpawnExtra(action) {
+        // Log the entire action object to see what we're receiving
+        console.log('🎬 [SpawnExtra] Full action object:', JSON.stringify(action, null, 2));
+        
         const name = action.name;
         if (!name) {
             console.warn('🎬 SpawnExtra missing name');
@@ -32,6 +35,16 @@ class ExtrasActions {
         // Determine position
         let x = action.position?.x;
         let y = action.position?.y;
+        
+        console.log('🎬 [SpawnExtra] Raw position from action:', { x, y, position: action.position, relativeTo: action.relativeTo });
+
+        // Convert to numbers if they're strings (JSON parsing might return strings)
+        if (x !== undefined && x !== null) {
+            x = typeof x === 'string' ? parseFloat(x) : Number(x);
+        }
+        if (y !== undefined && y !== null) {
+            y = typeof y === 'string' ? parseFloat(y) : Number(y);
+        }
 
         // Handle camera-relative positioning (e.g., "camera.x-200")
         if (typeof x === 'string' && x.includes('camera.x')) {
@@ -46,13 +59,18 @@ class ExtrasActions {
             }
         }
 
+        // Only override position if explicitly relative to player
         if (action.relativeTo === 'player' && this.scene.player) {
             const ox = action.offset?.x || 0;
             const oy = action.offset?.y || 0;
+            console.log('🎬 [SpawnExtra] Using player-relative positioning:', { playerX: this.scene.player.x, playerY: this.scene.player.y, offsetX: ox, offsetY: oy });
             x = this.scene.player.x + ox;
             y = this.scene.player.y + oy;
         }
-        if (x === undefined || y === undefined) {
+        
+        // Only use fallback if position is truly undefined/null (not 0, which is a valid position)
+        if ((x === undefined || x === null) || (y === undefined || y === null)) {
+            console.warn('🎬 [SpawnExtra] Position undefined, using fallback');
             // Fallback near player if available
             if (this.scene.player) {
                 x = this.scene.player.x + 60;
@@ -61,6 +79,8 @@ class ExtrasActions {
                 x = 200; y = 500;
             }
         }
+        
+        console.log('🎬 [SpawnExtra] Final position:', { x, y });
         const opts = {
             id: action.id,
             scale: action.scale,
