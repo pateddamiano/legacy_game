@@ -63,15 +63,39 @@ class EnvironmentManager {
     }
 
     /**
-     * Apply level-specific boundary adjustments
+     * Apply level-specific boundary adjustments from level JSON
      */
     applyLevelSpecificBounds() {
-        // Check if we're in level 2 and adjust bounds
+        // Try to get level JSON from LevelInitializationManager
+        let levelJson = null;
+        if (this.scene.levelInitializationManager && this.scene.levelInitializationManager.currentLevelJson) {
+            levelJson = this.scene.levelInitializationManager.currentLevelJson;
+        } else if (this.scene.levelManager) {
+            // Fallback: try to get from level manager
+            const currentConfig = this.scene.levelManager.getCurrentLevelConfig();
+            if (currentConfig && currentConfig.world) {
+                levelJson = currentConfig;
+            }
+        }
+        
+        // Apply bounds from level JSON if available
+        if (levelJson && levelJson.world) {
+            const top = levelJson.world.top;
+            const bottom = levelJson.world.bottom;
+            
+            if (top !== undefined && bottom !== undefined) {
+                console.log(`🌍 Applying level ${levelJson.id} street bounds from JSON: top=${top}, bottom=${bottom}`);
+                this.streetTopLimit = top;
+                this.streetBottomLimit = bottom;
+                console.log(`🛣️ Level ${levelJson.id} street limits: ${this.streetTopLimit} - ${this.streetBottomLimit}`);
+                return;
+            }
+        }
+        
+        // Fallback: Check if we're in level 2 and use old hardcoded values (for backwards compatibility)
         if (this.scene && this.scene.selectedLevelId === 2) {
-            console.log('🌍 Applying level 2 specific street bounds');
-            this.streetTopLimit = 350;    // Highest point on screen (let player go higher)
-            this.streetBottomLimit = 527; // Lowest point on screen
-            console.log(`🛣️ Level 2 street limits: ${this.streetTopLimit} - ${this.streetBottomLimit}`);
+            console.log('🌍 Level 2 detected but no world bounds in JSON, using defaults');
+            // Don't override - let WorldFactory handle it via inputManager
         }
     }
     

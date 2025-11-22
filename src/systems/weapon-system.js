@@ -36,7 +36,7 @@ const WEAPON_CONFIG = {
         size: { width: 48, height: 48 },
         hitbox: { width: 48, height: 48 },
         animations: null, // Will rotate sprite instead
-        verticalTolerance: 100,
+        verticalTolerance: 40, // Reduced from 100 to 40 for strict dodging
         collisionThreshold: 40
     },
     rating_1: {
@@ -50,7 +50,7 @@ const WEAPON_CONFIG = {
         size: { width: 48, height: 48 },
         hitbox: { width: 48, height: 48 },
         animations: null,
-        verticalTolerance: 100,
+        verticalTolerance: 40, // Reduced from 100 to 40 for strict dodging
         collisionThreshold: 40
     },
     rating_2: {
@@ -64,7 +64,7 @@ const WEAPON_CONFIG = {
         size: { width: 48, height: 48 },
         hitbox: { width: 48, height: 48 },
         animations: null,
-        verticalTolerance: 100,
+        verticalTolerance: 40, // Reduced from 100 to 40 for strict dodging
         collisionThreshold: 40
     },
     rating_3: {
@@ -78,7 +78,7 @@ const WEAPON_CONFIG = {
         size: { width: 48, height: 48 },
         hitbox: { width: 48, height: 48 },
         animations: null,
-        verticalTolerance: 100,
+        verticalTolerance: 40, // Reduced from 100 to 40 for strict dodging
         collisionThreshold: 40
     },
     rating_4: {
@@ -92,7 +92,7 @@ const WEAPON_CONFIG = {
         size: { width: 48, height: 48 },
         hitbox: { width: 48, height: 48 },
         animations: null,
-        verticalTolerance: 100,
+        verticalTolerance: 40, // Reduced from 100 to 40 for strict dodging
         collisionThreshold: 40
     }
 };
@@ -475,6 +475,11 @@ class WeaponManager {
                 if (horizontalDistance < collisionThreshold) {
                     const damage = projectile.onHit(enemy);
                     
+                    // Play weapon hit sound effect
+                    if (this.scene.audioManager) {
+                        this.scene.audioManager.playWeaponHit();
+                    }
+                    
                     // Deal damage to enemy with red flash effect
                     if (enemy.takeDamage) {
                         // Pass projectile position for knockback effect (knockback away from projectile)
@@ -511,6 +516,60 @@ class WeaponManager {
                     }
                 }
             });
+        });
+    }
+    
+    // Check if boss projectiles (rating weapons) hit the player
+    checkBossProjectileCollisions(player) {
+        // Handle player being either a wrapper (with .sprite) or the sprite itself
+        // GameScene passes the player sprite directly, while Enemy classes wrap the sprite
+        const playerSprite = player.sprite || player;
+        
+        if (!playerSprite || !playerSprite.active) return;
+        
+        this.projectiles.forEach(projectile => {
+            if (!projectile.active || !projectile.sprite || !projectile.sprite.active) return;
+            
+            // Only check rating weapons (boss projectiles)
+            // Check if weapon config name or sprite key indicates it's a rating weapon
+            const weaponConfig = projectile.weaponConfig;
+            if (!weaponConfig) return;
+            
+            const isRatingWeapon = (weaponConfig.spriteKey && weaponConfig.spriteKey.startsWith('ratingWeapon')) ||
+                                   (weaponConfig.name && weaponConfig.name.includes('Rating'));
+            
+            if (!isRatingWeapon) return;
+            
+            // Check vertical distance
+            const verticalDistance = Math.abs(projectile.sprite.y - playerSprite.y);
+            const verticalTolerance = projectile.weaponConfig.verticalTolerance || 100;
+            
+            if (verticalDistance > verticalTolerance) {
+                return; // Skip if too far apart vertically
+            }
+            
+            // Check horizontal collision
+            const horizontalDistance = Math.abs(projectile.sprite.x - playerSprite.x);
+            const collisionThreshold = projectile.weaponConfig.collisionThreshold || 40;
+            
+            // If collision detected
+            if (horizontalDistance < collisionThreshold) {
+                const damage = projectile.weaponConfig.damage || 15;
+                
+                // Play rating weapon hit sound effect
+                if (this.scene.audioManager) {
+                    this.scene.audioManager.playRatingWeaponHit();
+                }
+                
+                // Deal damage to player
+                if (this.scene.playerTakeDamage) {
+                    this.scene.playerTakeDamage(damage);
+                    console.log(`💥 Player hit by rating weapon for ${damage} damage!`);
+                }
+                
+                // Destroy the projectile
+                projectile.destroy();
+            }
         });
     }
     

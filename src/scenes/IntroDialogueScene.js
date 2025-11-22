@@ -104,11 +104,12 @@ class IntroDialogueScene extends Phaser.Scene {
         // Get the audio manager from the game scene (it's shared across scenes)
         const gameScene = this.scene.get('GameScene');
         if (gameScene && gameScene.audioManager) {
-            gameScene.audioManager.playBackgroundMusic('fadeMusic');
+            this.audioManager = gameScene.audioManager;
+            this.audioManager.playBackgroundMusic('fadeMusic');
         } else {
             // If GameScene isn't available, create a temporary audio manager
-            const tempAudioManager = new AudioManager(this);
-            tempAudioManager.playBackgroundMusic('fadeMusic');
+            this.audioManager = new AudioManager(this);
+            this.audioManager.playBackgroundMusic('fadeMusic');
         }
 
         // Fade in from black
@@ -224,6 +225,11 @@ class IntroDialogueScene extends Phaser.Scene {
     }
 
     typeText(text) {
+        // Start typing sound
+        if (this.audioManager) {
+            this.audioManager.startTextTyping();
+        }
+        
         let charIndex = 0;
         
         const typeInterval = setInterval(() => {
@@ -233,6 +239,11 @@ class IntroDialogueScene extends Phaser.Scene {
             } else {
                 clearInterval(typeInterval);
                 this.isTyping = false;
+                
+                // Stop typing sound when typing completes
+                if (this.audioManager) {
+                    this.audioManager.stopTextTyping();
+                }
             }
         }, this.typingSpeed);
 
@@ -247,6 +258,11 @@ class IntroDialogueScene extends Phaser.Scene {
             const line = this.dialogueLines[this.currentLineIndex - 1];
             this.messageText.setText(line.text);
             this.isTyping = false;
+            
+            // Stop typing sound when skipped
+            if (this.audioManager) {
+                this.audioManager.stopTextTyping();
+            }
         } else {
             // Move to next line
             this.showNextLine();

@@ -17,6 +17,9 @@ class EnemySpawnManager {
         this.isLoading = false;
         this.isTestMode = false;
         
+        // Allowed enemy types for this level (empty = all types allowed for backwards compatibility)
+        this.allowedEnemyTypes = [];
+        
         // References (set during initialization)
         this.player = null;
         this.streetTopLimit = 0;
@@ -38,6 +41,16 @@ class EnemySpawnManager {
         this.enemySpawnInterval = config.spawnInterval || ENEMY_CONFIG.spawnInterval;
         this.isTestMode = config.isTestMode || false;
         this.isLoading = config.isLoading || false;
+        
+        // Set allowed enemy types from config (if provided)
+        if (config.allowedEnemyTypes && Array.isArray(config.allowedEnemyTypes)) {
+            this.allowedEnemyTypes = config.allowedEnemyTypes;
+            console.log(`👾 EnemySpawnManager: Allowed enemy types set to: ${this.allowedEnemyTypes.join(', ')}`);
+        } else {
+            // Default: allow all enemy types (backwards compatibility)
+            this.allowedEnemyTypes = [];
+            console.log('👾 EnemySpawnManager: No enemy type restrictions (all types allowed)');
+        }
     }
     
     setReferences(player, streetTopLimit, streetBottomLimit, eventCameraLocked, playerCurrentHealth, playerMaxHealth, levelManager) {
@@ -274,16 +287,35 @@ class EnemySpawnManager {
         // Random Y position within street bounds with some variety
         let spawnY = this.streetTopLimit + Math.random() * (this.streetBottomLimit - this.streetTopLimit);
         
-        // Randomly select an enemy type with weighted probability FIRST
-        // Crackheads are most common (50%), Green thugs medium (30%), Black thugs rare (20%)
-        const random = Math.random();
+        // Select enemy type based on level config
         let enemyConfig;
-        if (random < 0.5) {
-            enemyConfig = CRACKHEAD_CONFIG; // 50% chance - most common
-        } else if (random < 0.8) {
-            enemyConfig = GREEN_THUG_CONFIG; // 30% chance - medium difficulty
+        
+        // If level specifies allowed enemy types, only spawn from those
+        if (this.allowedEnemyTypes && this.allowedEnemyTypes.length > 0) {
+            // Randomly select from allowed types with equal probability
+            const randomType = this.allowedEnemyTypes[Math.floor(Math.random() * this.allowedEnemyTypes.length)];
+            
+            // Find the config for this enemy type
+            if (typeof ALL_ENEMY_TYPES !== 'undefined' && ALL_ENEMY_TYPES) {
+                enemyConfig = ALL_ENEMY_TYPES.find(config => config.name === randomType);
+            }
+            
+            if (!enemyConfig) {
+                console.warn(`👾 Could not find enemy config for type: ${randomType}, falling back to default`);
+                // Fallback to first allowed type or crackhead
+                enemyConfig = ALL_ENEMY_TYPES.find(config => config.name === this.allowedEnemyTypes[0]) || CRACKHEAD_CONFIG;
+            }
         } else {
-            enemyConfig = BLACK_THUG_CONFIG; // 20% chance - hardest enemy
+            // No restrictions: use weighted probability (backwards compatibility)
+            // Crackheads are most common (50%), Green thugs medium (30%), Black thugs rare (20%)
+            const random = Math.random();
+            if (random < 0.5) {
+                enemyConfig = CRACKHEAD_CONFIG; // 50% chance - most common
+            } else if (random < 0.8) {
+                enemyConfig = GREEN_THUG_CONFIG; // 30% chance - medium difficulty
+            } else {
+                enemyConfig = BLACK_THUG_CONFIG; // 20% chance - hardest enemy
+            }
         }
         
         // NOW add spawn position variety based on enemy type

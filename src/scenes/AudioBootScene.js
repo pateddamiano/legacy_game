@@ -246,6 +246,8 @@ class AudioBootScene extends Phaser.Scene {
         
         // Weapon sounds
         this.load.audio('weaponRecordThrow', 'assets/audio/sfx/weapon_record_throw.mp3');
+        this.load.audio('weaponRecordHit', 'assets/audio/sfx/weapon_record_hit.mp3');
+        this.load.audio('ratingWeaponHit', 'assets/audio/sfx/rating_weapon_hit.mp3');
         
         // Item pickup sounds
         this.load.audio('healthPickup', 'assets/audio/sfx/item_health_item_pickup.mp3');
@@ -253,6 +255,7 @@ class AudioBootScene extends Phaser.Scene {
         
         // Effect sounds
         this.load.audio('tornadoWind', 'assets/audio/sfx/tornado_wind.mp3');
+        this.load.audio('textTyping', 'assets/audio/sfx/text.mp3');
         
         console.log('🎵 All audio assets configured for loading');
     }

@@ -22,12 +22,12 @@ class SpawningActions {
         this.scene.enemySpawnInterval = config.spawnInterval !== undefined ? config.spawnInterval : 1200;
         this.scene.enemySpawnTimer = 0; // Reset timer
         
-        // CRITICAL: Also reset the EnemySpawnManager's internal spawn timer
-        // This ensures enemies don't spawn immediately
+        // CRITICAL: Also reset the EnemySpawnManager's internal settings
         if (this.scene.enemySpawnManager) {
+            this.scene.enemySpawnManager.setMaxEnemies(this.scene.maxEnemies);
+            this.scene.enemySpawnManager.setSpawnInterval(this.scene.enemySpawnInterval);
             this.scene.enemySpawnManager.enemySpawnTimer = 0;
-            this.scene.enemySpawnManager.enemySpawnInterval = this.scene.enemySpawnInterval;
-            console.log(`🎬 Reset EnemySpawnManager spawn timer to 0`);
+            console.log(`🎬 Reset EnemySpawnManager: maxEnemies=${this.scene.maxEnemies}, interval=${this.scene.enemySpawnInterval}`);
         }
         
         // Store original spawn settings if needed
@@ -47,6 +47,12 @@ class SpawningActions {
         // Disable enemy spawning (but don't clear existing enemies)
         this.scene.maxEnemies = 0;
         this.scene.enemySpawnInterval = 999999;
+        
+        // CRITICAL: Also stop the EnemySpawnManager
+        if (this.scene.enemySpawnManager) {
+            this.scene.enemySpawnManager.setMaxEnemies(0);
+            console.log('🎬 Stopped EnemySpawnManager');
+        }
         
         if (this.scene.eventEnemySpawningConfig) {
             this.scene.eventEnemySpawningConfig.enabled = false;

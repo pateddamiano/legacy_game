@@ -73,6 +73,16 @@ class BossActions {
             }
             this.scene.eventEnemyMap.set(action.id, bossIndex);
             console.log(`👹 Stored boss reference: ${action.id} -> index ${bossIndex}`);
+        } else {
+            // Also store by bossType if no explicit ID provided, as a fallback
+            if (!this.scene.eventEnemyMap) {
+                this.scene.eventEnemyMap = new Map();
+            }
+            // If ID wasn't provided, use the bossType or 'boss_type' format as key if valid
+            // This is a safety measure for boss actions looking for specific boss types
+            this.scene.eventEnemyMap.set(mergedConfig.type, bossIndex);
+            this.scene.eventEnemyMap.set(`boss_${mergedConfig.type}`, bossIndex); 
+            console.log(`👹 Stored boss fallback references: ${mergedConfig.type}, boss_${mergedConfig.type} -> index ${bossIndex}`);
         }
         
         // Store boss reference separately for easy access
@@ -184,25 +194,37 @@ class BossActions {
         console.log(`👹 Waiting for boss ${boss.bossName} to be defeated...`);
         console.log(`👹 [WAIT_BOSS] Boss state check: health=${boss.health}/${boss.maxHealth}, state=${boss.state}, isDying=${boss.state === BOSS_STATES.DYING}, isDead=${boss.state === BOSS_STATES.DEAD}`);
         
-        // Set up callback to advance when boss is defeated
-        const previousCallback = boss.onBossDefeated;
-        boss.onBossDefeated = (defeatedBoss) => {
-            console.log(`👹 [WAIT_BOSS] ✅ onBossDefeated CALLBACK FIRED`);
-            console.log(`👹 Boss ${defeatedBoss.bossName} defeated!`);
-            // Small delay before advancing to next action
-            this.scene.time.delayedCall(500, () => {
-                this.advanceAction();
-            });
-        };
-        console.log(`👹 [WAIT_BOSS] Callback set. Previous callback was: ${previousCallback ? 'YES' : 'NO'}`);
-        
-        // Check if already defeated
+        // Check if already defeated FIRST before setting up callback
+        // This prevents race conditions where boss dies between checks or is already dead
         if (boss.health <= 0 || boss.state === BOSS_STATES.DYING || boss.state === BOSS_STATES.DEAD) {
             console.log(`👹 [WAIT_BOSS] ⚠️ Boss already in defeated state! health=${boss.health}, state=${boss.state}`);
             console.log(`👹 Boss already defeated, advancing immediately`);
             this.advanceAction();
             return;
         }
+
+        // Set up callback to advance when boss is defeated
+        // Use a chainable callback pattern instead of overwriting directly
+        const previousCallback = boss.onBossDefeated;
+        boss.onBossDefeated = (defeatedBoss) => {
+            console.log(`👹 [WAIT_BOSS] ✅ onBossDefeated CALLBACK FIRED`);
+            console.log(`👹 Boss ${defeatedBoss.bossName} defeated!`);
+            
+            // Execute previous callback if it existed
+            if (previousCallback && typeof previousCallback === 'function') {
+                previousCallback(defeatedBoss);
+            }
+            
+            // Small delay before advancing to next action
+            this.scene.time.delayedCall(500, () => {
+                // Verify we haven't already advanced (prevent double-advancing)
+                // This check assumes advanceAction increments an index we could check, 
+                // but since we don't have easy access to the exact expected index here without tracking,
+                // we rely on the event manager to handle extra calls gracefully or this being the primary trigger.
+                this.advanceAction();
+            });
+        };
+        console.log(`👹 [WAIT_BOSS] Callback set. Previous callback was: ${previousCallback ? 'YES' : 'NO'}`);
         
         // Don't advance - wait for callback
     }

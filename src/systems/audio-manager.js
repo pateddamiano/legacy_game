@@ -21,6 +21,7 @@ class AudioManager {
         this.runningSoundEffect = null;
         this.ambianceSoundEffect = null;
         this.subwayPassingSound = null;
+        this.textTypingSound = null;
 
         // Sound effect spam prevention
         this.lastFocusTime = Date.now();
@@ -363,6 +364,9 @@ class AudioManager {
             if (this.subwayPassingSound && this.subwayPassingSound.isPlaying) {
                 this.subwayPassingSound.pause();
             }
+            if (this.textTypingSound && this.textTypingSound.isPlaying) {
+                this.textTypingSound.pause();
+            }
             
             console.log('🎵 Game lost focus - muting sound effects');
         } else {
@@ -393,6 +397,9 @@ class AudioManager {
             }
             if (this.subwayPassingSound && this.subwayPassingSound.isPaused) {
                 this.subwayPassingSound.resume();
+            }
+            if (this.textTypingSound && this.textTypingSound.isPaused) {
+                this.textTypingSound.resume();
             }
             
             console.log('🎵 Game regained focus - unmuting sound effects');
@@ -452,6 +459,9 @@ class AudioManager {
 
         // Stop subway passing sound
         this.stopSubwayPassing();
+
+        // Stop text typing sound
+        this.stopTextTyping();
 
         console.log('🗑️ AudioManager destroyed');
     }
@@ -698,7 +708,12 @@ class AudioManager {
     
     playWeaponHit() {
         // Play when weapon hits enemy
-        this.playSoundEffect('weaponRecordThrow', 0.3);
+        this.playSoundEffect('weaponRecordHit', 0.4);
+    }
+    
+    playRatingWeaponHit() {
+        // Play when critic's rating weapon hits player
+        this.playSoundEffect('ratingWeaponHit', 0.4);
     }
     
     // Item Pickup Sounds
@@ -717,6 +732,42 @@ class AudioManager {
     
     playGameOverSound() {
         this.playSoundEffect('gameOver');
+    }
+    
+    // Dialogue typing sound (looping during typing)
+    startTextTyping() {
+        // Don't start if already playing
+        if (this.textTypingSound && this.textTypingSound.isPlaying) {
+            return;
+        }
+        
+        // Don't start if SFX is muted
+        if (this.sfxMuted || !this.config.soundEffects.enabled) {
+            return;
+        }
+        
+        // Check if sound exists in cache
+        if (!this.scene.cache.audio.has('textTyping')) {
+            console.warn('🔊 Text typing sound not found: textTyping');
+            return;
+        }
+        
+        // Create and play looping typing sound
+        this.textTypingSound = this.sound.add('textTyping', {
+            volume: 0.075,
+            loop: true
+        });
+        this.textTypingSound.play();
+        console.log('🔊 Started text typing sound');
+    }
+    
+    stopTextTyping() {
+        if (this.textTypingSound) {
+            this.textTypingSound.stop();
+            this.textTypingSound.destroy();
+            this.textTypingSound = null;
+            console.log('🔊 Stopped text typing sound');
+        }
     }
     
     // ========================================

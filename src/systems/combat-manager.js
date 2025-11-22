@@ -50,6 +50,15 @@ class CombatManager {
         // Skip if animation manager not initialized yet
         if (!this.animationManager || !this.player) return;
         
+        // CRITICAL FIX: Always use scene.enemies directly to avoid stale references
+        // This ensures we always check the current enemies array, not a cached reference
+        const currentEnemies = this.scene.enemies || this.enemies || [];
+        
+        // Update our reference if it's different (for other methods that use this.enemies)
+        if (this.enemies !== currentEnemies) {
+            this.enemies = currentEnemies;
+        }
+        
         // Check player attacks hitting enemies (both ground attacks and air kicks)
         this.checkPlayerAttacks();
         
@@ -59,6 +68,10 @@ class CombatManager {
     
     checkPlayerAttacks() {
         if ((this.animationManager.currentState === 'attack' || this.animationManager.currentState === 'airkick') && this.animationManager.animationLocked) {
+            // CRITICAL FIX: Always use scene.enemies directly
+            const currentEnemies = this.scene.enemies || this.enemies || [];
+            console.log(`⚔️ Checking player attacks: state=${this.animationManager.currentState}, enemies=${currentEnemies.length} (scene=${this.scene.enemies?.length || 0}, cached=${this.enemies?.length || 0})`);
+            
             const playerHitbox = this.getPlayerAttackHitbox();
             if (playerHitbox) {
                 // Get scaled hitbox for vertical tolerance
@@ -68,10 +81,15 @@ class CombatManager {
                     scaledHitbox.airkickVerticalTolerance : 
                     scaledHitbox.verticalTolerance;
                 
-                this.enemies.forEach(enemy => {
+                currentEnemies.forEach(enemy => {
                     if (enemy.state !== ENEMY_STATES.DEAD) {
                         // Check vertical distance first (street-level tolerance)
                         const verticalDistance = Math.abs(this.player.y - enemy.sprite.y);
+                        
+                        // Debug log for potential hits
+                        if (verticalDistance <= verticalTolerance * 2 && Math.abs(this.player.x - enemy.sprite.x) < 200) {
+                            console.log(`⚔️ Enemy nearby: dist=${Math.round(verticalDistance)} (tol=${verticalTolerance}), colliding=${this.isColliding(playerHitbox, enemy.sprite)}`);
+                        }
                         
                         if (verticalDistance <= verticalTolerance && this.isColliding(playerHitbox, enemy.sprite)) {
                             // Only deal damage if this enemy hasn't been hit by this attack yet
@@ -101,9 +119,11 @@ class CombatManager {
     }
     
     checkEnemyAttacks() {
-        if (!this.enemies) return;
+        // CRITICAL FIX: Always use scene.enemies directly
+        const currentEnemies = this.scene.enemies || this.enemies || [];
+        if (!currentEnemies || currentEnemies.length === 0) return;
 
-        this.enemies.forEach(enemy => {
+        currentEnemies.forEach(enemy => {
             const enemyHitbox = enemy.getAttackHitbox();
             if (enemyHitbox && this.isColliding(enemyHitbox, this.player)) {
                 // Only deal damage if this enemy hasn't hit the player with this attack yet
@@ -213,9 +233,12 @@ class CombatManager {
     // ========================================
     
     checkCharacterCollisions() {
+        // CRITICAL FIX: Always use scene.enemies directly
+        const currentEnemies = this.scene.enemies || this.enemies || [];
+        
         // Check player collision with all enemies
-        if (this.enemies) {
-            this.enemies.forEach(enemy => {
+        if (currentEnemies && currentEnemies.length > 0) {
+            currentEnemies.forEach(enemy => {
                 if (!enemy.sprite || enemy.state === ENEMY_STATES.DEAD) return;
                 
                 // Calculate horizontal and vertical distances separately
@@ -283,13 +306,14 @@ class CombatManager {
         }
         
         // Check enemy-to-enemy collisions
-        if (this.enemies) {
-            for (let i = 0; i < this.enemies.length; i++) {
-                const enemy1 = this.enemies[i];
+        // Use the same currentEnemies array we got above
+        if (currentEnemies && currentEnemies.length > 0) {
+            for (let i = 0; i < currentEnemies.length; i++) {
+                const enemy1 = currentEnemies[i];
                 if (!enemy1.sprite || enemy1.state === ENEMY_STATES.DEAD) continue;
                 
-                for (let j = i + 1; j < this.enemies.length; j++) {
-                    const enemy2 = this.enemies[j];
+                for (let j = i + 1; j < currentEnemies.length; j++) {
+                    const enemy2 = currentEnemies[j];
                     if (!enemy2.sprite || enemy2.state === ENEMY_STATES.DEAD) continue;
                     
                     // Calculate horizontal and vertical distances separately

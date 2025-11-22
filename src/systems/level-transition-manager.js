@@ -661,7 +661,8 @@ class LevelTransitionManager {
                     maxEnemies: enemyConfig.max || ENEMY_CONFIG.maxEnemiesOnScreen,
                     spawnInterval: enemyConfig.spawnRate || ENEMY_CONFIG.spawnInterval,
                     isTestMode: this.scene.isTestMode || false,
-                    isLoading: false // Enable spawning for new level
+                    isLoading: false, // Enable spawning for new level
+                    allowedEnemyTypes: enemyConfig.types || [] // Pass allowed enemy types from level config
                 });
                 
                 // Update references

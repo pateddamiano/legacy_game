@@ -46,8 +46,8 @@ const BOSS_TYPE_CONFIGS = {
         playerDamage: 8,
         attackTypes: ['enemy_punch'],
         detectionRange: 2000,
-        behaviors: ['jumpOnDamage', 'throwWeapons'],
-        jumpType: 'teleport',
+        behaviors: ['jumpOnDamage', 'throwWeapons', 'verticalMovement'],
+        jumpType: 'flip', // Changed from teleport to flip
         jumpDistance: 500,
         throwWeaponType: 'rating', // Will randomly select rating_0 through rating_4
         standOnEdges: true, // Enable edge-standing behavior
@@ -82,6 +82,7 @@ class Boss extends Enemy {
         this.behaviors = {
             jumpOnDamage: mergedConfig.behaviors?.includes('jumpOnDamage') || false,
             throwWeapons: mergedConfig.behaviors?.includes('throwWeapons') || false,
+            verticalMovement: mergedConfig.behaviors?.includes('verticalMovement') || false,
             chase: mergedConfig.behaviors?.includes('chase') !== false, // Default true
             attack: mergedConfig.behaviors?.includes('attack') !== false // Default true
         };
@@ -138,6 +139,12 @@ class Boss extends Enemy {
         // Update phase based on health
         this.updatePhase();
         
+        // Ensure tracking the correct active player instance
+        if (this.scene.player && this.scene.player.active && this.player !== this.scene.player) {
+            this.setPlayer(this.scene.player);
+            console.log(`👹 Boss ${this.bossName} updated tracking target to new player: ${this.scene.player.characterName || 'Unknown'}`);
+        }
+        
         // Call parent update
         super.update(time, delta);
         
@@ -155,6 +162,11 @@ class Boss extends Enemy {
             // Edge-standing behavior
             if (this.standOnEdges) {
                 this.updateEdgeStanding();
+            }
+
+            // Vertical movement behavior (align with player)
+            if (this.behaviors.verticalMovement && this.player) {
+                this.updateVerticalMovement();
             }
 
             // Update weapon throwing if enabled
@@ -261,6 +273,42 @@ class Boss extends Enemy {
                     this.setState(BOSS_STATES.WALKING);
                 }
             });
+        } else if (this.jumpType === 'flip') {
+            // Acrobatic flip jump
+            const jumpHeight = 250;
+            const jumpDuration = 800;
+            
+            // Determine direction for flip
+            const direction = targetX > this.sprite.x ? 1 : -1;
+            
+            // Play jump sound if available
+            if (this.scene.audioManager && this.scene.audioManager.playJump) {
+                this.scene.audioManager.playJump();
+            }
+            
+            // Create tween for jump arc
+            this.scene.tweens.add({
+                targets: this.sprite,
+                x: targetX,
+                y: targetY - jumpHeight,
+                angle: 360 * direction, // Full rotation
+                duration: jumpDuration / 2,
+                yoyo: true, // Go up and down
+                ease: 'Sine.easeInOut',
+                onComplete: () => {
+                    if (this.sprite && this.sprite.active) {
+                        this.sprite.y = targetY; // Ensure we land exactly on Y
+                        this.sprite.angle = 0;   // Reset rotation
+                        
+                        // Face the player after landing
+                        this.sprite.setFlipX(this.currentEdge === 'right'); // If on right, face left (flipX=true)
+                        
+                        if (this.state === BOSS_STATES.JUMPING) {
+                            this.setState(BOSS_STATES.WALKING);
+                        }
+                    }
+                }
+            });
         } else {
             // Physics-based jump with arc
             const jumpHeight = 150;
@@ -295,6 +343,36 @@ class Boss extends Enemy {
         // Jump behavior handled in executeBossJump via tweens
         // This is called during jump state for any additional updates
     }
+
+    updateVerticalMovement() {
+        if (!this.player || !this.sprite) return;
+        
+        // Don't move vertically if attacking or casting
+        if (this.state === BOSS_STATES.ATTACKING || this.state === BOSS_STATES.THROWING) return;
+
+        const targetY = this.player.y;
+        const currentY = this.sprite.y;
+        const diffY = targetY - currentY;
+        
+        // Deadzone to prevent jitter
+        if (Math.abs(diffY) > 10) {
+            const speed = this.speed * 0.8; // Vertical speed slightly slower
+            const direction = Math.sign(diffY);
+            
+            this.sprite.setVelocityY(direction * speed);
+        } else {
+            this.sprite.setVelocityY(0);
+        }
+        
+        // Constrain to street bounds if available
+        if (this.scene.inputManager && this.scene.inputManager.streetTopLimit) {
+            const minY = this.scene.inputManager.streetTopLimit;
+            const maxY = this.scene.inputManager.streetBottomLimit;
+            
+            if (this.sprite.y < minY) this.sprite.y = minY;
+            if (this.sprite.y > maxY) this.sprite.y = maxY;
+        }
+    }
     
     updateWeaponThrowing(time, delta) {
         if (!this.player || !this.sprite) return;
@@ -322,14 +400,19 @@ class Boss extends Enemy {
     
     executeBossThrow() {
         if (!this.player || !this.sprite || !this.scene.weaponManager) return;
+        
+        // Ensure we are targeting the active player
+        // The update loop should keep this in sync, but for the throw calculation, 
+        // using scene.player is safer to ensure we target the currently visible character
+        const targetPlayer = this.scene.player || this.player;
 
         console.log(`👹 Boss ${this.bossName} throwing rating weapon`);
 
         this.lastThrowTime = this.scene.time.now;
         this.setState(BOSS_STATES.THROWING);
 
-        // Determine throw direction
-        const direction = this.sprite.x < this.player.x ? 1 : -1;
+        // Determine throw direction based on target player
+        const direction = this.sprite.x < targetPlayer.x ? 1 : -1;
 
         // Calculate throw position (from boss sprite)
         const throwX = this.sprite.x + (direction * 50);

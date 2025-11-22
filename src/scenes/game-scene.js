@@ -642,12 +642,67 @@ class GameScene extends Phaser.Scene {
         
         // Check combat interactions using CombatManager
         if (this.combatManager) {
+            // Ensure CombatManager has correct references (critical for level transitions/character switches)
+            if (this.player && this.combatManager.player !== this.player) {
+                console.log('🔄 Updating CombatManager player reference in update loop');
+                this.combatManager.player = this.player;
+            }
+            if (this.animationManager && this.combatManager.animationManager !== this.animationManager) {
+                console.log('🔄 Updating CombatManager animationManager reference in update loop');
+                this.combatManager.animationManager = this.animationManager;
+            }
+
+            // SYNC ENEMIES: Ensure everyone is looking at the same enemies array
+            // EnemySpawnManager is the source of truth as it manages the update loop
+            if (this.enemySpawnManager) {
+                const spawnManagerEnemies = this.enemySpawnManager.enemies;
+                const sceneEnemies = this.enemies;
+                const combatEnemies = this.combatManager.enemies;
+                
+                // Debug: Log array states periodically (every 60 frames to avoid spam)
+                if (!this._enemySyncDebugCounter) this._enemySyncDebugCounter = 0;
+                this._enemySyncDebugCounter++;
+                if (this._enemySyncDebugCounter % 60 === 0) {
+                    console.log(`🔍 Enemy array sync check: scene=${sceneEnemies?.length || 0}, spawn=${spawnManagerEnemies?.length || 0}, combat=${combatEnemies?.length || 0}, sameRef=${sceneEnemies === spawnManagerEnemies}, combatSameRef=${combatEnemies === spawnManagerEnemies}`);
+                }
+                
+                if (spawnManagerEnemies) {
+                    // If GameScene's enemies array got desynced from EnemySpawnManager
+                    if (sceneEnemies !== spawnManagerEnemies) {
+                        console.log(`🔄 Re-syncing GameScene.enemies (${sceneEnemies?.length || 0}) with EnemySpawnManager.enemies (${spawnManagerEnemies.length})`);
+                        this.enemies = spawnManagerEnemies;
+                    }
+                    
+                    // If CombatManager's enemies array got desynced
+                    if (combatEnemies !== spawnManagerEnemies) {
+                        console.log(`🔄 Re-syncing CombatManager.enemies (${combatEnemies?.length || 0}) with EnemySpawnManager.enemies (${spawnManagerEnemies.length})`);
+                        this.combatManager.enemies = spawnManagerEnemies;
+                    }
+                } else {
+                    // EnemySpawnManager.enemies is null/undefined - this is a problem!
+                    if (this._enemySyncDebugCounter % 60 === 0) {
+                        console.warn(`⚠️ EnemySpawnManager.enemies is ${spawnManagerEnemies} - this should not happen!`);
+                    }
+                }
+            } else {
+                if (!this._enemySyncDebugCounter) this._enemySyncDebugCounter = 0;
+                this._enemySyncDebugCounter++;
+                if (this._enemySyncDebugCounter % 60 === 0) {
+                    console.warn(`⚠️ EnemySpawnManager is null!`);
+                }
+            }
+
             this.combatManager.update();
             this.combatManager.checkCharacterCollisions();
         }
         
         // Check weapon projectile collisions with enemies
         this.weaponManager.checkProjectileCollisions(this.enemies);
+        
+        // Check boss projectile collisions with player (rating weapons)
+        if (this.player && this.weaponManager.checkBossProjectileCollisions) {
+            this.weaponManager.checkBossProjectileCollisions(this.player);
+        }
         
         // Update UI and debug visuals using managers
         this.updateUIAndDebugVisuals();
@@ -1084,6 +1139,14 @@ class GameScene extends Phaser.Scene {
             this.isJumping
         );
         
+        // SYNC FIX: Ensure we use the active enemies array from spawn manager before creating CombatManager
+        if (this.enemySpawnManager && this.enemySpawnManager.enemies) {
+            if (this.enemies !== this.enemySpawnManager.enemies) {
+                console.log('🔄 Re-syncing enemies array before CombatManager init');
+                this.enemies = this.enemySpawnManager.enemies;
+            }
+        }
+
         // Initialize CombatManager
         this.combatManager = new CombatManager(this, this.characterManager, this.enemies, this.levelManager);
         this.combatManager.initialize(

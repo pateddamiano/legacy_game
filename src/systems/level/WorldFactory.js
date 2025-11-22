@@ -26,11 +26,39 @@ class WorldFactory {
         }
 
         // Apply world vertical bounds
-        if (levelJson.world && scene.inputManager) {
+        if (levelJson.world) {
             const top = levelJson.world.top ?? 410;
             const bottom = levelJson.world.bottom ?? 650;
-            scene.inputManager.setStreetBounds(top, bottom);
+            
+            // Update input manager
+            if (scene.inputManager) {
+                scene.inputManager.setStreetBounds(top, bottom);
+            }
+            
+            // Update environment manager directly (source of truth)
+            if (scene.environmentManager) {
+                scene.environmentManager.streetTopLimit = top;
+                scene.environmentManager.streetBottomLimit = bottom;
+                console.log(`🌍 [WorldFactory] Updated EnvironmentManager bounds: ${top} - ${bottom}`);
+            }
+            
             this.log('Applied street bounds', top, bottom);
+        }
+        
+        // Apply enemy spawn configuration (including allowed enemy types)
+        if (levelJson.enemies && scene.enemySpawnManager) {
+            const enemyConfig = levelJson.enemies;
+            
+            // Update enemy spawner configuration
+            scene.enemySpawnManager.initialize({
+                maxEnemies: enemyConfig.max || ENEMY_CONFIG.maxEnemiesOnScreen,
+                spawnInterval: enemyConfig.spawnRate || ENEMY_CONFIG.spawnInterval,
+                isTestMode: scene.isTestMode || false,
+                isLoading: false,
+                allowedEnemyTypes: enemyConfig.types || [] // Pass allowed enemy types from level config
+            });
+            
+            console.log(`🌍 [WorldFactory] Updated EnemySpawnManager: max=${enemyConfig.max || ENEMY_CONFIG.maxEnemiesOnScreen}, spawnRate=${enemyConfig.spawnRate || ENEMY_CONFIG.spawnInterval}, types=${(enemyConfig.types || []).join(', ') || 'all'}`);
         }
 
         // Music (actual playback done by caller)

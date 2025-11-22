@@ -204,6 +204,11 @@ class DialogueManager {
             this.typewriterTimer.remove();
         }
         
+        // Start typing sound (loops during typing)
+        if (this.scene.audioManager) {
+            this.scene.audioManager.startTextTyping();
+        }
+        
         this.typewriterTimer = this.scene.time.addEvent({
             delay: this.typewriterSpeed,
             callback: () => {
@@ -212,7 +217,10 @@ class DialogueManager {
                     this.messageText.setText(this.displayedText);
                     this.charIndex++;
                 } else {
-                    // Typewriter complete
+                    // Typewriter complete - stop typing sound
+                    if (this.scene.audioManager) {
+                        this.scene.audioManager.stopTextTyping();
+                    }
                     this.typewriterTimer.remove();
                     this.typewriterTimer = null;
                     this.showContinuePrompt();
@@ -226,6 +234,11 @@ class DialogueManager {
         if (this.typewriterTimer) {
             this.typewriterTimer.remove();
             this.typewriterTimer = null;
+        }
+        
+        // Stop typing sound when skipped
+        if (this.scene.audioManager) {
+            this.scene.audioManager.stopTextTyping();
         }
         
         this.displayedText = this.fullText;
