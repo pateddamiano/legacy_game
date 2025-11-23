@@ -50,6 +50,11 @@ class CombatManager {
         // Skip if animation manager not initialized yet
         if (!this.animationManager || !this.player) return;
         
+        // Skip combat if game is paused (physics world paused indicates game over/death state)
+        if (this.scene.physics && this.scene.physics.world && this.scene.physics.world.isPaused) {
+            return;
+        }
+        
         // CRITICAL FIX: Always use scene.enemies directly to avoid stale references
         // This ensures we always check the current enemies array, not a cached reference
         const currentEnemies = this.scene.enemies || this.enemies || [];
@@ -214,9 +219,32 @@ class CombatManager {
         const healthPercent = (newHealth / activeCharData.maxHealth) * 100;
 
         if (healthPercent <= this.autoSwitchThreshold) {
-            console.log(`🔄 Auto-switching due to low health: ${healthPercent.toFixed(1)}% (threshold: ${this.autoSwitchThreshold}%)`);
-            if (onSwitchCharacter) {
-                onSwitchCharacter(true);
+            // Determine which character to switch to
+            const currentChar = activeCharName;
+            const otherChar = currentChar === 'tireek' ? 'tryston' : 'tireek';
+            
+            // Check if auto-switch is available for current character
+            const canUseAutoSwitch = activeCharData.autoSwitchAvailable;
+            
+            // Check if the other character is available for auto-switch (health >= 80%)
+            const canSwitchToOther = this.characterManager.canAutoSwitchTo(otherChar);
+            
+            if (canUseAutoSwitch && canSwitchToOther) {
+                console.log(`🔄 Auto-switching due to low health: ${healthPercent.toFixed(1)}% (threshold: ${this.autoSwitchThreshold}%)`);
+                // Mark auto-switch as used
+                this.characterManager.useAutoSwitch(currentChar);
+                if (onSwitchCharacter) {
+                    onSwitchCharacter(true);
+                }
+            } else {
+                if (!canUseAutoSwitch) {
+                    console.log(`🔄 Auto-switch unavailable for ${currentChar} (already used, waiting for 80% health)`);
+                }
+                if (!canSwitchToOther) {
+                    const otherCharData = this.characterManager.characters[otherChar];
+                    const otherHealthPercent = (otherCharData.health / otherCharData.maxHealth) * 100;
+                    console.log(`🔄 Cannot auto-switch to ${otherChar} (health: ${otherHealthPercent.toFixed(1)}%, need 80%+)`);
+                }
             }
         }
 

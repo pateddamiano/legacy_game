@@ -5,13 +5,43 @@
 
 // Character Animation Configuration System
 class CharacterConfig {
-    constructor(name, spriteSheets, animations, frameSize = {width: 128, height: 96}, baseScale = 1.0, perspectiveScales = {minScale: 3.0, maxScale: 4.0}) {
+    constructor(name, spriteSheets, animations, frameSize = {width: 128, height: 96}, baseScale = 1.0, perspectiveScales = {minScale: 3.0, maxScale: 4.0}, variations = null) {
         this.name = name;
         this.spriteSheets = spriteSheets;
         this.animations = animations;
         this.frameSize = frameSize;
         this.baseScale = baseScale; // Base size multiplier for perspective scaling
         this.perspectiveScales = perspectiveScales; // Min and max scale for perspective effect
+        this.variations = variations; // Optional: array of variation configs with sprite sheet paths
+    }
+    
+    // Get a random variation name if variations exist, otherwise return the base name
+    getRandomVariation() {
+        if (!this.variations || this.variations.length === 0) {
+            return this.name;
+        }
+        // Randomly select a variation (including base name as option 0)
+        const variationIndex = Math.floor(Math.random() * (this.variations.length + 1));
+        if (variationIndex === 0) {
+            return this.name; // Use base name
+        }
+        return this.variations[variationIndex - 1].name;
+    }
+    
+    // Get sprite sheet paths for a specific variation (or base if variation is null)
+    getSpriteSheetsForVariation(variationName) {
+        if (!variationName || variationName === this.name) {
+            return this.spriteSheets;
+        }
+        
+        // Find the variation
+        const variation = this.variations.find(v => v.name === variationName);
+        if (variation && variation.spriteSheets) {
+            return variation.spriteSheets;
+        }
+        
+        // Fallback to base sprite sheets
+        return this.spriteSheets;
     }
 }
 
@@ -67,7 +97,7 @@ const TRYSTON_CONFIG = new CharacterConfig(
     {minScale: 3.3396, maxScale: 4.2504}  // Perspective scaling range (Tryston: 2.662 * 1.2 to 3.388 * 1.2)
 );
 
-// Define Crackhead enemy configuration
+// Define Crackhead enemy configuration with variations
 const CRACKHEAD_CONFIG = new CharacterConfig(
     'crackhead',
     {
@@ -81,7 +111,22 @@ const CRACKHEAD_CONFIG = new CharacterConfig(
         jab: { frames: 4, frameRate: 16, repeat: 0 },     // Medium speed attack
         bottle_attack: { frames: 5, frameRate: 14, repeat: 0 }, // Special bottle attack
         idle: { frames: 5, frameRate: 6, repeat: -1 }     // Slow idle animation
-    }
+    },
+    {width: 128, height: 96}, // frameSize
+    1.0, // baseScale
+    {minScale: 3.0, maxScale: 4.0}, // perspectiveScales
+    [
+        // Variation 1: crackhead2
+        {
+            name: 'crackhead2',
+            spriteSheets: {
+                walk: 'assets/characters/crackhead/spritesheets/crackhead2_idle_5Frames.png',
+                jab: 'assets/characters/crackhead/spritesheets/Crackhead2_Jab_4frames.png',
+                bottle_attack: 'assets/characters/crackhead/spritesheets/Crackhead2_Bottle_Attack_5Frames.png',
+                idle: 'assets/characters/crackhead/spritesheets/crackhead2_idle_5Frames.png'
+            }
+        }
+    ]
 );
 
 // Define Green Thug enemy configuration

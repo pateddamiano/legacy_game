@@ -31,6 +31,9 @@ class EventManager {
         // Store original entity states for restoration
         this.savedEntityStates = new Map();
         
+        // Track event-related timers for cleanup
+        this.eventTimers = [];
+        
         // Cinematic darkening effect
         this.darkenedSprites = []; // Track sprites we've darkened
         this.speakingExtra = null; // The extra currently speaking
@@ -70,6 +73,7 @@ class EventManager {
         
         // Reset triggered events set
         this.triggeredEvents.clear();
+        this._gameOverRestartLogShown = false; // Reset log flag
         
         console.log('🎬 Events registered:', this.events.map(e => e.id || 'unnamed'));
         
@@ -81,6 +85,16 @@ class EventManager {
         // Check if player exists and if any events should trigger immediately
         if (!this.scene.player) {
             // Player not created yet, will check in update loop
+            return;
+        }
+        
+        // Skip if this is a Game Over restart to prevent immediate triggering
+        if (this.scene.isGameOverRestart) {
+            // Only log this once to avoid spamming if called multiple times
+            if (!this._gameOverRestartLogShown) {
+                console.log('🎬 EventManager: Skipping initial triggers due to Game Over restart');
+                this._gameOverRestartLogShown = true;
+            }
             return;
         }
         
@@ -117,11 +131,10 @@ class EventManager {
         this.activeEvent = null;
         this.actionQueue = [];
         this.currentActionIndex = 0;
-        this.pausedEntities = {
-            player: false,
-            enemies: [],
-            all: false
-        };
+        // Reset pause state properties without breaking references
+        this.pausedEntities.player = false;
+        this.pausedEntities.enemies = [];
+        this.pausedEntities.all = false;
         this.savedEntityStates.clear();
     }
     
@@ -416,6 +429,148 @@ class EventManager {
     
     getActiveEvent() {
         return this.activeEvent;
+    }
+    
+    // ========================================
+    // EVENT STATE CLEANUP
+    // ========================================
+    
+    /**
+     * Centralized cleanup of ALL event-related state
+     * This ensures events always start with a clean slate
+     * Called before triggering/restarting events
+     */
+    cleanupEventState() {
+        console.log('🎬 Cleaning up all event-related state...');
+        console.log(`🎬 Cleanup: pausedEntities before cleanup:`, {
+            player: this.pausedEntities.player,
+            enemiesCount: this.pausedEntities.enemies.length,
+            all: this.pausedEntities.all
+        });
+        
+        // 1. Clear all pending timers from the scene
+        if (this.scene.time && this.scene.time.removeAllEvents) {
+            const pendingCount = this.scene.time._pendingInsertion ? this.scene.time._pendingInsertion.length : 0;
+            const activeCount = this.scene.time._active ? this.scene.time._active.length : 0;
+            const timerCount = pendingCount + activeCount;
+            this.scene.time.removeAllEvents();
+            if (timerCount > 0) {
+                console.log(`🎬 Cleared ${timerCount} pending timers`);
+            }
+        }
+        
+        // 2. Complete any active event
+        if (this.activeEvent) {
+            const eventId = this.activeEvent.id;
+            console.log(`🎬 Completing active event: ${eventId}`);
+            this.completeEvent();
+        }
+        
+        // 3. Stop enemy spawning
+        if (this.scene.enemySpawnManager) {
+            this.scene.enemySpawnManager.setMaxEnemies(0);
+        }
+        
+        // 4. Clear all enemies
+        if (this.scene.enemies && this.scene.enemies.length > 0) {
+            const enemyCount = this.scene.enemies.length;
+            if (this.scene.enemySpawnManager) {
+                this.scene.enemySpawnManager.destroyAll();
+            }
+            console.log(`🎬 Cleared ${enemyCount} enemies`);
+        }
+        
+        // 5. Clear event-related scene flags
+        this.scene.eventWaitingForZone = null;
+        this.scene.eventWaitingForEnemyDestroy = null;
+        this.scene.eventWaitingForEnemiesCleared = false;
+        
+        // 6. Clear enemy protection registry
+        if (this.scene.eventEnemyProtection) {
+            this.scene.eventEnemyProtection.clearAll();
+        }
+        
+        // 7. Clear extras (event NPCs like the critic)
+        if (this.scene.extrasManager) {
+            this.scene.extrasManager.clearAll();
+        }
+        
+        // 8. Clear all projectiles
+        if (this.scene.weaponManager) {
+            this.scene.weaponManager.clearAllProjectiles();
+        }
+        
+        // 9. Resume all entities and reset pause states
+        // Important: Actually resume the entities, don't just reset the tracking flags
+        if (this.pausedEntities.player || this.pausedEntities.all) {
+            this.entityManager.resumeEntities(['player']);
+            console.log(`🎬 Resumed player during cleanup`);
+        }
+        if (this.pausedEntities.enemies.length > 0 || this.pausedEntities.all) {
+            this.entityManager.resumeEntities(['enemies']);
+            console.log(`🎬 Resumed enemies during cleanup`);
+        }
+        
+        // Now reset pause state tracking (modify properties, don't replace object to preserve references)
+        this.pausedEntities.player = false;
+        this.pausedEntities.enemies = [];
+        this.pausedEntities.all = false;
+        this.savedEntityStates.clear();
+        
+        // 10. Clear cinematic effects
+        this.cinematicManager.removeCinematicDarkening();
+        
+        console.log('🎬 Event state cleanup complete');
+    }
+    
+    // ========================================
+    // EVENT RESTART API
+    // ========================================
+    
+    /**
+     * Restart the currently active event from the beginning
+     * Simple public API for lives system integration
+     * @returns {boolean} True if event was restarted, false if no active event
+     */
+    restartActiveEvent() {
+        if (!this.activeEvent) {
+            console.warn('🎬 Cannot restart event: no active event');
+            return false;
+        }
+        
+        const eventId = this.activeEvent.id;
+        console.log(`🎬 ========== RESTARTING EVENT: ${eventId} ==========`);
+        
+        // Find the event
+        const event = this.events.find(e => e.id === eventId);
+        if (!event) {
+            console.warn(`🎬 Cannot restart event ${eventId}: not found`);
+            return false;
+        }
+        
+        // Clean up all event state
+        this.cleanupEventState();
+        
+        // Reset event's triggered state
+        event.triggered = false;
+        this.triggeredEvents.delete(eventId);
+        
+        // Trigger the event fresh
+        console.log(`🎬 Triggering cleaned event: ${eventId}`);
+        this.triggerEvent(event);
+        console.log(`🎬 ========== EVENT RESTART COMPLETE ==========`);
+        
+        return true;
+    }
+    
+    /**
+     * DEPRECATED: Use restartActiveEvent() instead
+     * Legacy method kept for backward compatibility
+     * Simply delegates to restartActiveEvent()
+     */
+    retriggerEvent(eventId) {
+        console.warn(`🎬 retriggerEvent() is deprecated, use restartActiveEvent() instead`);
+        return this.restartActiveEvent();
     }
     
     // ========================================

@@ -103,7 +103,7 @@ const ENEMY_TYPE_CONFIGS = {
         health: 10,                    // Weak but numerous
         speed: 400,                   // Slow, shambling movement
         attackCooldown: 300,         // Slower attacks
-        playerDamage: 2,             // Less damage (DOUBLED from 1)
+        playerDamage: 5,             // Less damage (increased from 2)
         attackTypes: ['jab', 'bottle_attack'],
         detectionRange: 900,         // Less aggressive - shorter detection range (increased from 600)
         baseScale: 0.65,              // Base size multiplier (1.0 = normal size, 0.8 = smaller, 1.2 = larger)
@@ -154,6 +154,10 @@ class Enemy {
         this.characterConfig = characterConfig;
         this.state = ENEMY_STATES.SPAWNING;
         
+        // Select a random variation if available
+        this.variationName = characterConfig.getRandomVariation ? characterConfig.getRandomVariation() : characterConfig.name;
+        this.variationSpriteSheets = characterConfig.getSpriteSheetsForVariation ? characterConfig.getSpriteSheetsForVariation(this.variationName) : characterConfig.spriteSheets;
+        
         // Get enemy type configuration
         const enemyType = characterConfig.name;
         const typeConfig = ENEMY_TYPE_CONFIGS[enemyType] || {};
@@ -161,11 +165,11 @@ class Enemy {
         // Store base scale multiplier from type config (defaults to 1.0 if not specified)
         this.baseScaleMultiplier = typeConfig.baseScale !== undefined ? typeConfig.baseScale : 1.0;
         
-        // Ensure crisp pixel-art filtering for all animations of this enemy
-        if (characterConfig && characterConfig.spriteSheets) {
+        // Ensure crisp pixel-art filtering for all animations of this enemy (using variation sprite sheets)
+        if (this.variationSpriteSheets) {
             try {
-                Object.keys(characterConfig.spriteSheets).forEach(animKey => {
-                    const texKey = `${characterConfig.name}_${animKey}`;
+                Object.keys(this.variationSpriteSheets).forEach(animKey => {
+                    const texKey = `${this.variationName}_${animKey}`;
                     if (scene.textures.exists(texKey)) {
                         const tex = scene.textures.get(texKey);
                         if (tex && tex.setFilter) {
@@ -176,8 +180,8 @@ class Enemy {
             } catch (e) {}
         }
         
-        // Create sprite
-        this.sprite = scene.physics.add.sprite(Math.round(x), Math.round(y), `${characterConfig.name}_idle`);
+        // Create sprite using variation-specific key
+        this.sprite = scene.physics.add.sprite(Math.round(x), Math.round(y), `${this.variationName}_idle`);
         // Apply base scale multiplier to initial scale
         this.sprite.setScale(ENEMY_CONFIG.minScale * this.baseScaleMultiplier);
         this.sprite.setDepth(y);
@@ -191,14 +195,24 @@ class Enemy {
         // Green and black thugs now use their natural colors without tint
         
         // AI properties (using enemy type config with fallback to base config)
-        this.health = typeConfig.health || ENEMY_CONFIG.health;
+        let baseHealth = typeConfig.health || ENEMY_CONFIG.health;
+        let basePlayerDamage = typeConfig.playerDamage || ENEMY_CONFIG.playerDamage;
+        let baseSpeed = typeConfig.speed || ENEMY_CONFIG.speed;
+        
+        // Apply level multipliers if available (from levelManager)
+        let multipliers = { health: 1.0, damage: 1.0, speed: 1.0 };
+        if (scene.levelManager && typeof scene.levelManager.getCurrentDifficultyMultipliers === 'function') {
+            multipliers = scene.levelManager.getCurrentDifficultyMultipliers();
+        }
+        
+        this.health = Math.round(baseHealth * multipliers.health);
         this.maxHealth = this.health;
-        this.speed = typeConfig.speed || ENEMY_CONFIG.speed;
+        this.speed = baseSpeed * multipliers.speed;
         this.attackRange = ENEMY_CONFIG.attackRange;
         this.attackCooldown = typeConfig.attackCooldown || ENEMY_CONFIG.attackCooldown;
         this.lastAttackTime = 0;
         this.detectionRange = typeConfig.detectionRange || ENEMY_CONFIG.detectionRange;
-        this.playerDamage = typeConfig.playerDamage || ENEMY_CONFIG.playerDamage;
+        this.playerDamage = Math.round(basePlayerDamage * multipliers.damage);
         
         // Store enemy type config for attack selection
         this.enemyTypeConfig = typeConfig;
@@ -265,8 +279,9 @@ class Enemy {
         switch (newState) {
             case ENEMY_STATES.WALKING:
                 // Try to play walk animation, fall back to idle if walk doesn't exist
-                const walkKey = `${this.characterConfig.name}_walk`;
-                const idleKey = `${this.characterConfig.name}_idle`;
+                // Use variation name for animation keys
+                const walkKey = `${this.variationName}_walk`;
+                const idleKey = `${this.variationName}_idle`;
                 
                 //console.log(`Enemy ${this.characterConfig.name} trying to play walk animation: ${walkKey}`);
                 // console.log(`Available animations:`, Object.keys(this.scene.anims.anims.entries));
@@ -279,7 +294,7 @@ class Enemy {
                     console.log(`Falling back to idle animation: ${idleKey}`);
                     this.sprite.anims.play(idleKey, true);
                 } else {
-                    console.error(`No valid animations found for ${this.characterConfig.name}! Walk: ${walkKey}, Idle: ${idleKey}`);
+                    console.error(`No valid animations found for ${this.variationName}! Walk: ${walkKey}, Idle: ${idleKey}`);
                     // Don't try to play any animation if none exist
                 }
                 break;
@@ -322,6 +337,9 @@ class Enemy {
         
         // Skip AI updates if paused by event system (but still update visual properties above)
         if (this.eventPaused) return;
+        
+        // Skip AI updates if paused due to player death
+        if (this.deathPaused) return;
         
         // Update knockback timer
         if (this.isKnockedBack) {
@@ -749,7 +767,8 @@ class Enemy {
         this.animationLocked = true;
         // Make sure the lock timer is longer than the windup time so damage can be dealt
         this.lockTimer = Math.max(animationDuration, windupDelay + 100); // Add 100ms buffer
-        this.sprite.anims.play(`${this.characterConfig.name}_${attackType}`, true);
+        // Use variation name for animation key
+        this.sprite.anims.play(`${this.variationName}_${attackType}`, true);
         
         // Start attack windup - attack won't deal damage immediately
         this.isWindingUp = true;

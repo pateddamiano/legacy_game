@@ -381,6 +381,7 @@ class DialogueManager {
         const eventManager = this.scene.eventManager;
         const playerPausedByEvent = eventManager && eventManager.pausedEntities.player;
         const enemiesPausedByEvent = eventManager && eventManager.pausedEntities.enemies.length > 0;
+        console.log(`💬 PAUSE CHECK - eventManager exists: ${!!eventManager}, pausedEntities.player: ${eventManager?.pausedEntities.player}, enemies: ${eventManager?.pausedEntities.enemies.length}`);
         
         if (playerPausedByEvent || enemiesPausedByEvent) {
             console.log('💬 Event system already has control - minimal dialogue pause');
@@ -418,6 +419,7 @@ class DialogueManager {
         const eventManager = this.scene.eventManager;
         const playerPausedByEvent = eventManager && eventManager.pausedEntities.player;
         const enemiesPausedByEvent = eventManager && eventManager.pausedEntities.enemies.length > 0;
+        console.log(`💬 RESUME CHECK - eventManager exists: ${!!eventManager}, pausedEntities.player: ${eventManager?.pausedEntities.player}, enemies: ${eventManager?.pausedEntities.enemies.length}`);
         
         if (playerPausedByEvent || enemiesPausedByEvent) {
             console.log(`💬 Event system has control - Player paused: ${playerPausedByEvent}, Enemies paused: ${enemiesPausedByEvent}`);

@@ -16,7 +16,8 @@ class CharacterManager {
                 sprite: null,
                 isActive: true,
                 regenRate: 5.0, // Health per second when inactive (increased from 2.0)
-                lastSwitchTime: 0
+                lastSwitchTime: 0,
+                autoSwitchAvailable: true // Auto-switch available until used, resets at 80% health
             },
             tryston: {
                 config: TRYSTON_CONFIG,
@@ -25,7 +26,8 @@ class CharacterManager {
                 sprite: null,
                 isActive: false,
                 regenRate: 5.0, // Health per second when inactive (increased from 2.0)
-                lastSwitchTime: 0
+                lastSwitchTime: 0,
+                autoSwitchAvailable: true // Auto-switch available until used, resets at 80% health
             }
         };
         
@@ -41,6 +43,12 @@ class CharacterManager {
         this.worldManager = null;
         this.eventCameraLocked = false;
         this.isJumping = false;
+        
+        // Prevent multiple game over calls
+        this.isHandlingGameOver = false;
+        
+        // Track event that was active when player died (for event respawning)
+        this.deathDuringEventId = null;
         
         console.log('👥 CharacterManager initialized');
     }
@@ -246,7 +254,19 @@ class CharacterManager {
 
         // Hide current character
         console.log(`👥 Starting character switch: ${currentChar} → ${newChar} (was jumping: ${isCurrentlyJumping})`);
-        this.characters[currentChar].sprite.setVisible(false);
+        
+        // CRITICAL FIX: Ensure the old character is properly hidden immediately
+        // We do this before creating the new one or starting effects to avoid visual glitches
+        const oldSprite = this.characters[currentChar].sprite;
+        if (oldSprite) {
+            oldSprite.setVisible(false);
+            oldSprite.setActive(false); // Also set inactive so it doesn't process updates
+            if (oldSprite.body) {
+                oldSprite.body.enable = false; // Disable physics body
+            }
+            console.log(`👥 Hidden old character ${currentChar}`);
+        }
+        
         this.characters[currentChar].isActive = false;
         this.characters[currentChar].lastSwitchTime = currentTime;
 
@@ -292,87 +312,126 @@ class CharacterManager {
         // Clear any damage tint from previous hit
         newPlayer.clearTint();
 
-        // Spawn tornado effect using EffectSystem
-        let animationDuration = 0;
-        if (this.scene.effectSystem) {
-            const effectResult = this.scene.effectSystem.spawnTornadoEffect(
-                finalPositionX,
-                finalPositionY,
-                currentScale,
-                currentPlayer.depth,
-                () => {
-                    // Animation complete callback
-                    // Show new character
-                    newPlayer.setVisible(true);
-                    this.characters[newChar].isActive = true;
-                    this.characters[newChar].lastSwitchTime = currentTime;
-                    
-                    // Reset animation state to idle (in case old character was in attack/airkick)
-                    if (newPlayer.anims) {
-                        const charName = this.characters[newChar].config.name;
-                        newPlayer.anims.play(`${charName}_idle`, true);
-                    }
-                    
-                    // Ensure character is on ground and not jumping
-                    if (newPlayer.body) {
-                        newPlayer.setVelocityY(0);
-                        if (newPlayer.setGravityY) {
-                            newPlayer.setGravityY(0);
-                        }
-                        newPlayer.body.velocity.y = 0;
-                        newPlayer.body.acceleration.y = 0;
-                    }
-
-                    // Update health bar with new character's health
-                    if (this.uiManager) {
-                        this.uiManager.updateHealthBar(this.characters[newChar].health, this.characters[newChar].maxHealth);
-                        this.uiManager.updateDualCharacterHealth(
-                            this.characters.tireek.health,
-                            this.characters.tryston.health,
-                            this.selectedCharacter
-                        );
-                        this.uiManager.updateCharacterDisplay(this.currentCharacterConfig);
-                    }
-
-                    console.log(`🔄 Character switch animation complete: ${this.currentCharacterConfig.name} (${this.characters[newChar].health}/100 HP)`);
+            // Spawn tornado effect using EffectSystem
+            let animationDuration = 0;
+            
+            // Define callback function separately so we can attach the target property to it
+            const onSwitchComplete = () => {
+                // Animation complete callback
+                // Show new character
+                newPlayer.setVisible(true);
+                newPlayer.setActive(true); // Re-enable active state
+                if (newPlayer.body) {
+                    newPlayer.body.enable = true; // Re-enable physics body
                 }
-            );
-            animationDuration = effectResult.duration;
-        } else {
-            // Fallback: instant switch if effectSystem not available
-            newPlayer.setVisible(true);
-            this.characters[newChar].isActive = true;
-            this.characters[newChar].lastSwitchTime = currentTime;
-            
-            // Reset animation state to idle (in case old character was in attack/airkick)
-            if (newPlayer.anims) {
-                const charName = this.characters[newChar].config.name;
-                newPlayer.anims.play(`${charName}_idle`, true);
-            }
-            
-            // Ensure character is on ground and not jumping
-            if (newPlayer.body) {
-                newPlayer.setVelocityY(0);
-                if (newPlayer.setGravityY) {
-                    newPlayer.setGravityY(0);
+                
+                // Double check old character is hidden (sometimes race conditions occur)
+                const recheckOldSprite = this.characters[currentChar].sprite;
+                if (recheckOldSprite && recheckOldSprite.visible) {
+                        console.log(`👥 ⚠️ Fixing lingering old character ${currentChar} after switch`);
+                        recheckOldSprite.setVisible(false);
+                        recheckOldSprite.setActive(false);
+                        if (recheckOldSprite.body) recheckOldSprite.body.enable = false;
                 }
-                newPlayer.body.velocity.y = 0;
-                newPlayer.body.acceleration.y = 0;
-            }
+
+                this.characters[newChar].isActive = true;
+                this.characters[newChar].lastSwitchTime = currentTime;
+                
+                // Reset animation state to idle (in case old character was in attack/airkick)
+                if (newPlayer.anims) {
+                    const charName = this.characters[newChar].config.name;
+                    newPlayer.anims.play(`${charName}_idle`, true);
+                }
+                
+                // Ensure character is on ground and not jumping
+                if (newPlayer.body) {
+                    newPlayer.setVelocityY(0);
+                    if (newPlayer.setGravityY) {
+                        newPlayer.setGravityY(0);
+                    }
+                    newPlayer.body.velocity.y = 0;
+                    newPlayer.body.acceleration.y = 0;
+                }
+
+                // Update health bar with new character's health
+                if (this.uiManager) {
+                    this.uiManager.updateHealthBar(this.characters[newChar].health, this.characters[newChar].maxHealth);
+                    this.uiManager.updateDualCharacterHealth(
+                        this.characters.tireek.health,
+                        this.characters.tryston.health,
+                        this.selectedCharacter
+                    );
+                    this.uiManager.updateCharacterDisplay(this.currentCharacterConfig);
+                }
+
+                console.log(`🔄 Character switch animation complete: ${this.currentCharacterConfig.name} (${this.characters[newChar].health}/100 HP)`);
+            };
             
-            if (this.uiManager) {
-                this.uiManager.updateHealthBar(this.characters[newChar].health, this.characters[newChar].maxHealth);
-                this.uiManager.updateDualCharacterHealth(
-                    this.characters.tireek.health,
-                    this.characters.tryston.health,
-                    this.selectedCharacter
+            // Attach the new player sprite as the target for the effect to follow
+            // Note: Even though newPlayer is invisible initially, we want the tornado to follow where it IS (which moves with physics/input)
+            onSwitchComplete.target = newPlayer;
+
+            if (this.scene.effectSystem) {
+                const effectResult = this.scene.effectSystem.spawnTornadoEffect(
+                    finalPositionX,
+                    finalPositionY,
+                    currentScale,
+                    currentPlayer.depth,
+                    onSwitchComplete
                 );
-                this.uiManager.updateCharacterDisplay(this.currentCharacterConfig);
+                animationDuration = effectResult.duration;
+            } else {
+                // Fallback: instant switch if effectSystem not available
+                newPlayer.setVisible(true);
+                newPlayer.setActive(true);
+                if (newPlayer.body) newPlayer.body.enable = true;
+                
+                this.characters[newChar].isActive = true;
+                this.characters[newChar].lastSwitchTime = currentTime;
+                
+                // Reset animation state to idle
+                if (newPlayer.anims) {
+                    const charName = this.characters[newChar].config.name;
+                    newPlayer.anims.play(`${charName}_idle`, true);
+                }
+                
+                if (this.uiManager) {
+                    this.uiManager.updateHealthBar(this.characters[newChar].health, this.characters[newChar].maxHealth);
+                    this.uiManager.updateDualCharacterHealth(
+                        this.characters.tireek.health,
+                        this.characters.tryston.health,
+                        this.selectedCharacter
+                    );
+                    this.uiManager.updateCharacterDisplay(this.currentCharacterConfig);
+                }
             }
-        }
 
         console.log(`🔄 Character switch initiated: ${currentChar} → ${newChar} (animation: ${animationDuration}ms)`);
         return { success: true, newPlayer, newCharacter: newChar };
+    }
+    
+    // ========================================
+    // AUTO-SWITCH AVAILABILITY
+    // ========================================
+    
+    canAutoSwitchTo(characterName) {
+        const charData = this.characters[characterName];
+        if (!charData) return false;
+        
+        // Character must be alive
+        if (charData.health <= 0) return false;
+        
+        // Character must have at least 80% health to be available for auto-switch
+        const healthPercent = (charData.health / charData.maxHealth) * 100;
+        return healthPercent >= 80;
+    }
+    
+    useAutoSwitch(characterName) {
+        const charData = this.characters[characterName];
+        if (!charData) return;
+        
+        charData.autoSwitchAvailable = false;
+        console.log(`🔄 Auto-switch used for ${characterName}. Will reset when health reaches 80%`);
     }
     
     // ========================================
@@ -393,7 +452,16 @@ class CharacterManager {
                 // Regenerate health over time
                 const regenAmount = (charData.regenRate * delta) / 1000; // Convert to per-second
                 const oldHealth = charData.health;
+                const oldHealthPercent = (oldHealth / charData.maxHealth) * 100;
                 charData.health = Math.min(charData.maxHealth, charData.health + regenAmount);
+                const newHealthPercent = (charData.health / charData.maxHealth) * 100;
+                
+                // Restore auto-switch availability when health reaches 80%
+                if (oldHealthPercent < 80 && newHealthPercent >= 80 && !charData.autoSwitchAvailable) {
+                    charData.autoSwitchAvailable = true;
+                    console.log(`🔄 Auto-switch restored for ${charName} (health reached 80%)`);
+                }
+                
                 // console.log(`💚 ${charName} regenerating: ${oldHealth.toFixed(1)} → ${charData.health.toFixed(1)} HP (+${regenAmount.toFixed(2)})`);
                 didRegenerate = true;
             }
@@ -473,6 +541,12 @@ class CharacterManager {
     }
     
     handleCharacterDown(animationManager, isJumping, eventCameraLocked, onGameOver) {
+        // Prevent handling if game over is already being processed
+        if (this.isHandlingGameOver) {
+            console.log("⚠️ Character down ignored - game over already being handled");
+            return;
+        }
+        
         const activeChar = this.characters[this.selectedCharacter];
         console.log(`${this.selectedCharacter} is down!`);
         
@@ -483,17 +557,42 @@ class CharacterManager {
             console.log("Both characters are down! Game Over!");
             this.handleGameOver(onGameOver);
         } else {
-            // Try to switch to the other character
+            // Determine which character is still alive
+            const aliveCharacter = this.characters.tireek.health > 0 ? 'tireek' : 'tryston';
+            console.log(`One character down, switching to alive character: ${aliveCharacter}`);
+
+            // Force switch to the alive character, regardless of cooldowns or current animation states
+            // We pass 'true' for forceSwitch to bypass checks
+            // We also need to ensure we're switching TO the alive character
+            
+            // If the selected character is the one that died (which should be the case if we're here),
+            // switchCharacter will naturally switch to the other one.
+            // But let's verify logic: switchCharacter toggles between tireek/tryston.
+            // If current is tireek (dead) -> switches to tryston.
+            // If current is tryston (dead) -> switches to tireek.
+            // This logic holds up as long as one is dead and one is alive.
+            
             const switchResult = this.switchCharacter(true, animationManager, isJumping, eventCameraLocked);
             if (!switchResult || !switchResult.success) {
-                console.log("Both characters are down!");
+                // Fallback if switch fails for some reason (shouldn't happen with force=true)
+                console.error("CRITICAL: Failed to switch to alive character! Forcing Game Over.");
                 this.handleGameOver(onGameOver);
             }
         }
     }
     
     handleGameOver(onGameOver) {
+        // Prevent multiple calls
+        if (this.isHandlingGameOver) {
+            console.log("⚠️ Game over already being handled, ignoring duplicate call");
+            return;
+        }
+        
+        this.isHandlingGameOver = true;
         console.log("Game Over! Both characters are down!");
+        
+        // Pause game immediately to prevent continued attacks
+        this.pauseGameOnDeath();
         
         // Check if we have lives manager and checkpoint manager
         const livesManager = this.scene.livesManager;
@@ -508,6 +607,7 @@ class CharacterManager {
                 if (this.uiManager) {
                     this.uiManager.updateHealthBar(this.characters[this.selectedCharacter].health, this.characters[this.selectedCharacter].maxHealth);
                 }
+                this.resumeGameAfterDeath();
                 console.log("Both characters respawned!");
                 if (onGameOver) {
                     onGameOver();
@@ -516,53 +616,247 @@ class CharacterManager {
             return;
         }
         
-        // Lose a life
-        const remainingLives = livesManager.loseLife();
-        
-        // Update lives display
-        if (this.uiManager) {
-            this.uiManager.updateLivesDisplay(remainingLives);
-        }
+        // Check current lives (don't lose yet - will lose on respawn)
+        const currentLives = livesManager.getLives();
+        console.log(`💀 DEATH LOGIC CHECK: Current Lives: ${currentLives}`);
         
         // Determine respawn behavior
-        if (remainingLives > 0) {
-            // Respawn at last checkpoint
-            console.log(`❤️ Respawn at checkpoint (${remainingLives} lives remaining)`);
+        // Changed from > 0 to > 1: when player has 1 life showing, that's the last chance
+        if (currentLives > 1) {
+            console.log(`💀 DEATH LOGIC: Entering TRY AGAIN path (lives > 1)`);
+            // TRY AGAIN PATH: Check if player died during an event (like boss fight or level end)
+            // Only track event for Try Again - NOT for Game Over
+            this.deathDuringEventId = null;
+            if (this.scene.eventManager && this.scene.eventManager.isEventActive()) {
+                const activeEvent = this.scene.eventManager.getActiveEvent();
+                if (activeEvent && activeEvent.id) {
+                    this.deathDuringEventId = activeEvent.id;
+                    console.log(`🔄 TRY AGAIN: Death occurred during event: ${this.deathDuringEventId} - will restart event`);
+                }
+            }
+            
+            // Show "Try Again" message (life will be lost on respawn)
+            if (this.uiManager) {
+                this.uiManager.showTryAgainOverlay();
+            }
+            
+            // Play try again sound
+            if (this.audioManager) {
+                this.audioManager.playTryAgainSound();
+            }
+            
+            // Respawn at last checkpoint (life will be lost when respawning)
+            console.log(`❤️ Respawn at checkpoint (${currentLives} lives remaining - will lose one on respawn)`);
             this.scene.time.delayedCall(2000, () => {
-                this.respawnAtCheckpoint(checkpointManager, onGameOver);
+                this.respawnAtCheckpoint(checkpointManager, onGameOver, true); // true = lose life on respawn
             });
         } else {
-            // No lives left - restart level from beginning
-            console.log("💀 No lives remaining - restarting level");
-            this.scene.time.delayedCall(2000, () => {
-                this.restartLevel(onGameOver);
-            });
+            console.log(`💀 DEATH LOGIC: Entering GAME OVER path (lives <= 1)`);
+            // GAME OVER PATH: Full level restart (NOT event restart)
+            // Clear any event tracking - we're doing a complete level restart
+            this.deathDuringEventId = null;
+            console.log('💀 GAME OVER PATH: Will perform full level restart (NOT event restart)');
+            
+            // Last life - show game over (life counter will show 0 during game over)
+            // Lose the final life to bring counter to 0
+            const remainingLives = livesManager.loseLife(); // Should be 0 after this
+            console.log(`💀 GAME OVER FLOW: Final life lost! Remaining: ${remainingLives}`);
+            
+            // Update lives display (should show 0 lives)
+            if (this.uiManager) {
+                this.uiManager.updateLivesDisplay(remainingLives, false); // No flash needed, already at 0
+            }
+            
+            // Show "Game Over" overlay (will be typed out)
+            console.log('💀 GAME OVER FLOW: Showing game over overlay');
+            if (this.uiManager) {
+                this.uiManager.showGameOverOverlay();
+            }
+            
+            // Play game over music
+            let gameOverMusic = null;
+            if (this.audioManager) {
+                console.log('💀 GAME OVER FLOW: Playing game over music');
+                gameOverMusic = this.audioManager.playGameOverMusic();
+                console.log(`💀 GAME OVER FLOW: Music object received:`, {
+                    hasObject: !!gameOverMusic,
+                    hasOnMethod: gameOverMusic && typeof gameOverMusic.on === 'function',
+                    hasDuration: gameOverMusic && !!gameOverMusic.duration
+                });
+            }
+            
+            // Fade in the screen, then start typewriter
+            if (this.uiManager) {
+                console.log('💀 GAME OVER FLOW: Starting fade in');
+                this.uiManager.fadeInGameOverScreen(() => {
+                    console.log('💀 GAME OVER FLOW: Fade complete, starting typewriter');
+                    // After fade completes, start typewriter
+                    this.uiManager.startGameOverTypewriter(() => {
+                        // Typewriter complete - music should still be playing
+                        console.log('💀 GAME OVER FLOW: Typewriter complete');
+                    });
+                });
+            }
+            
+            // When music finishes, play voice and then restart
+            console.log('💀 GAME OVER FLOW: Setting up music completion handlers');
+            if (gameOverMusic) {
+                // Use Phaser sound event system - check if sound has on method
+                if (typeof gameOverMusic.on === 'function') {
+                    console.log('💀 GAME OVER FLOW: Using event-based music completion');
+                    // Listen for completion using 'on' (one-time listener)
+                    const onComplete = () => {
+                        console.log('💀 GAME OVER FLOW: Music finished via event, playing voice');
+                        // Remove listener to prevent multiple calls
+                        gameOverMusic.off('complete', onComplete);
+                        
+                        // Play voice after music
+                        if (this.audioManager) {
+                            this.audioManager.playGameOverVoice();
+                        }
+                        
+                        // Wait a bit for voice to play, then restart level
+                        console.log('💀 GAME OVER FLOW: Scheduling level restart in 2000ms');
+                        this.scene.time.delayedCall(2000, () => {
+                            console.log('💀 GAME OVER FLOW: ⚡ CALLING RESTART LEVEL NOW ⚡');
+                            this.restartLevel(onGameOver);
+                        });
+                    };
+                    gameOverMusic.on('complete', onComplete);
+                } else if (gameOverMusic.duration) {
+                    // Fallback: use duration to calculate when music finishes
+                    const musicDuration = gameOverMusic.duration * 1000; // Convert to ms
+                    console.log(`💀 GAME OVER FLOW: Using duration-based timing (${musicDuration}ms)`);
+                    this.scene.time.delayedCall(musicDuration, () => {
+                        console.log('💀 GAME OVER FLOW: Music finished via duration, playing voice');
+                        // Play voice after music
+                        if (this.audioManager) {
+                            this.audioManager.playGameOverVoice();
+                        }
+                        
+                        // Wait a bit for voice to play, then restart level
+                        console.log('💀 GAME OVER FLOW: Scheduling level restart in 2000ms');
+                        this.scene.time.delayedCall(2000, () => {
+                            console.log('💀 GAME OVER FLOW: ⚡ CALLING RESTART LEVEL NOW ⚡');
+                            this.restartLevel(onGameOver);
+                        });
+                    });
+                } else {
+                    // Fallback if we can't determine duration
+                    console.warn('💀 GAME OVER FLOW: Music object invalid, using fallback timing (3000ms)');
+                    this.scene.time.delayedCall(3000, () => {
+                        console.log('💀 GAME OVER FLOW: Fallback timer triggered, playing voice');
+                        if (this.audioManager) {
+                            this.audioManager.playGameOverVoice();
+                        }
+                        console.log('💀 GAME OVER FLOW: Scheduling level restart in 2000ms');
+                        this.scene.time.delayedCall(2000, () => {
+                            console.log('💀 GAME OVER FLOW: ⚡ CALLING RESTART LEVEL NOW ⚡');
+                            this.restartLevel(onGameOver);
+                        });
+                    });
+                }
+            } else {
+                // Fallback if music doesn't load - wait a bit then restart
+                console.warn('💀 GAME OVER FLOW: No music available, using fallback timing (3000ms)');
+                this.scene.time.delayedCall(3000, () => {
+                    console.log('💀 GAME OVER FLOW: No-music fallback timer triggered, playing voice');
+                    if (this.audioManager) {
+                        this.audioManager.playGameOverVoice();
+                    }
+                    console.log('💀 GAME OVER FLOW: Scheduling level restart in 2000ms');
+                    this.scene.time.delayedCall(2000, () => {
+                        console.log('💀 GAME OVER FLOW: ⚡ CALLING RESTART LEVEL NOW ⚡');
+                        this.restartLevel(onGameOver);
+                    });
+                });
+            }
         }
     }
     
-    respawnAtCheckpoint(checkpointManager, onGameOver) {
+    respawnAtCheckpoint(checkpointManager, onGameOver, loseLifeOnRespawn = false) {
         const checkpoint = checkpointManager.getLastCheckpoint();
         if (!checkpoint) {
             console.warn("⚠️ No checkpoint available, using spawn point");
-            // Fallback to level spawn
-            const levelConfig = this.scene.levelManager?.currentLevelConfig || this.scene.selectedLevelConfig;
-            if (levelConfig && levelConfig.spawn) {
-                this.respawnAtPosition(levelConfig.spawn.x, levelConfig.spawn.y, onGameOver);
+            // Fallback to level spawn from world manager
+            if (this.worldManager) {
+                const spawnPoint = this.worldManager.getSpawnPoint();
+                this.respawnAtPosition(spawnPoint.x, spawnPoint.y, onGameOver, loseLifeOnRespawn);
+            } else {
+                console.error("⚠️ WorldManager not available - cannot respawn!");
             }
             return;
         }
         
-        this.respawnAtPosition(checkpoint.x, checkpoint.y, onGameOver);
+        // Check if death occurred during an event - if so, restart the event
+        if (this.deathDuringEventId && this.scene.eventManager) {
+            console.log(`🔄 Respawning during event: ${this.deathDuringEventId} - will re-trigger event`);
+            this.respawnAtPosition(checkpoint.x, checkpoint.y, onGameOver, loseLifeOnRespawn, this.deathDuringEventId);
+        } else {
+            this.respawnAtPosition(checkpoint.x, checkpoint.y, onGameOver, loseLifeOnRespawn);
+        }
     }
     
-    respawnAtPosition(x, y, onGameOver) {
+    respawnAtPosition(x, y, onGameOver, loseLifeOnRespawn = false, retriggerEventId = null) {
+        console.log(`📍 RESPAWN: Starting respawn at position (${x}, ${y}), loseLife: ${loseLifeOnRespawn}, retriggerEvent: ${retriggerEventId || 'none'}`);
+        
+        // Hide death overlay
+        if (this.uiManager) {
+            this.uiManager.hideDeathOverlay();
+        }
+        
+        // Lose a life on respawn if requested (with visual flash)
+        if (loseLifeOnRespawn && this.scene.livesManager) {
+            const remainingLives = this.scene.livesManager.loseLife();
+            console.log(`❤️ Life lost on respawn! Remaining: ${remainingLives}`);
+            
+            // Play try again start sound when life is taken
+            if (this.audioManager) {
+                this.audioManager.playTryAgainStartSound();
+            }
+            
+            // Update lives display with flash effect for lost life
+            if (this.uiManager) {
+                this.uiManager.updateLivesDisplay(remainingLives, true); // true = flash the lost life
+            }
+        }
+        
+        // Reset game over flag BEFORE doing anything else to prevent race conditions
+        this.isHandlingGameOver = false;
+        
+        // Clear the death event tracking (will be set again if they die in the event)
+        const eventToRetrigger = retriggerEventId;
+        this.deathDuringEventId = null;
+        
         // Restore both characters to full health
+        console.log(`📍 RESPAWN: Before health restore - Tireek: ${this.characters.tireek.health}/${this.characters.tireek.maxHealth}, Tryston: ${this.characters.tryston.health}/${this.characters.tryston.maxHealth}`);
         this.characters.tireek.health = this.characters.tireek.maxHealth;
         this.characters.tryston.health = this.characters.tryston.maxHealth;
+        console.log(`📍 RESPAWN: After health restore - Tireek: ${this.characters.tireek.health}, Tryston: ${this.characters.tryston.health}`);
+        
+        // Reset auto-switch availability for both characters
+        this.characters.tireek.autoSwitchAvailable = true;
+        this.characters.tryston.autoSwitchAvailable = true;
         
         // Clear all enemies
         if (this.scene.enemySpawnManager) {
             this.scene.enemySpawnManager.destroyAll();
+        }
+        
+        // Resume game after respawn
+        if (eventToRetrigger) {
+            // Event restart: only resume basic systems
+            // Event manager will handle all event-specific state (enemies, spawning, etc.)
+            console.log(`📍 RESPAWN: Event restart - resuming basic systems only`);
+            if (this.scene.physics && this.scene.physics.world) {
+                this.scene.physics.world.isPaused = false;
+            }
+            if (this.scene.inputManager) {
+                this.scene.inputManager.disabled = false;
+            }
+        } else {
+            // Normal checkpoint respawn - resume everything
+            this.resumeGameAfterDeath();
         }
         
         // Reset both character sprites to checkpoint position
@@ -586,9 +880,20 @@ class CharacterManager {
             }
         }
         
-        // Reset camera to checkpoint position
+        // Reset camera to checkpoint position and restart follow
         if (this.scene.cameras && this.scene.cameras.main) {
-            this.scene.cameras.main.setScroll(x - this.scene.cameras.main.width / 2, 0);
+            const camera = this.scene.cameras.main;
+            camera.stopFollow(); // Stop any existing follow
+            camera.setScroll(x - camera.width / 2, 0);
+            
+            // Restart camera follow on player (only if not locked by event system)
+            if (!this.scene.eventCameraLocked) {
+                const activePlayer = this.getActiveCharacter();
+                if (activePlayer) {
+                    camera.startFollow(activePlayer, true, 0.1, 0);
+                    console.log(`📷 Camera follow restarted on player after respawn`);
+                }
+            }
         }
         
         // Update health display
@@ -598,9 +903,33 @@ class CharacterManager {
                 this.characters.tryston.health,
                 this.selectedCharacter
             );
+            
+            // Force immediate visual update if using futuristic health bar
+            // This bypasses the delayed update system to ensure health shows correctly
+            // even if timers are cleared (e.g., during event restart)
+            if (this.uiManager.futuristicHealthBar) {
+                this.uiManager.futuristicHealthBar.characters.tireek.health = this.characters.tireek.health;
+                this.uiManager.futuristicHealthBar.characters.tryston.health = this.characters.tryston.health;
+                this.uiManager.futuristicHealthBar.updateCardHealth('tireek');
+                this.uiManager.futuristicHealthBar.updateCardHealth('tryston');
+            }
         }
         
         console.log(`📍 Respawned at checkpoint (${x}, ${y})`);
+        
+        // Re-trigger event if death occurred during an event (like boss fight)
+        if (eventToRetrigger && this.scene.eventManager) {
+            console.log(`🎬 Restarting event after respawn: ${eventToRetrigger}`);
+            console.log(`📍 RESPAWN: Current health - Tireek: ${this.characters.tireek.health}, Tryston: ${this.characters.tryston.health}`);
+            
+            // Small delay to ensure player is fully positioned and health is updated before event starts
+            this.scene.time.delayedCall(100, () => {
+                if (this.scene.eventManager) {
+                    console.log(`🎬 About to restart event - Health check - Tireek: ${this.characters.tireek.health}, Tryston: ${this.characters.tryston.health}`);
+                    this.scene.eventManager.restartActiveEvent();
+                }
+            });
+        }
         
         if (onGameOver) {
             onGameOver();
@@ -608,25 +937,133 @@ class CharacterManager {
     }
     
     restartLevel(onGameOver) {
-        // Reset lives
-        if (this.scene.livesManager) {
-            this.scene.livesManager.reset();
-            if (this.uiManager) {
-                this.uiManager.updateLivesDisplay(this.scene.livesManager.getLives());
-            }
-        }
+        console.log('🔄 GAME OVER RESTART: Complete scene teardown starting...');
         
-        // Reset checkpoints
+        // Store only what we need to preserve
+        // Use startOfLevelScore if available to reset score to what it was at level start
+        const preservedScore = (this.scene.startOfLevelScore !== undefined) ? this.scene.startOfLevelScore : 0;
+        const startOfLevelScore = preservedScore; // Keep passing it forward
+        const currentLevelId = window.gameState?.currentGame?.levelId || 1;
+        const currentCharacter = this.selectedCharacter || 'tireek';
+        
+        console.log(`🔄 Preserving: score=${preservedScore} (start of level), level=${currentLevelId}, char=${currentCharacter}`);
+        
+        // Clear ALL state that could persist
+        this.deathDuringEventId = null;
+        this.isHandlingGameOver = false;
+        
         if (this.scene.checkpointManager) {
             this.scene.checkpointManager.reset();
         }
         
-        // Get level spawn point
-        const levelConfig = this.scene.levelManager?.currentLevelConfig || this.scene.selectedLevelConfig;
-        if (levelConfig && levelConfig.spawn) {
-            this.respawnAtPosition(levelConfig.spawn.x, levelConfig.spawn.y, onGameOver);
-        } else {
-            console.warn("⚠️ No level spawn point available");
+        if (this.scene.levelTransitionManager) {
+            this.scene.levelTransitionManager.preservedState = null;
+        }
+        
+        if (this.uiManager) {
+            this.uiManager.hideDeathOverlay();
+        }
+        
+        // Hide the scene first
+        this.scene.scene.setVisible(false);
+        
+        // Complete teardown: STOP then START
+        console.log('🔄 GAME OVER RESTART: Stopping scene...');
+        this.scene.scene.stop();
+        
+        console.log('🔄 GAME OVER RESTART: Starting fresh scene...');
+        this.scene.scene.start('GameScene', {
+            levelId: currentLevelId,
+            character: currentCharacter,
+            preservedScore: preservedScore,
+            startOfLevelScore: startOfLevelScore,
+            isGameOverRestart: true  // Flag to prevent event auto-triggering
+        });
+    }
+    
+    // ========================================
+    // GAME PAUSE/RESUME FOR DEATH
+    // ========================================
+    
+    pauseGameOnDeath() {
+        console.log('💀 Pausing game on death');
+        
+        // Pause physics world
+        if (this.scene.physics && this.scene.physics.world) {
+            this.scene.physics.world.isPaused = true;
+        }
+        
+        // Disable input
+        if (this.scene.inputManager) {
+            this.scene.inputManager.disabled = true;
+        }
+        
+        // Pause all enemies
+        if (this.scene.enemies && this.scene.enemies.length > 0) {
+            this.scene.enemies.forEach((enemy, index) => {
+                if (enemy && enemy.sprite && enemy.sprite.body) {
+                    // Save velocity
+                    if (!enemy.savedVelocityOnDeath) {
+                        enemy.savedVelocityOnDeath = {
+                            x: enemy.sprite.body.velocity.x,
+                            y: enemy.sprite.body.velocity.y
+                        };
+                    }
+                    // Stop physics
+                    enemy.sprite.body.setVelocity(0, 0);
+                    // Pause AI
+                    enemy.deathPaused = true;
+                }
+            });
+        }
+        
+        // Stop enemy spawning
+        if (this.scene.enemySpawnManager) {
+            this.scene.enemySpawnManager.setMaxEnemies(0);
+        }
+    }
+    
+    resumeGameAfterDeath() {
+        console.log('💀 Resuming game after death');
+        
+        // Reset game over flag
+        this.isHandlingGameOver = false;
+        
+        // Resume physics world
+        if (this.scene.physics && this.scene.physics.world) {
+            this.scene.physics.world.isPaused = false;
+        }
+        
+        // Enable input
+        if (this.scene.inputManager) {
+            this.scene.inputManager.disabled = false;
+        }
+        
+        // Resume all enemies
+        if (this.scene.enemies && this.scene.enemies.length > 0) {
+            this.scene.enemies.forEach((enemy) => {
+                if (enemy && enemy.sprite && enemy.sprite.body) {
+                    // Restore velocity if saved
+                    if (enemy.savedVelocityOnDeath) {
+                        enemy.sprite.body.setVelocity(
+                            enemy.savedVelocityOnDeath.x,
+                            enemy.savedVelocityOnDeath.y
+                        );
+                        enemy.savedVelocityOnDeath = null;
+                    }
+                    // Resume AI
+                    enemy.deathPaused = false;
+                }
+            });
+        }
+        
+        // Resume enemy spawning (restore to previous max if needed)
+        // Note: EnemySpawnManager will handle spawning based on level config
+        if (this.scene.enemySpawnManager) {
+            // Restore maxEnemies from scene or use level config default
+            const maxEnemies = this.scene.maxEnemies !== undefined ? this.scene.maxEnemies : 4;
+            this.scene.enemySpawnManager.setMaxEnemies(maxEnemies);
+            console.log(`💀 Enemy spawning re-enabled: maxEnemies=${maxEnemies}`);
         }
     }
     
@@ -649,6 +1086,10 @@ class CharacterManager {
             const charData = this.characters[charName];
             charData.health = Math.min(charData.maxHealth, charData.health + (charData.maxHealth * 0.75));
         });
+        
+        // Reset auto-switch availability for both characters
+        this.characters.tireek.autoSwitchAvailable = true;
+        this.characters.tryston.autoSwitchAvailable = true;
         
         // Update UI
         if (this.uiManager) {

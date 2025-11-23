@@ -340,6 +340,9 @@ class FuturisticHealthBar {
     // ========================================
     
     update(tireekHealth, trystonHealth, activeCharacter) {
+        // console.log(`💊 FuturisticHealthBar.update() called - New: Tireek=${tireekHealth}, Tryston=${trystonHealth}, Active=${activeCharacter}`);
+        // console.log(`💊 FuturisticHealthBar previous stored - Tireek=${this.characters.tireek.health}, Tryston=${this.characters.tryston.health}`);
+        
         // Check if health decreased (damage taken) or increased (healing)
         const previousTireekHealth = this.characters.tireek.health;
         const previousTrystonHealth = this.characters.tryston.health;
@@ -349,6 +352,8 @@ class FuturisticHealthBar {
         const trystonHeal = trystonHealth - previousTrystonHealth;
         const healthDecreased = (tireekDamage > 0) || (trystonDamage > 0);
         const healthIncreased = (tireekHeal > 0) || (trystonHeal > 0);
+        // console.log(`💊 Health changes - Tireek: ${tireekHeal > 0 ? '+' : ''}${-tireekDamage} (heal:${tireekHeal}, dmg:${tireekDamage}), Tryston: ${trystonHeal > 0 ? '+' : ''}${-trystonDamage} (heal:${trystonHeal}, dmg:${trystonDamage})`);
+        // console.log(`💊 healthDecreased: ${healthDecreased}, healthIncreased: ${healthIncreased}`);
         
         // Show damage flash before updating health
         if (healthDecreased) {
@@ -380,12 +385,15 @@ class FuturisticHealthBar {
         // Update health displays for both cards (after a brief delay to show flash)
         if (healthDecreased || healthIncreased) {
             // Delay health update to show flash first
+            // console.log(`💊 Health changed - delaying UI update by 150ms to show flash`);
             this.scene.time.delayedCall(150, () => {
+                // console.log(`💊 Delayed UI update executing now`);
                 this.updateCardHealth('tireek');
                 this.updateCardHealth('tryston');
             });
         } else {
             // Update immediately if no health change
+            // console.log(`💊 No health change detected - updating UI immediately`);
             this.updateCardHealth('tireek');
             this.updateCardHealth('tryston');
         }
@@ -693,7 +701,12 @@ class FuturisticHealthBar {
         const card = this.cards[characterName];
         const charData = this.characters[characterName];
         
-        if (!card.healthFill || !card.healthText) return;
+        // console.log(`💊 updateCardHealth(${characterName}) - Health: ${charData.health}/${charData.maxHealth}`);
+        
+        if (!card.healthFill || !card.healthText) {
+            // console.warn(`💊 updateCardHealth(${characterName}) - Missing healthFill or healthText!`);
+            return;
+        }
         
         // Clear previous graphics
         card.healthFill.clear();
@@ -701,6 +714,7 @@ class FuturisticHealthBar {
         // Calculate health percentage
         const healthPercent = Math.max(0, Math.min(1, charData.health / charData.maxHealth));
         const healthWidth = this.config.healthBarWidth * healthPercent;
+        // console.log(`💊 updateCardHealth(${characterName}) - HealthPercent: ${(healthPercent * 100).toFixed(1)}%, HealthWidth: ${healthWidth.toFixed(1)}px`);
         
         // Health bar position (below name)
         const healthBarX = 0;
@@ -757,11 +771,13 @@ class FuturisticHealthBar {
         // Update health text
         const healthPercentText = Math.round(healthPercent * 100);
         card.healthText.setText(`${healthPercentText}%`);
+        // console.log(`💊 updateCardHealth(${characterName}) - Set health text to: "${healthPercentText}%"`);
         
         // Text color (white, same as name)
         card.healthText.setStyle({ fill: '#FFFFFF' });
         // Same opacity for both (dimming handled via tint)
         card.healthText.setAlpha(1.0);
+        // console.log(`💊 updateCardHealth(${characterName}) - COMPLETE`);
     }
     
     updateCardBorder(characterName) {
@@ -867,7 +883,7 @@ class FuturisticHealthBar {
             this.container.destroy();
         }
         
-        console.log('✨ FuturisticHealthBar destroyed');
+        // console.log('✨ FuturisticHealthBar destroyed');
     }
 }
 

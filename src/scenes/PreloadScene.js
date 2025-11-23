@@ -227,7 +227,7 @@ class PreloadScene extends Phaser.Scene {
     loadCharacterAssets(characterConfig) {
         console.log(`📦 Loading assets for ${characterConfig.name}:`, characterConfig.spriteSheets);
         
-        // Load all sprite sheets for the character
+        // Load all sprite sheets for the base character
         Object.entries(characterConfig.spriteSheets).forEach(([animName, path]) => {
             const spriteKey = `${characterConfig.name}_${animName}`;
             console.log(`📦 Loading spritesheet ${spriteKey} from ${path}`);
@@ -237,6 +237,23 @@ class PreloadScene extends Phaser.Scene {
                 frameHeight: characterConfig.frameSize.height
             });
         });
+        
+        // Load all variations if they exist
+        if (characterConfig.variations && Array.isArray(characterConfig.variations)) {
+            characterConfig.variations.forEach(variation => {
+                if (variation.spriteSheets) {
+                    Object.entries(variation.spriteSheets).forEach(([animName, path]) => {
+                        const spriteKey = `${variation.name}_${animName}`;
+                        console.log(`📦 Loading variation spritesheet ${spriteKey} from ${path}`);
+                        
+                        this.load.spritesheet(spriteKey, path, {
+                            frameWidth: characterConfig.frameSize.width,
+                            frameHeight: characterConfig.frameSize.height
+                        });
+                    });
+                }
+            });
+        }
     }
     
     loadAudioAssets() {

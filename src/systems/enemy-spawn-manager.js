@@ -13,6 +13,7 @@ class EnemySpawnManager {
         // Spawn configuration
         this.enemySpawnTimer = 0;
         this.enemySpawnInterval = ENEMY_CONFIG.spawnInterval;
+        this.baseSpawnInterval = ENEMY_CONFIG.spawnInterval; // Store base interval to preserve config
         this.maxEnemies = ENEMY_CONFIG.maxEnemiesOnScreen;
         this.isLoading = false;
         this.isTestMode = false;
@@ -38,18 +39,31 @@ class EnemySpawnManager {
     
     initialize(config) {
         this.maxEnemies = config.maxEnemies || ENEMY_CONFIG.maxEnemiesOnScreen;
-        this.enemySpawnInterval = config.spawnInterval || ENEMY_CONFIG.spawnInterval;
+        const configuredInterval = config.spawnInterval || ENEMY_CONFIG.spawnInterval;
+        this.baseSpawnInterval = configuredInterval; // Store base interval from config
+        this.enemySpawnInterval = configuredInterval;
         this.isTestMode = config.isTestMode || false;
         this.isLoading = config.isLoading || false;
         
         // Set allowed enemy types from config (if provided)
-        if (config.allowedEnemyTypes && Array.isArray(config.allowedEnemyTypes)) {
-            this.allowedEnemyTypes = config.allowedEnemyTypes;
-            console.log(`👾 EnemySpawnManager: Allowed enemy types set to: ${this.allowedEnemyTypes.join(', ')}`);
+        // IMPORTANT: Only update if explicitly provided - preserve existing value otherwise
+        if (config.hasOwnProperty('allowedEnemyTypes')) {
+            if (config.allowedEnemyTypes && Array.isArray(config.allowedEnemyTypes)) {
+                this.allowedEnemyTypes = config.allowedEnemyTypes;
+                console.log(`👾 EnemySpawnManager: Allowed enemy types set to: ${this.allowedEnemyTypes.join(', ')}`);
+            } else {
+                // Explicitly set to empty array (all types allowed for backwards compatibility)
+                this.allowedEnemyTypes = [];
+                console.log('👾 EnemySpawnManager: No enemy type restrictions (all types allowed)');
+            }
         } else {
-            // Default: allow all enemy types (backwards compatibility)
-            this.allowedEnemyTypes = [];
-            console.log('👾 EnemySpawnManager: No enemy type restrictions (all types allowed)');
+            // Not provided in config - preserve existing value
+            // Only log if we're initializing for the first time (allowedEnemyTypes is empty)
+            if (this.allowedEnemyTypes.length === 0) {
+                console.log('👾 EnemySpawnManager: Preserving default (all types allowed)');
+            } else {
+                console.log(`👾 EnemySpawnManager: Preserving existing allowed types: ${this.allowedEnemyTypes.join(', ')}`);
+            }
         }
     }
     
@@ -119,8 +133,9 @@ class EnemySpawnManager {
                 this.spawnEnemy();
                 this.enemySpawnTimer = 0;
                 // Add some randomness to spawn interval (±20% variation)
+                // Use baseSpawnInterval to preserve the configured value
                 const variation = 0.8 + Math.random() * 0.4; // 0.8 to 1.2
-                this.enemySpawnInterval = ENEMY_CONFIG.spawnInterval * variation;
+                this.enemySpawnInterval = this.baseSpawnInterval * variation;
             }
         }
         
@@ -227,6 +242,18 @@ class EnemySpawnManager {
         
         if (activeEnemyCount >= this.maxEnemies) return;
         
+        // Debug: Log allowed enemy types when spawning (only first few times to avoid spam)
+        if (!this._spawnDebugLogged) {
+            console.log(`👾 [Spawn Debug] Allowed enemy types: [${this.allowedEnemyTypes.length > 0 ? this.allowedEnemyTypes.join(', ') : 'ALL (no restrictions)'}]`);
+            this._spawnDebugLogged = true;
+            // Reset after 10 spawns to allow checking again if config changes
+            this._spawnCount = 0;
+        }
+        this._spawnCount = (this._spawnCount || 0) + 1;
+        if (this._spawnCount >= 10) {
+            this._spawnDebugLogged = false;
+        }
+        
         // Get camera and player bounds for spawning
         const cameraX = this.scene.cameras.main.scrollX;
         const cameraWidth = this.scene.cameras.main.width;
@@ -301,9 +328,15 @@ class EnemySpawnManager {
             }
             
             if (!enemyConfig) {
-                console.warn(`👾 Could not find enemy config for type: ${randomType}, falling back to default`);
-                // Fallback to first allowed type or crackhead
-                enemyConfig = ALL_ENEMY_TYPES.find(config => config.name === this.allowedEnemyTypes[0]) || CRACKHEAD_CONFIG;
+                console.warn(`👾 Could not find enemy config for type: ${randomType} from allowed types: [${this.allowedEnemyTypes.join(', ')}]`);
+                // Fallback to first allowed type (don't use CRACKHEAD_CONFIG as it might not be allowed)
+                if (this.allowedEnemyTypes.length > 0) {
+                    enemyConfig = ALL_ENEMY_TYPES.find(config => config.name === this.allowedEnemyTypes[0]);
+                }
+                if (!enemyConfig) {
+                    console.error(`👾 CRITICAL: Could not find config for any allowed enemy type! Allowed: [${this.allowedEnemyTypes.join(', ')}]`);
+                    return; // Don't spawn if we can't find a valid config
+                }
             }
         } else {
             // No restrictions: use weighted probability (backwards compatibility)
@@ -426,6 +459,7 @@ class EnemySpawnManager {
     }
     
     setSpawnInterval(interval) {
+        this.baseSpawnInterval = interval;
         this.enemySpawnInterval = interval;
     }
     

@@ -113,6 +113,11 @@ class EffectSystem {
         const animationDuration = (3 / 12) * 1000; // 250ms
         
         // Track active effect
+        // Store target sprite if provided (e.g. player) to follow
+        if (onComplete && onComplete.target) {
+            tornadoSprite.target = onComplete.target;
+        }
+        
         this.activeEffects.push(tornadoSprite);
         
         // Set up cleanup after animation
@@ -212,6 +217,23 @@ class EffectSystem {
         });
         this.activeEffects = [];
         console.log('🌪️ All effects cleaned up');
+    }
+    
+    update() {
+        // Update effect positions to follow targets
+        this.activeEffects.forEach(sprite => {
+            if (sprite && sprite.active && sprite.target) {
+                // If target is active and visible, follow it
+                if (sprite.target.active) {
+                    sprite.x = sprite.target.x;
+                    sprite.y = sprite.target.y;
+                    
+                    // Also update wind effect center
+                    // Note: We can't update the ongoing wind effect easily without refactoring applyWindEffectToEnemies
+                    // but for visual consistency, the sprite moving is most important
+                }
+            }
+        });
     }
 }
 

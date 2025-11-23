@@ -23,11 +23,21 @@ class SpawningActions {
         this.scene.enemySpawnTimer = 0; // Reset timer
         
         // CRITICAL: Also reset the EnemySpawnManager's internal settings
+        // Preserve allowedEnemyTypes from current config if not specified in action
         if (this.scene.enemySpawnManager) {
-            this.scene.enemySpawnManager.setMaxEnemies(this.scene.maxEnemies);
-            this.scene.enemySpawnManager.setSpawnInterval(this.scene.enemySpawnInterval);
+            // Preserve current allowedEnemyTypes if not overridden in action config
+            const currentAllowedTypes = this.scene.enemySpawnManager.allowedEnemyTypes || [];
+            const allowedTypes = config.allowedEnemyTypes !== undefined ? config.allowedEnemyTypes : currentAllowedTypes;
+            
+            this.scene.enemySpawnManager.initialize({
+                maxEnemies: this.scene.maxEnemies,
+                spawnInterval: this.scene.enemySpawnInterval,
+                isTestMode: this.scene.enemySpawnManager.isTestMode || false,
+                isLoading: false,
+                allowedEnemyTypes: allowedTypes // Preserve or use config value
+            });
             this.scene.enemySpawnManager.enemySpawnTimer = 0;
-            console.log(`🎬 Reset EnemySpawnManager: maxEnemies=${this.scene.maxEnemies}, interval=${this.scene.enemySpawnInterval}`);
+            console.log(`🎬 Reset EnemySpawnManager: maxEnemies=${this.scene.maxEnemies}, interval=${this.scene.enemySpawnInterval}, types=${allowedTypes.join(', ') || 'all'}`);
         }
         
         // Store original spawn settings if needed

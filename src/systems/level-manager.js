@@ -223,9 +223,11 @@ class LevelManager {
     
     applyDifficultyMultipliers(enemyConfig) {
         // Store difficulty multipliers for enemy spawning
+        // Level config uses multipliers.health and multipliers.damage
+        const multipliers = enemyConfig.multipliers || {};
         this.currentDifficultyMultipliers = {
-            health: enemyConfig.healthMultiplier || 1.0,
-            damage: enemyConfig.damageMultiplier || 1.0,
+            health: multipliers.health || 1.0,
+            damage: multipliers.damage || 1.0,
             speed: enemyConfig.difficulty || 1.0
         };
     }

@@ -18,7 +18,7 @@ class AnimationSetupManager {
         
         console.log(`Creating animations for ${charName}:`, characterConfig.animations);
         
-        // Create all animations based on character config
+        // Create all animations for base character
         Object.entries(characterConfig.animations).forEach(([animName, config]) => {
             const spriteKey = `${charName}_${animName}`;
             const frameConfig = this.scene.anims.generateFrameNumbers(spriteKey, { 
@@ -40,6 +40,37 @@ class AnimationSetupManager {
                 console.error(`Failed to create animation ${spriteKey}:`, error);
             }
         });
+        
+        // Create animations for all variations if they exist
+        if (characterConfig.variations && Array.isArray(characterConfig.variations)) {
+            characterConfig.variations.forEach(variation => {
+                const variationName = variation.name;
+                console.log(`Creating animations for variation ${variationName}`);
+                
+                // Use the same animation configs as base, but with variation sprite keys
+                Object.entries(characterConfig.animations).forEach(([animName, config]) => {
+                    const spriteKey = `${variationName}_${animName}`;
+                    const frameConfig = this.scene.anims.generateFrameNumbers(spriteKey, { 
+                        start: 0, 
+                        end: config.frames - 1 
+                    });
+
+                    console.log(`Creating variation animation ${spriteKey} with ${config.frames} frames at ${config.frameRate} FPS`);
+                    
+                    try {
+                        this.scene.anims.create({
+                            key: `${variationName}_${animName}`,
+                            frames: frameConfig,
+                            frameRate: config.frameRate,
+                            repeat: config.repeat
+                        });
+                        console.log(`Successfully created variation animation: ${spriteKey}`);
+                    } catch (error) {
+                        console.error(`Failed to create variation animation ${spriteKey}:`, error);
+                    }
+                });
+            });
+        }
         
         console.log(`Finished creating animations for ${charName}`);
     }

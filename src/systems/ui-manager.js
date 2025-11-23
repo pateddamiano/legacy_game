@@ -38,6 +38,21 @@ class UIManager {
         this.livesBox = null;
         this.livesPlusSymbols = [];
         
+        // Death overlay elements
+        this.deathOverlay = null;
+        this.deathOverlayText = null;
+        this.deathOverlayFade = null;
+        
+        // Typewriter effect for game over
+        this.gameOverTypewriterTimer = null;
+        this.gameOverFullText = '';
+        this.gameOverDisplayedText = '';
+        this.gameOverCharIndex = 0;
+        this.gameOverTypewriterSpeed = 100; // ms per character
+        
+        // Lives flash animation reference
+        this.livesFlashTween = null;
+        
         console.log('🎨 UIManager initialized!');
     }
     
@@ -367,9 +382,15 @@ class UIManager {
         console.log('❤️ Lives display created');
     }
     
-    updateLivesDisplay(lives) {
+    updateLivesDisplay(lives, flashLostLife = false) {
         if (!this.livesPlusSymbols || this.livesPlusSymbols.length === 0) {
             return;
+        }
+        
+        // Stop any existing flash animations to prevent overlapping flashes
+        if (this.livesFlashTween) {
+            this.livesFlashTween.stop();
+            this.livesFlashTween = null;
         }
         
         // Update each plus symbol based on remaining lives
@@ -383,10 +404,32 @@ class UIManager {
                 life.symbol.setAlpha(1.0);
                 life.shadow.setAlpha(0.5);
             } else {
-                // Lost life: greyed out
+                // Lost life: greyed out (default state)
                 life.symbol.setFill('#666666');
                 life.symbol.setAlpha(0.5);
                 life.shadow.setAlpha(0.2);
+                
+                // Flash red if this life was just lost (only flash the one that was just lost)
+                if (flashLostLife && i === lives) {
+                    // Flash red for 1 second
+                    life.symbol.setFill('#FF0000');
+                    life.symbol.setAlpha(1.0);
+                    
+                    // Create flash animation and store reference
+                    this.livesFlashTween = this.scene.tweens.add({
+                        targets: [life.symbol, life.shadow],
+                        alpha: 0.5,
+                        duration: 1000,
+                        ease: 'Power2',
+                        onComplete: () => {
+                            // Restore greyed out state
+                            life.symbol.setFill('#666666');
+                            life.symbol.setAlpha(0.5);
+                            life.shadow.setAlpha(0.2);
+                            this.livesFlashTween = null;
+                        }
+                    });
+                }
             }
         }
     }
@@ -868,7 +911,196 @@ Legend:
             this.futuristicHealthBar.destroy();
         }
         
+        // Clean up death overlay
+        this.hideDeathOverlay();
+        
         console.log('🗑️ UIManager destroyed');
+    }
+    
+    // ========================================
+    // DEATH OVERLAY METHODS
+    // ========================================
+    
+    showTryAgainOverlay() {
+        this.showDeathOverlay('TRY AGAIN');
+    }
+    
+    showGameOverOverlay() {
+        // Remove existing overlay if present
+        this.hideDeathOverlay();
+        
+        const centerX = this.scene.cameras.main.centerX;
+        const centerY = this.scene.cameras.main.centerY;
+        
+        // Create fully opaque black overlay (will fade in)
+        this.deathOverlay = this.scene.add.rectangle(
+            centerX,
+            centerY,
+            this.scene.cameras.main.width,
+            this.scene.cameras.main.height,
+            0x000000,
+            1.0
+        );
+        this.deathOverlay.setDepth(3000);
+        this.deathOverlay.setScrollFactor(0);
+        this.deathOverlay.setAlpha(0); // Start invisible for fade
+        
+        // Create message text (empty initially, will be typed out)
+        this.deathOverlayText = this.scene.add.text(
+            centerX,
+            centerY,
+            '',
+            {
+                fontSize: '72px',
+                fill: '#FF0000',
+                fontFamily: GAME_CONFIG.ui.fontFamily,
+                fontStyle: 'bold',
+                stroke: '#000000',
+                strokeThickness: 8
+            }
+        );
+        this.deathOverlayText.setOrigin(0.5);
+        this.deathOverlayText.setDepth(3001);
+        this.deathOverlayText.setScrollFactor(0);
+        
+        // Initialize typewriter
+        this.gameOverFullText = 'GAME OVER';
+        this.gameOverDisplayedText = '';
+        this.gameOverCharIndex = 0;
+        
+        console.log('💀 Game over overlay created (will fade in and type)');
+    }
+    
+    fadeInGameOverScreen(callback) {
+        // Fade in the black overlay
+        this.scene.tweens.add({
+            targets: this.deathOverlay,
+            alpha: 1,
+            duration: 1000,
+            ease: 'Power2',
+            onComplete: () => {
+                if (callback) callback();
+            }
+        });
+    }
+    
+    startGameOverTypewriter(onComplete) {
+        // Start typing sound
+        if (this.scene.audioManager) {
+            this.scene.audioManager.startTextTyping();
+        }
+        
+        // Clear any existing timer
+        if (this.gameOverTypewriterTimer) {
+            this.gameOverTypewriterTimer.remove();
+        }
+        
+        // Start typewriter effect
+        this.gameOverTypewriterTimer = this.scene.time.addEvent({
+            delay: this.gameOverTypewriterSpeed,
+            callback: () => {
+                if (this.gameOverCharIndex < this.gameOverFullText.length) {
+                    this.gameOverDisplayedText += this.gameOverFullText[this.gameOverCharIndex];
+                    this.deathOverlayText.setText(this.gameOverDisplayedText);
+                    this.gameOverCharIndex++;
+                } else {
+                    // Typewriter complete
+                    if (this.scene.audioManager) {
+                        this.scene.audioManager.stopTextTyping();
+                    }
+                    if (this.gameOverTypewriterTimer) {
+                        this.gameOverTypewriterTimer.remove();
+                        this.gameOverTypewriterTimer = null;
+                    }
+                    if (onComplete) {
+                        onComplete();
+                    }
+                }
+            },
+            loop: true
+        });
+    }
+    
+    showDeathOverlay(message) {
+        // Remove existing overlay if present
+        this.hideDeathOverlay();
+        
+        const centerX = this.scene.cameras.main.centerX;
+        const centerY = this.scene.cameras.main.centerY;
+        
+        // Create semi-transparent dark overlay
+        this.deathOverlay = this.scene.add.rectangle(
+            centerX,
+            centerY,
+            this.scene.cameras.main.width,
+            this.scene.cameras.main.height,
+            0x000000,
+            0.7
+        );
+        this.deathOverlay.setDepth(3000);
+        this.deathOverlay.setScrollFactor(0);
+        
+        // Create message text
+        this.deathOverlayText = this.scene.add.text(
+            centerX,
+            centerY,
+            message,
+            {
+                fontSize: '72px',
+                fill: '#FF0000',
+                fontFamily: GAME_CONFIG.ui.fontFamily,
+                fontStyle: 'bold',
+                stroke: '#000000',
+                strokeThickness: 8
+            }
+        );
+        this.deathOverlayText.setOrigin(0.5);
+        this.deathOverlayText.setDepth(3001);
+        this.deathOverlayText.setScrollFactor(0);
+        
+        // Add pulsing animation
+        this.scene.tweens.add({
+            targets: this.deathOverlayText,
+            scaleX: 1.1,
+            scaleY: 1.1,
+            duration: 500,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+        
+        console.log(`💀 Death overlay shown: ${message}`);
+    }
+    
+    hideDeathOverlay() {
+        // Stop typewriter if running
+        if (this.gameOverTypewriterTimer) {
+            this.gameOverTypewriterTimer.remove();
+            this.gameOverTypewriterTimer = null;
+        }
+        
+        // Stop typing sound
+        if (this.scene.audioManager) {
+            this.scene.audioManager.stopTextTyping();
+        }
+        
+        if (this.deathOverlay) {
+            this.deathOverlay.destroy();
+            this.deathOverlay = null;
+        }
+        if (this.deathOverlayText) {
+            this.deathOverlayText.destroy();
+            this.deathOverlayText = null;
+        }
+        if (this.deathOverlayFade) {
+            this.deathOverlayFade.destroy();
+            this.deathOverlayFade = null;
+        }
+        
+        // Reset typewriter state
+        this.gameOverFullText = '';
+        this.gameOverDisplayedText = '';
+        this.gameOverCharIndex = 0;
     }
 }
 

@@ -16,7 +16,7 @@
     "subwayPassingVolume": 0.1
   },
   "enemies": {
-    "spawnRate": 800,
+    "spawnRate": 700,
     "max": 7,
     "types": ["crackhead"],
     "multipliers": { "health": 1.0, "damage": 1.0 }

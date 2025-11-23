@@ -734,6 +734,52 @@ class AudioManager {
         this.playSoundEffect('gameOver');
     }
     
+    playGameOverMusic() {
+        // Stop current background music
+        if (this.currentBackgroundMusic && this.currentBackgroundMusic.isPlaying) {
+            this.currentBackgroundMusic.stop();
+        }
+        
+        // Play game over music
+        if (this.scene.cache.audio.has('gameoverMusic')) {
+            const music = this.sound.play('gameoverMusic', {
+                volume: this.config.soundEffects.gameOver?.volume || this.config.soundEffects.volume
+            });
+            console.log('🎵 Playing game over music');
+            return music; // Return sound object so we can listen for completion
+        } else {
+            console.warn('🔊 Game over music not found in cache');
+            return null;
+        }
+    }
+    
+    playGameOverVoice() {
+        if (this.scene.cache.audio.has('gameoverVoice')) {
+            this.playSoundEffect('gameoverVoice', this.config.soundEffects.gameOver?.volume || this.config.soundEffects.volume);
+            console.log('🎵 Playing game over voice');
+        } else {
+            console.warn('🔊 Game over voice not found in cache');
+        }
+    }
+    
+    playTryAgainSound() {
+        if (this.scene.cache.audio.has('tryAgain')) {
+            this.playSoundEffect('tryAgain', this.config.soundEffects.gameOver?.volume || this.config.soundEffects.volume);
+            console.log('🎵 Playing try again sound');
+        } else {
+            console.warn('🔊 Try again sound not found in cache');
+        }
+    }
+    
+    playTryAgainStartSound() {
+        if (this.scene.cache.audio.has('tryAgainStart')) {
+            this.playSoundEffect('tryAgainStart', this.config.soundEffects.gameOver?.volume || this.config.soundEffects.volume);
+            console.log('🎵 Playing try again start sound');
+        } else {
+            console.warn('🔊 Try again start sound not found in cache');
+        }
+    }
+    
     // Dialogue typing sound (looping during typing)
     startTextTyping() {
         // Don't start if already playing

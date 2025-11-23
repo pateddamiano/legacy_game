@@ -257,6 +257,14 @@ class AudioBootScene extends Phaser.Scene {
         this.load.audio('tornadoWind', 'assets/audio/sfx/tornado_wind.mp3');
         this.load.audio('textTyping', 'assets/audio/sfx/text.mp3');
         
+        // Game over sounds
+        this.load.audio('gameoverMusic', 'assets/audio/sfx/gameover_music.mp3');
+        this.load.audio('gameoverVoice', 'assets/audio/sfx/gameover-voice.mp3');
+        
+        // Try again sounds
+        this.load.audio('tryAgain', 'assets/audio/sfx/try_again.mp3');
+        this.load.audio('tryAgainStart', 'assets/audio/sfx/try_again_start.mp3');
+        
         console.log('🎵 All audio assets configured for loading');
     }
 
@@ -281,9 +289,10 @@ class AudioBootScene extends Phaser.Scene {
             console.log('👥 ALL_CHARACTERS is undefined!');
         }
         
-        // Also load enemy assets
+        // Also load enemy assets (including variations)
         if (typeof ALL_ENEMY_TYPES !== 'undefined') {
             ALL_ENEMY_TYPES.forEach(enemy => {
+                // Load base enemy sprite sheets
                 if (enemy.spriteSheets) {
                     Object.entries(enemy.spriteSheets).forEach(([animKey, path]) => {
                         const spriteKey = `${enemy.name}_${animKey}`;
@@ -292,6 +301,22 @@ class AudioBootScene extends Phaser.Scene {
                             frameHeight: enemy.frameSize.height
                         });
                         console.log(`🦹 Loading ${spriteKey} from ${path}`);
+                    });
+                }
+                
+                // Load variation sprite sheets if they exist
+                if (enemy.variations && Array.isArray(enemy.variations)) {
+                    enemy.variations.forEach(variation => {
+                        if (variation.spriteSheets) {
+                            Object.entries(variation.spriteSheets).forEach(([animKey, path]) => {
+                                const spriteKey = `${variation.name}_${animKey}`;
+                                this.load.spritesheet(spriteKey, path, {
+                                    frameWidth: enemy.frameSize.width,
+                                    frameHeight: enemy.frameSize.height
+                                });
+                                console.log(`🦹 Loading variation ${spriteKey} from ${path}`);
+                            });
+                        }
                     });
                 }
             });

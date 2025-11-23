@@ -12,6 +12,12 @@ class GameScene extends Phaser.Scene {
     }
 
     init(data) {
+        // Clear persistent state from previous runs to prevent stale references
+        this.player = null;
+        this.enemies = [];
+        this.bosses = [];
+        this.eventPlayerBounds = null;
+        
         // Check for debug mode and direct level loading
         if (window.DIRECT_LEVEL_LOAD && (window.TEST_LEVEL_ID !== undefined)) {
             // Load requested level directly
@@ -33,6 +39,25 @@ class GameScene extends Phaser.Scene {
         // Update game state
         window.gameState.currentGame.character = this.selectedCharacter;
         window.gameState.currentGame.levelId = this.selectedLevelId;
+        
+        // Apply preserved score if passed (from Game Over restart)
+        if (data && data.preservedScore !== undefined) {
+            this.playerScore = data.preservedScore;
+            console.log(`🔄 Restored score from Game Over: ${this.playerScore}`);
+        } else {
+            this.playerScore = 0;
+        }
+
+        // Store the score at the start of the level to restore it on Game Over
+        // If startOfLevelScore is passed (from previous restart), keep it. Otherwise, use current (0 or carried over).
+        this.startOfLevelScore = (data && data.startOfLevelScore !== undefined) ? data.startOfLevelScore : this.playerScore;
+        console.log(`💾 Level start score recorded: ${this.startOfLevelScore}`);
+        
+        // Check if this is a Game Over restart
+        this.isGameOverRestart = data?.isGameOverRestart || false;
+        if (this.isGameOverRestart) {
+            console.log('🔄 Game Over restart detected - will skip event auto-triggers');
+        }
         
         // Initialize debug/testing mode
         this.isTestMode = window.DEBUG_MODE || this.selectedLevelId === 'test' || window.LEVEL_TEST_MODE === true;
@@ -451,10 +476,9 @@ class GameScene extends Phaser.Scene {
             this.isJumping,
             this.eventCameraLocked || false,
             () => {
-                // Game over callback
-                this.characterManager.handleGameOver(() => {
-                    console.log("Game over - characters will respawn");
-                });
+                // Game over callback - handleGameOver is already called by handleCharacterDown
+                // Just do any cleanup here if needed
+                console.log("Game over handled - characters respawned");
             }
         );
         
@@ -564,6 +588,11 @@ class GameScene extends Phaser.Scene {
         
         // Update weapon system
         this.weaponManager.update();
+        
+        // Update effect system (for moving effects like tornado)
+        if (this.effectSystem) {
+            this.effectSystem.update();
+        }
         
         // Update item pickup system (only when not loading)
         if (!this.isLoading) {
@@ -1074,6 +1103,12 @@ class GameScene extends Phaser.Scene {
             console.log('📍 Checkpoint system initialized');
         }
         
+        // Update score display if we have a preserved score (from Game Over restart)
+        if (this.uiManager && this.playerScore > 0) {
+            this.uiManager.updateScoreDisplay(this.playerScore);
+            console.log(`🔄 Score display updated: ${this.playerScore}`);
+        }
+        
         // Initialize animation state manager now that player exists
         this.animationManager = new AnimationStateManager(this.player);
         console.log('🎯 Animation manager initialized');
@@ -1099,8 +1134,13 @@ class GameScene extends Phaser.Scene {
         
         // Check if any events should trigger immediately (player already past trigger)
         // Skip during level transitions - transition manager will handle this
-        if (this.eventManager && this.player && !this.levelTransitionManager?.isTransitioning) {
+        // Skip during Game Over restarts - we want to start fresh from level beginning
+        if (this.eventManager && this.player && !this.levelTransitionManager?.isTransitioning && !this.isGameOverRestart) {
             this.eventManager.checkInitialTriggers();
+        } else if (this.isGameOverRestart) {
+            console.log('🔄 Skipping event auto-triggers due to Game Over restart');
+            // Clear the flag after use
+            this.isGameOverRestart = false;
         }
         
         // Update debug manager references if it exists

@@ -44,10 +44,14 @@ class EventEntityManager {
     }
     
     pausePlayer() {
-        if (this.pausedEntities.player) return; // Already paused
+        if (this.pausedEntities.player) {
+            console.log('🎬 Player already paused, skipping');
+            return; // Already paused
+        }
         
-        console.log('🎬 Pausing player');
+        console.log('🎬 Pausing player - setting pausedEntities.player = true');
         this.pausedEntities.player = true;
+        console.log(`🎬 After pause - pausedEntities.player is now: ${this.pausedEntities.player}`);
         
         // Save current state
         if (this.scene.player && this.scene.player.body) {
@@ -119,11 +123,15 @@ class EventEntityManager {
     }
     
     resumePlayer() {
-        if (!this.pausedEntities.player) return;
+        if (!this.pausedEntities.player) {
+            console.log('🎬 Player not paused, skipping resume');
+            return;
+        }
         
         console.log(`🎬 Resuming player - current animation state: ${this.scene.animationManager.currentState}, locked: ${this.scene.animationManager.animationLocked}`);
-        
+        console.log('🎬 Setting pausedEntities.player = false');
         this.pausedEntities.player = false;
+        console.log(`🎬 After resume - pausedEntities.player is now: ${this.pausedEntities.player}`);
         
         // Restore state
         if (this.scene.player && this.scene.player.body && this.savedEntityStates.has('player')) {

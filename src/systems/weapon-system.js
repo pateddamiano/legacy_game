@@ -459,6 +459,19 @@ class WeaponManager {
             enemies.forEach(enemy => {
                 if (!enemy.sprite || !enemy.sprite.active) return;
                 
+                // Skip dead or dying enemies - they should not be hittable
+                // Once an enemy dies (flashes red and starts fading), they should not be hit by weapons
+                
+                // Check if enemy is dead (state check) - this catches enemies that have died
+                if (typeof ENEMY_STATES !== 'undefined' && enemy.state === ENEMY_STATES.DEAD) {
+                    return; // Enemy is dead/fading, skip collision
+                }
+                
+                // Also check if enemy health is 0 or less (safety check in case state hasn't updated yet)
+                if (enemy.health !== undefined && enemy.health <= 0) {
+                    return; // Enemy is dying/dead, skip collision
+                }
+                
                 // Check vertical distance first (street-level tolerance)
                 const verticalDistance = Math.abs(projectile.sprite.y - enemy.sprite.y);
                 const weaponConfig = this.weapons[this.currentWeapon];
