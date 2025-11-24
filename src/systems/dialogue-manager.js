@@ -122,11 +122,12 @@ class DialogueManager {
         );
         this.messageText.setScrollFactor(0);
         
-        // Continue prompt
+        // Continue prompt (text will be updated based on device)
+        const promptText = (window.DeviceManager && window.DeviceManager.shouldShowTouchControls()) ? '[TAP]' : '[SPACE]';
         this.continuePrompt = this.uiScene.add.text(
             panelX + Math.floor(panelWidth / 2) - 10,
             panelY + Math.floor(panelHeight / 2) - 18,
-            '[SPACE]',
+            promptText,
             {
                 fontSize: GAME_CONFIG.ui.fontSize.tiny,
                 fill: '#FFD700',
@@ -146,6 +147,12 @@ class DialogueManager {
             this.messageText,
             this.continuePrompt
         ]);
+        
+        // Make dialogue box and overlay interactive for tap-to-advance on mobile
+        this.dialogueBox.setInteractive({ useHandCursor: false });
+        if (this.overlay) {
+            this.overlay.setInteractive({ useHandCursor: false });
+        }
         
         // Make continue prompt blink
         this.scene.tweens.add({
@@ -421,15 +428,80 @@ class DialogueManager {
         this.spaceKey = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
         this.spaceKey.on('down', () => {
             if (this.isActive) {
-                if (this.typewriterTimer) {
-                    // Skip typewriter
-                    this.skipTypewriter();
-                } else {
-                    // Dismiss dialogue
-                    this.hideDialogue();
-                }
+                this.advanceDialogue();
             }
         });
+        
+        // Set up touch input for dialogue (tap to advance)
+        // Only register taps on dialogue box/overlay, not on gameplay controls
+        if (this.dialogueBox) {
+            this.dialogueBox.on('pointerdown', (pointer) => {
+                if (this.isActive && this.isTouchInDialogueArea(pointer)) {
+                    this.advanceDialogue();
+                }
+            });
+        }
+        
+        if (this.overlay) {
+            this.overlay.on('pointerdown', (pointer) => {
+                if (this.isActive && this.isTouchInDialogueArea(pointer)) {
+                    this.advanceDialogue();
+                }
+            });
+        }
+        
+        // Also set up uiConfirm action in unified input controller
+        // This will be checked in update() method
+        if (this.scene.inputManager && this.scene.inputManager.unifiedInput) {
+            // Set uiConfirm when SPACE is pressed
+            this.spaceKey.on('down', () => {
+                if (this.isActive) {
+                    this.scene.inputManager.unifiedInput.setActionFromKeyboard('uiConfirm', true);
+                }
+            });
+        }
+    }
+    
+    /**
+     * Check if touch is in dialogue area (not on gameplay controls)
+     * @param {Phaser.Input.Pointer} pointer - The pointer event
+     * @returns {boolean} True if touch is in dialogue area
+     */
+    isTouchInDialogueArea(pointer) {
+        // Check if touch is outside gameplay control zones
+        // For now, we'll allow any tap on dialogue box/overlay
+        // The touch controls overlay should handle its own zones
+        return true;
+    }
+    
+    /**
+     * Advance dialogue (skip typewriter or dismiss)
+     */
+    advanceDialogue() {
+        if (!this.isActive) return;
+        
+        if (this.typewriterTimer) {
+            // Skip typewriter
+            this.skipTypewriter();
+        } else {
+            // Dismiss dialogue
+            this.hideDialogue();
+        }
+    }
+    
+    /**
+     * Update method to check for unified input controller actions
+     * Should be called each frame when dialogue is active
+     */
+    update() {
+        if (!this.isActive) return;
+        
+        // Check unified input controller for uiConfirm action
+        if (this.scene.inputManager && this.scene.inputManager.unifiedInput) {
+            if (this.scene.inputManager.unifiedInput.isActionPressed('uiConfirm')) {
+                this.advanceDialogue();
+            }
+        }
     }
     
     // ========================================

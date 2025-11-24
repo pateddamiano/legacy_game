@@ -122,6 +122,9 @@ class MainMenuScene extends Phaser.Scene {
             console.log('🏠 MainMenuScene: Setting up input...');
             this.setupInput();
             
+            // Set up automatic fullscreen on first interaction
+            this.setupAutoFullscreen();
+            
             console.log('🏠 ✅ MainMenuScene: All components created successfully!');
             
         } catch (error) {
@@ -657,6 +660,44 @@ class MainMenuScene extends Phaser.Scene {
         });
     }
     
+    setupAutoFullscreen() {
+        // Request fullscreen on first user interaction (click or touch)
+        if (window.FullscreenManager && window.FullscreenManager.shouldAutoRequest) {
+            // Create invisible overlay to catch first interaction
+            const fullscreenTrigger = this.add.rectangle(
+                this.virtualWidth / 2,
+                this.virtualHeight / 2,
+                this.virtualWidth,
+                this.virtualHeight,
+                0x000000,
+                0
+            );
+            fullscreenTrigger.setDepth(10000); // Above everything
+            fullscreenTrigger.setInteractive({ useHandCursor: false });
+            
+            // One-time fullscreen request on first click/touch
+            const requestFullscreen = (pointer) => {
+                if (window.FullscreenManager) {
+                    window.FullscreenManager.requestFullscreenOnInteraction(pointer);
+                }
+                // Remove the trigger after first interaction
+                fullscreenTrigger.destroy();
+            };
+            
+            fullscreenTrigger.on('pointerdown', requestFullscreen);
+            
+            // Also listen to keyboard (for desktop testing)
+            this.input.keyboard.once('keydown', () => {
+                if (window.FullscreenManager) {
+                    window.FullscreenManager.requestFullscreenOnInteraction(null);
+                }
+                fullscreenTrigger.destroy();
+            });
+            
+            console.log('📱 MainMenuScene: Auto-fullscreen trigger set up');
+        }
+    }
+    
     // ========================================
     // MENU ACTIONS
     // ========================================
@@ -909,42 +950,127 @@ class MainMenuScene extends Phaser.Scene {
     }
     
     createFullscreenTrigger() {
-        // Only needed for mobile devices
-        if (!window.DeviceManager || !window.DeviceManager.isMobile) return;
+        // Show on mobile devices or if explicitly enabled
+        const shouldShow = (window.DeviceManager && window.DeviceManager.isMobile) || 
+                          (window.DEBUG_MODE && window.DeviceManager);
         
-        console.log('📱 Creating mobile fullscreen trigger...');
+        if (!shouldShow) return;
+        
+        console.log('📱 Creating mobile fullscreen trigger in MainMenuScene...');
         
         // Create a "Tap to Fullscreen" button in the top-left corner
         const btnX = 100; // Virtual coordinates
         const btnY = 50;
         
-        const fullscreenBtn = this.add.text(btnX, btnY, '[ FULLSCREEN ]', {
-            fontSize: '24px',
-            fill: '#FFFFFF',
-            fontFamily: 'VT323',
-            backgroundColor: '#000000'
-        })
-        .setOrigin(0.5)
-        .setInteractive({ useHandCursor: true })
-        .setDepth(1000)
-        .setScrollFactor(0);
+        // Create button background for better visibility
+        const btnBg = this.add.rectangle(btnX, btnY, 180, 40, 0x000000, 0.8);
+        btnBg.setStrokeStyle(2, 0xFFFFFF, 0.7);
+        btnBg.setScrollFactor(0);
+        btnBg.setDepth(1000);
+        btnBg.setInteractive({ useHandCursor: true });
         
-        fullscreenBtn.on('pointerdown', () => {
-            if (this.scale.isFullscreen) {
-                this.scale.stopFullscreen();
-            } else {
-                this.scale.startFullscreen();
+        // Create button text
+        const fullscreenBtn = this.add.text(btnX, btnY, '[ FULLSCREEN ]', {
+            fontSize: '20px',
+            fill: '#FFFFFF',
+            fontFamily: GAME_CONFIG.ui.fontFamily || 'VT323',
+            fontStyle: 'bold'
+        });
+        fullscreenBtn.setOrigin(0.5);
+        fullscreenBtn.setScrollFactor(0);
+        fullscreenBtn.setDepth(1001);
+        fullscreenBtn.setInteractive({ useHandCursor: true });
+        
+        // Store reference for state updates
+        this.fullscreenButton = fullscreenBtn;
+        this.fullscreenButtonBg = btnBg;
+        
+        // Toggle fullscreen on click - use game's scale manager
+        const toggleFullscreen = (pointer) => {
+            console.log('📱 Fullscreen button clicked');
+            console.log('📱 Scale manager:', this.game.scale);
+            console.log('📱 Is fullscreen:', this.game.scale.isFullscreen);
+            
+            try {
+                const scaleManager = this.game.scale;
+                
+                if (scaleManager.isFullscreen) {
+                    console.log('📱 Attempting to exit fullscreen...');
+                    scaleManager.stopFullscreen();
+                } else {
+                    console.log('📱 Attempting to enter fullscreen...');
+                    // Request fullscreen - Phaser will handle the API
+                    scaleManager.startFullscreen();
+                }
+            } catch (error) {
+                console.error('📱 Fullscreen error:', error);
+                // Fallback to native fullscreen API
+                try {
+                    const element = document.getElementById('game-container') || document.documentElement;
+                    if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement) {
+                        console.log('📱 Using native fullscreen API (enter)...');
+                        if (element.requestFullscreen) {
+                            element.requestFullscreen();
+                        } else if (element.webkitRequestFullscreen) {
+                            element.webkitRequestFullscreen();
+                        } else if (element.msRequestFullscreen) {
+                            element.msRequestFullscreen();
+                        } else if (element.mozRequestFullScreen) {
+                            element.mozRequestFullScreen();
+                        }
+                    } else {
+                        console.log('📱 Using native fullscreen API (exit)...');
+                        if (document.exitFullscreen) {
+                            document.exitFullscreen();
+                        } else if (document.webkitExitFullscreen) {
+                            document.webkitExitFullscreen();
+                        } else if (document.msExitFullscreen) {
+                            document.msExitFullscreen();
+                        } else if (document.mozCancelFullScreen) {
+                            document.mozCancelFullScreen();
+                        }
+                    }
+                } catch (fallbackError) {
+                    console.error('📱 Fullscreen fallback also failed:', fallbackError);
+                    alert('Fullscreen is not supported in this browser. Please use F11 or your browser\'s fullscreen option.');
+                }
+            }
+        };
+        
+        btnBg.on('pointerdown', toggleFullscreen);
+        fullscreenBtn.on('pointerdown', toggleFullscreen);
+        
+        // Update button text based on fullscreen state - use game's scale manager
+        const scaleManager = this.game.scale;
+        scaleManager.on('fullscreenchange', () => {
+            if (this.fullscreenButton) {
+                if (scaleManager.isFullscreen) {
+                    this.fullscreenButton.setText('[ EXIT FULL ]');
+                } else {
+                    this.fullscreenButton.setText('[ FULLSCREEN ]');
+                }
             }
         });
         
-        // Update button text based on state
-        this.scale.on('enterfullscreen', () => {
-            fullscreenBtn.setText('[ EXIT FULL ]');
+        // Also listen to Phaser's fullscreen events
+        scaleManager.on('enterfullscreen', () => {
+            if (this.fullscreenButton) {
+                this.fullscreenButton.setText('[ EXIT FULL ]');
+            }
         });
         
-        this.scale.on('leavefullscreen', () => {
-            fullscreenBtn.setText('[ FULLSCREEN ]');
+        scaleManager.on('leavefullscreen', () => {
+            if (this.fullscreenButton) {
+                this.fullscreenButton.setText('[ FULLSCREEN ]');
+            }
         });
+        
+        // Check initial state
+        if (scaleManager.isFullscreen) {
+            fullscreenBtn.setText('[ EXIT FULL ]');
+        }
+        
+        console.log('📱 Fullscreen button created in MainMenuScene');
     }
     
     checkOrientation() {

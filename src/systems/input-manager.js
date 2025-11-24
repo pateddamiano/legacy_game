@@ -5,11 +5,14 @@
 // Manages all player input, movement, attacks, and special actions
 
 class InputManager {
-    constructor(scene) {
+    constructor(scene, unifiedInputController = null) {
         this.disabled = false;
         this.scene = scene;
         
-        // Input state tracking
+        // Unified input controller (create if not provided)
+        this.unifiedInput = unifiedInputController || new UnifiedInputController();
+        
+        // Input state tracking (kept for backward compatibility)
         this.inputState = {
             left: false,
             right: false,
@@ -77,7 +80,9 @@ class InputManager {
             sfxToggle: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.N),
             // Level testing keys
             nextLevel: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L),
-            levelStatus: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P)
+            levelStatus: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P),
+            // Touch controls toggle (for testing)
+            touchControlsToggle: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.T)
         };
         
         console.log('⌨️ Keyboard controls initialized');
@@ -118,15 +123,35 @@ class InputManager {
             this.inputState.sfxToggle = false;
             this.inputState.nextLevel = false;
             this.inputState.levelStatus = false;
+            
+            // Also clear unified input
+            if (this.unifiedInput) {
+                this.unifiedInput.reset();
+            }
             return; // Don't process any input
         }
         
         try {
-            // Update continuous input state (movement)
+            // Update continuous input state (movement) - for backward compatibility
             this.inputState.left = this.cursors.left.isDown;
             this.inputState.right = this.cursors.right.isDown;
             this.inputState.up = this.cursors.up.isDown;
             this.inputState.down = this.cursors.down.isDown;
+            
+            // Update unified input controller with keyboard movement
+            if (this.unifiedInput) {
+                // Convert keyboard input to normalized movement vector
+                let moveX = 0;
+                let moveY = 0;
+                
+                if (this.inputState.left) moveX = -1;
+                else if (this.inputState.right) moveX = 1;
+                
+                if (this.inputState.up) moveY = -1;
+                else if (this.inputState.down) moveY = 1;
+                
+                this.unifiedInput.setMovementFromKeyboard(moveX, moveY);
+            }
             
             // Update discrete input state (single presses) with safety checks
             this.inputState.jump = this.keys.space ? Phaser.Input.Keyboard.JustDown(this.keys.space) : false;
@@ -141,6 +166,17 @@ class InputManager {
         // Level testing input states
         this.inputState.nextLevel = this.keys.nextLevel ? Phaser.Input.Keyboard.JustDown(this.keys.nextLevel) : false;
         this.inputState.levelStatus = this.keys.levelStatus ? Phaser.Input.Keyboard.JustDown(this.keys.levelStatus) : false;
+        this.inputState.touchControlsToggle = this.keys.touchControlsToggle ? Phaser.Input.Keyboard.JustDown(this.keys.touchControlsToggle) : false;
+            
+            // Update unified input controller with keyboard actions
+            if (this.unifiedInput) {
+                this.unifiedInput.setActionFromKeyboard('jump', this.keys.space ? this.keys.space.isDown : false);
+                this.unifiedInput.setActionFromKeyboard('punch', this.keys.attack ? this.keys.attack.isDown : false);
+                this.unifiedInput.setActionFromKeyboard('recordThrow', this.keys.weapon ? this.keys.weapon.isDown : false);
+                this.unifiedInput.setActionFromKeyboard('characterSwitch', this.keys.switchCharacter ? this.keys.switchCharacter.isDown : false);
+                // uiConfirm is set when SPACE is pressed (for dialogue/menus)
+                this.unifiedInput.setActionFromKeyboard('uiConfirm', this.keys.space ? this.keys.space.isDown : false);
+            }
         } catch (error) {
             console.warn('Input update error:', error);
         }
@@ -168,6 +204,22 @@ class InputManager {
             return;
         }
         
+        // Get movement vector from unified input controller (supports both keyboard and touch)
+        let moveX = 0;
+        let moveY = 0;
+        
+        if (this.unifiedInput) {
+            const movement = this.unifiedInput.getMovementVector();
+            moveX = movement.x;
+            moveY = movement.y;
+        } else {
+            // Fallback to legacy inputState
+            if (this.inputState.left) moveX = -1;
+            else if (this.inputState.right) moveX = 1;
+            if (this.inputState.up) moveY = -1;
+            else if (this.inputState.down) moveY = 1;
+        }
+        
         // Handle horizontal movement (normal speed or slower for air kicks) - original logic
         let speed = this.movementConfig.walkSpeed; // Normal speed (420)
         if (isAirKick) {
@@ -180,20 +232,20 @@ class InputManager {
         
         // Horizontal movement (skip if being knocked back)
         if (!isKnockedBack) {
-        if (this.inputState.left) {
-            body.setVelocityX(-speed);
-            player.setFlipX(true); // Face left
-            isMoving = true;
-        } else if (this.inputState.right) {
-            body.setVelocityX(speed);
-            player.setFlipX(false); // Face right
-            isMoving = true;
-        } else {
-            body.setVelocityX(0); // Stop horizontal movement
+            if (moveX < 0) {
+                body.setVelocityX(-speed * Math.abs(moveX)); // Scale by magnitude
+                player.setFlipX(true); // Face left
+                isMoving = true;
+            } else if (moveX > 0) {
+                body.setVelocityX(speed * Math.abs(moveX)); // Scale by magnitude
+                player.setFlipX(false); // Face right
+                isMoving = true;
+            } else {
+                body.setVelocityX(0); // Stop horizontal movement
             }
         } else {
             // During knockback, don't override velocity but still track if player is trying to move
-            if (this.inputState.left || this.inputState.right) {
+            if (moveX !== 0) {
                 isMoving = true; // Player is trying to move, but knockback takes priority
             }
         }
@@ -201,14 +253,14 @@ class InputManager {
         // Vertical movement (beat 'em up style) - only when not jumping
         if (!isJumping) {
             // Manual position control for beat 'em up style movement
-            if (this.inputState.up && player.y > this.streetTopLimit) {
-                player.y -= this.movementConfig.verticalSpeed;
+            if (moveY < 0 && player.y > this.streetTopLimit) {
+                player.y -= this.movementConfig.verticalSpeed * Math.abs(moveY); // Scale by magnitude
                 if (player.lastGroundY !== undefined) {
                     player.lastGroundY = player.y;
                 }
                 isMoving = true;
-            } else if (this.inputState.down && player.y < this.streetBottomLimit) {
-                player.y += this.movementConfig.verticalSpeed;
+            } else if (moveY > 0 && player.y < this.streetBottomLimit) {
+                player.y += this.movementConfig.verticalSpeed * Math.abs(moveY); // Scale by magnitude
                 if (player.lastGroundY !== undefined) {
                     player.lastGroundY = player.y;
                 }
@@ -225,7 +277,12 @@ class InputManager {
     handleJumping(player, animationManager) {
         if (!player || !player.body) return false;
         
-        // Use the input state that's already being tracked (avoids duplicate JustDown calls)
+        // Check unified input controller first, then fallback to legacy inputState
+        if (this.unifiedInput && this.unifiedInput.isActionPressed('jump')) {
+            return true;
+        }
+        
+        // Fallback to legacy input state
         if (this.inputState.jump) {
             // Signal that a jump was requested - scene will handle the actual jump logic
             return true;
@@ -239,7 +296,9 @@ class InputManager {
     // ========================================
     
     handleAttackInput(player, animationManager, isJumping, audioManager) {
-        if (!this.inputState.attack) return false;
+        // Check unified input controller first, then fallback to legacy inputState
+        const attackPressed = (this.unifiedInput && this.unifiedInput.isActionPressed('punch')) || this.inputState.attack;
+        if (!attackPressed) return false;
         
         const charName = player.characterConfig.name;
         
@@ -297,7 +356,8 @@ class InputManager {
             onClearEnemies,
             onHeal,
             onSwitchCharacter,
-            onWeaponUse
+            onWeaponUse,
+            onTouchControlsToggle
         } = callbacks;
         
         // Handle debug toggle
@@ -323,14 +383,21 @@ class InputManager {
             onHeal();
         }
         
-        // Handle character switching
-        if (this.inputState.switchCharacter && onSwitchCharacter) {
+        // Handle character switching (check unified input first)
+        const switchPressed = (this.unifiedInput && this.unifiedInput.isActionPressed('characterSwitch')) || this.inputState.switchCharacter;
+        if (switchPressed && onSwitchCharacter) {
             onSwitchCharacter();
         }
         
-        // Handle weapon use
-        if (this.inputState.weapon && onWeaponUse) {
+        // Handle weapon use (check unified input first)
+        const weaponPressed = (this.unifiedInput && this.unifiedInput.isActionPressed('recordThrow')) || this.inputState.weapon;
+        if (weaponPressed && onWeaponUse) {
             onWeaponUse();
+        }
+        
+        // Handle touch controls toggle
+        if (this.inputState.touchControlsToggle && onTouchControlsToggle) {
+            onTouchControlsToggle();
         }
     }
     
@@ -339,7 +406,9 @@ class InputManager {
     // ========================================
     
     handleWeaponInput(player, animationManager, audioManager) {
-        if (!this.inputState.weapon) return false;
+        // Check unified input controller first, then fallback to legacy inputState
+        const weaponPressed = (this.unifiedInput && this.unifiedInput.isActionPressed('recordThrow')) || this.inputState.weapon;
+        if (!weaponPressed) return false;
         
         const charName = player.characterConfig.name;
         
@@ -426,6 +495,43 @@ class InputManager {
     // ========================================
     // UTILITY METHODS
     // ========================================
+    
+    /**
+     * Get movement vector from unified input controller
+     * @returns {{x: number, y: number}} Normalized movement vector
+     */
+    getMovementVector() {
+        if (this.unifiedInput) {
+            return this.unifiedInput.getMovementVector();
+        }
+        // Fallback: convert legacy inputState to vector
+        let x = 0, y = 0;
+        if (this.inputState.left) x = -1;
+        else if (this.inputState.right) x = 1;
+        if (this.inputState.up) y = -1;
+        else if (this.inputState.down) y = 1;
+        return { x, y };
+    }
+    
+    /**
+     * Check if action was just pressed
+     * @param {string} action - Action name
+     * @returns {boolean}
+     */
+    isActionPressed(action) {
+        if (this.unifiedInput) {
+            return this.unifiedInput.isActionPressed(action);
+        }
+        // Fallback to legacy inputState
+        const actionMap = {
+            'punch': 'attack',
+            'jump': 'jump',
+            'characterSwitch': 'switchCharacter',
+            'recordThrow': 'weapon'
+        };
+        const legacyKey = actionMap[action] || action;
+        return this.inputState[legacyKey] || false;
+    }
     
     getInputState() {
         return { ...this.inputState };

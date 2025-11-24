@@ -37,7 +37,8 @@ const config = {
         parent: 'game-container',
         width: '100%',
         height: '100%',
-        autoCenter: Phaser.Scale.NO_CENTER
+        autoCenter: Phaser.Scale.NO_CENTER,
+        fullscreenTarget: 'game-container' // Enable fullscreen on the game container
     },
     parent: 'game-container',
     backgroundColor: '#000000', // Black background for letterboxing
@@ -70,6 +71,11 @@ const game = new Phaser.Game(config);
 // Initialize Device Manager
 if (window.DeviceManager) {
     window.DeviceManager.initialize(game);
+}
+
+// Initialize Fullscreen Manager
+if (window.FullscreenManager) {
+    window.FullscreenManager.initialize(game);
 }
 
 console.log('🎮 ✅ Phaser Game instance created successfully');

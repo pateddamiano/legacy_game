@@ -98,12 +98,40 @@ class IntroDialogueScene extends Phaser.Scene {
         // Input handling
         this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
         this.spaceKey.on('down', () => this.handleSpacePress());
+        
+        // Touch input support - make dialogue box and background interactive
+        if (this.dialogueBox) {
+            this.dialogueBox.setInteractive({ useHandCursor: false });
+            this.dialogueBox.on('pointerdown', (pointer) => {
+                this.handleSpacePress();
+            });
+        }
+        
+        // Also make the entire scene interactive for tap-to-advance
+        // Create an invisible overlay that covers the screen
+        this.touchOverlay = this.add.rectangle(
+            this.virtualWidth / 2,
+            this.virtualHeight / 2,
+            this.virtualWidth,
+            this.virtualHeight,
+            0x000000,
+            0
+        );
+        this.touchOverlay.setDepth(9); // Below dialogue box but above background
+        this.touchOverlay.setInteractive({ useHandCursor: false });
+        this.touchOverlay.on('pointerdown', (pointer) => {
+            // Only advance if not typing or if dialogue is ready
+            this.handleSpacePress();
+        });
 
-        // Skip text at bottom
+        // Skip text at bottom - update based on device
+        const promptText = (window.DeviceManager && window.DeviceManager.shouldShowTouchControls()) 
+            ? 'Tap to continue' 
+            : 'Press SPACE to continue';
         this.skipText = this.add.text(
             this.virtualWidth / 2,
             this.virtualHeight - 50,
-            'Press SPACE to continue',
+            promptText,
             {
                 fontFamily: GAME_CONFIG.ui.fontFamily,
                 fontSize: GAME_CONFIG.ui.fontSize.label,

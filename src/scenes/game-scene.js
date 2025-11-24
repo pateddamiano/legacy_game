@@ -101,7 +101,11 @@ class GameScene extends Phaser.Scene {
         // NOTE: UIManager initialization moved to create() method after uiScene is launched
         // to ensure uiScene is available before initializing UIManager
         
-        this.inputManager = new InputManager(this);
+        // Create UnifiedInputController before InputManager
+        this.unifiedInputController = new UnifiedInputController();
+        
+        // Initialize InputManager with UnifiedInputController
+        this.inputManager = new InputManager(this, this.unifiedInputController);
         
         // World and level management
         this.worldManager = new WorldManager(this);
@@ -191,6 +195,19 @@ class GameScene extends Phaser.Scene {
         
         // Initialize DialogueManager AFTER uiScene is available (needs uiScene for positioning)
         this.dialogueManager = new DialogueManager(this, this.uiScene);
+        
+        // Initialize TouchControlsOverlay AFTER uiScene is available
+        if (window.TouchControlsOverlay && this.unifiedInputController) {
+            this.touchControlsOverlay = new TouchControlsOverlay(this, this.uiScene, this.unifiedInputController);
+            this.touchControlsOverlay.create();
+            
+            // Set visibility based on DeviceManager
+            if (window.DeviceManager) {
+                const shouldShow = window.DeviceManager.shouldShowTouchControls();
+                this.touchControlsOverlay.setVisible(shouldShow);
+                console.log(`📱 Touch controls overlay ${shouldShow ? 'shown' : 'hidden'}`);
+            }
+        }
         
         // Update WeaponManager with uiScene reference (created in preload before uiScene was available)
         if (this.weaponManager) {
@@ -335,9 +352,40 @@ class GameScene extends Phaser.Scene {
         console.log('🔊 Starting street ambiance...');
         this.audioManager.startAmbiance('streetAmbiance', 0.15);
         
+        // Set up automatic fullscreen on first interaction (if not already requested)
+        this.setupAutoFullscreen();
+        
         // Fade in from black
         this.cameras.main.fadeIn(1000, 0, 0, 0);
         console.log('🎬 Fading in to gameplay...');
+    }
+    
+    setupAutoFullscreen() {
+        // Request fullscreen on first user interaction (click or touch)
+        // Only if not already requested and if auto-request is enabled
+        if (window.FullscreenManager && 
+            window.FullscreenManager.shouldAutoRequest && 
+            !window.FullscreenManager.hasRequestedFullscreen) {
+            
+            // Listen to first input event
+            const requestFullscreen = (pointer) => {
+                if (window.FullscreenManager) {
+                    window.FullscreenManager.requestFullscreenOnInteraction(pointer);
+                }
+                // Remove listeners after first request
+                this.input.off('pointerdown', requestFullscreen);
+                if (this.input.keyboard) {
+                    this.input.keyboard.off('keydown', requestFullscreen);
+                }
+            };
+            
+            this.input.once('pointerdown', requestFullscreen);
+            if (this.input.keyboard) {
+                this.input.keyboard.once('keydown', requestFullscreen);
+            }
+            
+            console.log('📱 GameScene: Auto-fullscreen trigger set up');
+        }
     }
 
     initializeLevel1World() {
@@ -571,6 +619,21 @@ class GameScene extends Phaser.Scene {
             this.animationManager.update(delta);
         }
 
+        // Update unified input controller (reset "just pressed" flags)
+        if (this.unifiedInputController) {
+            this.unifiedInputController.update();
+        }
+        
+        // Update touch controls overlay
+        if (this.touchControlsOverlay) {
+            this.touchControlsOverlay.update();
+        }
+        
+        // Update dialogue manager (check for touch input)
+        if (this.dialogueManager) {
+            this.dialogueManager.update();
+        }
+        
         // Update input state (only if input manager is ready, not loading, and not disabled)
         if (this.inputManager && !this.isLoading && !this.inputManager.disabled) {
             this.inputManager.updateInputState();
@@ -909,6 +972,17 @@ class GameScene extends Phaser.Scene {
                     // Fire the weapon projectile
                     const direction = this.player.flipX ? -1 : 1; // Get player facing direction
                     this.weaponManager.useWeapon(this.player, direction);
+                }
+            },
+            onTouchControlsToggle: () => {
+                // Toggle touch controls (T key for testing)
+                if (window.DeviceManager) {
+                    window.DeviceManager.toggleTouchControls();
+                    if (this.touchControlsOverlay) {
+                        const shouldShow = window.DeviceManager.shouldShowTouchControls();
+                        this.touchControlsOverlay.setVisible(shouldShow);
+                        console.log(`📱 Touch controls toggled: ${shouldShow ? 'ON' : 'OFF'}`);
+                    }
                 }
             }
         });

@@ -9,6 +9,10 @@ const DeviceManager = {
     isDesktop: false,
     isPortrait: false,
     isLandscape: true,
+    hasTouchSupport: false,
+    
+    // Manual toggle state (for testing on desktop)
+    touchControlsEnabled: null, // null = auto-detect, true/false = manual override
     
     // Reference to the game instance
     game: null,
@@ -26,9 +30,14 @@ const DeviceManager = {
         
         // Refine tablet detection (Phaser treats iPads as mobile, but we might want to distinct)
         // For now, we'll consider tablets as mobile for scaling purposes
-        this.isTablet = os.iPad || (os.android && !os.mobileSafari); 
+        this.isTablet = os.iPad || (os.android && !os.mobileSafari);
+        
+        // Detect touch support
+        this.hasTouchSupport = 'ontouchstart' in window || 
+                               navigator.maxTouchPoints > 0 || 
+                               navigator.msMaxTouchPoints > 0;
 
-        console.log(`📱 DeviceManager Initialized: Mobile=${this.isMobile}, Desktop=${this.isDesktop}`);
+        console.log(`📱 DeviceManager Initialized: Mobile=${this.isMobile}, Desktop=${this.isDesktop}, TouchSupport=${this.hasTouchSupport}`);
 
         // Initial orientation check
         this.checkOrientation();
@@ -43,6 +52,13 @@ const DeviceManager = {
             // Small delay to allow layout to settle
             setTimeout(() => this.checkOrientation(), 100);
         });
+        
+        // Load manual toggle state from sessionStorage
+        const storedToggle = sessionStorage.getItem('touchControlsEnabled');
+        if (storedToggle !== null) {
+            this.touchControlsEnabled = storedToggle === 'true';
+            console.log(`📱 Loaded touch controls toggle from sessionStorage: ${this.touchControlsEnabled}`);
+        }
     },
 
     checkOrientation() {
@@ -90,6 +106,66 @@ const DeviceManager = {
             offsetLeft: 0,
             offsetTop: 0
         };
+    },
+    
+    /**
+     * Determine if touch controls overlay should be shown.
+     * Checks URL parameter first, then manual toggle, then auto-detection.
+     * @returns {boolean} True if touch controls should be visible
+     */
+    shouldShowTouchControls() {
+        // Check URL parameter first (for testing)
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('touchControls')) {
+            const urlValue = urlParams.get('touchControls');
+            const shouldShow = urlValue === 'true' || urlValue === '1';
+            console.log(`📱 Touch controls from URL parameter: ${shouldShow}`);
+            return shouldShow;
+        }
+        
+        // Check manual toggle (from sessionStorage or T key)
+        if (this.touchControlsEnabled !== null) {
+            console.log(`📱 Touch controls from manual toggle: ${this.touchControlsEnabled}`);
+            return this.touchControlsEnabled;
+        }
+        
+        // Auto-detect: show on touch devices
+        const shouldShow = this.hasTouchSupport && this.isMobile;
+        console.log(`📱 Touch controls auto-detected: ${shouldShow} (hasTouchSupport=${this.hasTouchSupport}, isMobile=${this.isMobile})`);
+        return shouldShow;
+    },
+    
+    /**
+     * Toggle touch controls visibility (for testing on desktop).
+     * Persists to sessionStorage.
+     * @param {boolean|null} enabled - true to enable, false to disable, null to reset to auto-detect
+     */
+    setTouchControlsEnabled(enabled) {
+        this.touchControlsEnabled = enabled;
+        
+        if (enabled !== null) {
+            sessionStorage.setItem('touchControlsEnabled', enabled.toString());
+            console.log(`📱 Touch controls manually set to: ${enabled}`);
+        } else {
+            sessionStorage.removeItem('touchControlsEnabled');
+            console.log(`📱 Touch controls reset to auto-detect`);
+        }
+    },
+    
+    /**
+     * Toggle touch controls (for T key binding).
+     */
+    toggleTouchControls() {
+        if (this.touchControlsEnabled === null) {
+            // Currently auto-detect, enable manually
+            this.setTouchControlsEnabled(true);
+        } else if (this.touchControlsEnabled === true) {
+            // Currently enabled, disable
+            this.setTouchControlsEnabled(false);
+        } else {
+            // Currently disabled, reset to auto-detect
+            this.setTouchControlsEnabled(null);
+        }
     }
 };
 
