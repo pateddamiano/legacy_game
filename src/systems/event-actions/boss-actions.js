@@ -459,6 +459,14 @@ class BossActions {
                 console.log(`👹 [WAIT_BOSS] Input completely disabled to prevent dialogue skipping`);
             }
             
+            // Clear all boss projectiles (rating weapons) immediately when boss is defeated
+            // This prevents rating weapons from continuing to fly during dialogue
+            if (this.scene.weaponManager) {
+                const projectileCount = this.scene.weaponManager.projectiles?.length || 0;
+                this.scene.weaponManager.clearAllProjectiles();
+                console.log(`👹 [WAIT_BOSS] Cleared ${projectileCount} projectiles (including rating weapons) when boss defeated`);
+            }
+            
             // Small delay before advancing to next action
             // This gives time for any queued actions to settle
             this.scene.time.delayedCall(500, () => {

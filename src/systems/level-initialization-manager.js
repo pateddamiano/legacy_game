@@ -263,12 +263,14 @@ class LevelInitializationManager {
         console.log(`🌍 World width: ${worldWidth}px`);
         
         // Create a tileSprite that will repeat the texture
+        // Use virtual height (720) for positioning - parallax should align with world coordinates
+        const virtualHeight = 720;
         const scale = 1.2; // Scale up the background
         const tileSprite = this.scene.add.tileSprite(
             0,                    // x
-            -360,                 // y (moved down from -360 to -200)
+            -180,                    // y (start at top of virtual world, not -360)
             worldWidth * 2,       // width (make it wider than world)
-            720,                  // height
+            virtualHeight,        // height (match virtual height)
             parallaxTexture       // texture key from config
         );
         

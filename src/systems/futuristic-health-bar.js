@@ -73,8 +73,8 @@ class FuturisticHealthBar {
         
         // Configuration
         this.config = {
-            x: 70,
-            y: 60,
+            x: 110,
+            y: 130,
             width: 350, // Match health bar width
             height: 50, // Will be extended to fit name + health bar
             borderWidth: 8,
@@ -100,10 +100,36 @@ class FuturisticHealthBar {
     // ========================================
     
     create() {
+        console.log('🔍 HEALTHBAR_DEBUG: Creating health bar');
+        console.log('🔍 HEALTHBAR_DEBUG: Scene:', this.scene.scene.key);
+        console.log('🔍 HEALTHBAR_DEBUG: Config position:', { x: this.config.x, y: this.config.y });
+        console.log('🔍 HEALTHBAR_DEBUG: Scene camera:', {
+            zoom: this.scene.cameras.main.zoom,
+            scrollX: this.scene.cameras.main.scrollX,
+            scrollY: this.scene.cameras.main.scrollY,
+            width: this.scene.cameras.main.width,
+            height: this.scene.cameras.main.height
+        });
+        
         // Create main container
         this.container = this.scene.add.container(this.config.x, this.config.y);
         this.container.setDepth(2000);
         this.container.setScrollFactor(0);
+        
+        // Scale the container to match the UI scene's scale factor
+        // This ensures UI elements appear at the correct size relative to the viewport
+        // The camera zoom is 1.0 for correct positioning, but we need to scale elements to match viewport
+        if (this.scene.uiScale !== undefined) {
+            this.container.setScale(this.scene.uiScale);
+            console.log(`🔍 HEALTHBAR_DEBUG: Applied UI scale ${this.scene.uiScale} to health bar container`);
+        } else {
+            // Fallback: calculate scale from camera zoom if uiScale not set
+            const calculatedScale = this.scene.cameras.main.zoom || 1.0;
+            this.container.setScale(calculatedScale);
+            console.log(`🔍 HEALTHBAR_DEBUG: Applied calculated scale ${calculatedScale} to health bar container`);
+        }
+        
+        console.log('🔍 HEALTHBAR_DEBUG: Container created at:', { x: this.container.x, y: this.container.y, depth: this.container.depth });
         
         // Determine initial positions based on active character
         // Active card is at (0, 0), inactive card is offset left and above

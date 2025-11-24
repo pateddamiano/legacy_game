@@ -45,8 +45,20 @@ class IntroDialogueScene extends Phaser.Scene {
             return;
         }
 
-        const centerX = this.cameras.main.width / 2;
-        const centerY = this.cameras.main.height / 2;
+        // Use the same fixed virtual dimensions as the game world
+        this.virtualWidth = 1200;
+        this.virtualHeight = 720;
+        
+        // Apply layout manager to maintain consistent aspect ratio with game
+        LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight);
+        
+        // Handle window resizing
+        this.scale.on('resize', (gameSize) => {
+            LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight);
+        });
+
+        const centerX = this.virtualWidth / 2;
+        const centerY = this.virtualHeight / 2;
 
         // Add music studio background
         this.add.image(centerX, centerY, 'musicStudio').setOrigin(0.5, 0.5).setDepth(0);
@@ -89,8 +101,8 @@ class IntroDialogueScene extends Phaser.Scene {
 
         // Skip text at bottom
         this.skipText = this.add.text(
-            this.cameras.main.width / 2,
-            this.cameras.main.height - 50,
+            this.virtualWidth / 2,
+            this.virtualHeight - 50,
             'Press SPACE to continue',
             {
                 fontFamily: GAME_CONFIG.ui.fontFamily,
@@ -117,8 +129,8 @@ class IntroDialogueScene extends Phaser.Scene {
     }
 
     createCharacterPortraits() {
-        const screenWidth = this.cameras.main.width;
-        const screenHeight = this.cameras.main.height;
+        const screenWidth = this.virtualWidth;
+        const screenHeight = this.virtualHeight;
         const centerX = screenWidth / 2;
         
         // Tireek on the left (closer to center, moved down)
@@ -142,8 +154,8 @@ class IntroDialogueScene extends Phaser.Scene {
     }
     
     createCinematicBars() {
-        const screenWidth = this.cameras.main.width;
-        const screenHeight = this.cameras.main.height;
+        const screenWidth = this.virtualWidth;
+        const screenHeight = this.virtualHeight;
         const barHeight = 100; // Height of each black bar
         
         // Top black bar
@@ -160,8 +172,8 @@ class IntroDialogueScene extends Phaser.Scene {
     }
 
     createDialogueUI() {
-        const centerX = this.cameras.main.width / 2;
-        const centerY = this.cameras.main.height / 2;
+        const centerX = this.virtualWidth / 2;
+        const centerY = this.virtualHeight / 2;
 
         // Dialogue box background (centered, smaller horizontally, moved down further) - set depth above characters and bars
         this.dialogueBox = this.add.rectangle(

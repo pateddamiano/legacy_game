@@ -275,9 +275,13 @@ class LevelTransitionManager {
         const worldBounds = this.scene.physics && this.scene.physics.world && this.scene.physics.world.bounds 
             ? this.scene.physics.world.bounds 
             : { x: 0, width: 1200 };
+        // camera.width is in screen pixels, but we need world coordinates
+        // World width visible = screen width / zoom, or use virtualWidth directly
+        const virtualWidth = this.scene.virtualWidth || 1200;
+        const cameraWorldWidth = virtualWidth; // This is the world width the camera can see
         const minCameraX = worldBounds.x;
-        const maxCameraX = worldBounds.x + worldBounds.width - this.scene.cameras.main.width;
-        const cameraTargetX = Math.max(minCameraX, Math.min(maxCameraX, spawnPointAfterLoad.x - this.scene.cameras.main.width / 2));
+        const maxCameraX = worldBounds.x + worldBounds.width - cameraWorldWidth;
+        const cameraTargetX = Math.max(minCameraX, Math.min(maxCameraX, spawnPointAfterLoad.x - cameraWorldWidth / 2));
         
         // Reset camera scroll to spawn point
         this.scene.cameras.main.setScroll(cameraTargetX, 0);
@@ -780,20 +784,31 @@ class LevelTransitionManager {
         const worldBounds = this.scene.physics && this.scene.physics.world && this.scene.physics.world.bounds 
             ? this.scene.physics.world.bounds 
             : { x: 0, width: 1200 };
+        // camera.width is in screen pixels, but we need world coordinates
+        // World width visible = screen width / zoom, or use virtualWidth directly
+        const virtualWidth = this.scene.virtualWidth || 1200;
+        const cameraWorldWidth = virtualWidth; // This is the world width the camera can see
         const minCameraX = worldBounds.x;
-        const maxCameraX = worldBounds.x + worldBounds.width - camera.width;
+        const maxCameraX = worldBounds.x + worldBounds.width - cameraWorldWidth;
         
         this.debugLog(`[campos] World bounds: x=${worldBounds.x}, width=${worldBounds.width}`);
-        this.debugLog(`[campos] Camera bounds: minX=${minCameraX}, maxX=${maxCameraX}, camera width=${camera.width}`);
+        this.debugLog(`[campos] Camera: screen width=${camera.width}, zoom=${camera.zoom}, virtualWidth=${virtualWidth}, world width=${cameraWorldWidth}`);
+        this.debugLog(`[campos] Camera bounds: minX=${minCameraX}, maxX=${maxCameraX}`);
         
         // Use actual player position (should be at spawn)
+        // Center the player in the camera viewport (using world coordinates)
         const targetPlayerX = currentPlayer.x;
-        const cameraTargetX = Math.max(minCameraX, Math.min(maxCameraX, targetPlayerX - camera.width / 2));
+        const targetPlayerY = currentPlayer.y || spawnPoint.y;
         
-        this.debugLog(`[campos] Calculated camera target: ${cameraTargetX} (player at ${targetPlayerX}, camera center offset: ${camera.width / 2})`);
+        // Use centerOn which handles bounds clamping automatically
+        // It will center on the player, but clamp to world bounds if needed
+        camera.centerOn(targetPlayerX, targetPlayerY);
         
-        camera.setScroll(cameraTargetX, 0);
-        this.debugLog(`[campos] Camera positioned: scrollX=${camera.scrollX}, scrollY=${camera.scrollY}`);
+        // Get the actual scroll position after centering (may be clamped)
+        const actualScrollX = camera.scrollX;
+        const actualScrollY = camera.scrollY;
+        
+        this.debugLog(`[campos] Centered camera on player: target (${targetPlayerX}, ${targetPlayerY}), actual scroll (${actualScrollX}, ${actualScrollY})`);
         this.debugLog(`[campos] Player at: (${currentPlayer.x}, ${currentPlayer.y}), spawn at: (${spawnPoint.x}, ${spawnPoint.y})`);
         
         // Start camera following player (only if not locked by event system)

@@ -46,6 +46,25 @@ class MainMenuScene extends Phaser.Scene {
     create() {
         console.log('🏠 ===== MAIN MENU SCENE CREATED =====');
         
+        // Ensure UIScene is stopped (in case we returned from GameScene)
+        if (this.scene.isActive('UIScene')) {
+            console.log('🏠 Stopping UIScene...');
+            this.scene.stop('UIScene');
+        }
+
+        // Use the same fixed virtual dimensions as the game world
+        this.virtualWidth = 1200;
+        this.virtualHeight = 720;
+        
+        // Apply the same layout manager as GameScene to maintain consistent aspect ratio
+        LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight);
+        
+        // Handle window resizing - reapply layout to maintain aspect ratio
+        this.scale.on('resize', (gameSize) => {
+            console.log('📏 Resizing MainMenuScene...');
+            LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight);
+        });
+        
         // Check for debug mode - immediately redirect to test level
         if (window.DIRECT_LEVEL_LOAD && window.TEST_LEVEL_ID === 'test') {
             console.log('%c🧪 DEBUG MODE: Redirecting from MainMenuScene to test level', 'color: #00ff00; font-weight: bold;');
@@ -60,6 +79,11 @@ class MainMenuScene extends Phaser.Scene {
         
         // Initialize core systems if not already done
         this.initializeCoreServices();
+        
+        // Initialize DeviceManager specifically here to ensure it's ready
+        if (window.DeviceManager) {
+            window.DeviceManager.initialize(this.game);
+        }
         
         // Create menu audio feedback
         this.createMenuSounds();
@@ -87,6 +111,12 @@ class MainMenuScene extends Phaser.Scene {
             // Create menu UI
             console.log('🏠 MainMenuScene: Creating menu UI...');
             this.createMenuUI();
+            
+            // Create fullscreen trigger (mobile only)
+            this.createFullscreenTrigger();
+            
+            // Check orientation and show prompt if needed
+            this.checkOrientation();
             
             // Set up input handling
             console.log('🏠 MainMenuScene: Setting up input...');
@@ -312,8 +342,9 @@ class MainMenuScene extends Phaser.Scene {
     createAnimatedBackground() {
         console.log('🎨 MainMenuScene: Creating animated tiled background...');
         
-        const screenWidth = this.cameras.main.width;
-        const screenHeight = this.cameras.main.height;
+        // Use virtual dimensions for background (matches game world size)
+        const screenWidth = this.virtualWidth;
+        const screenHeight = this.virtualHeight;
         const originalTileSize = 768; // Original size of your background tile
         const scaleFactor = 0.3; // Make tiles much smaller (30% of original size)
         const tileSize = originalTileSize * scaleFactor;
@@ -419,8 +450,10 @@ class MainMenuScene extends Phaser.Scene {
     
     createMenuUI() {
         console.log('🏠 MainMenuScene: Starting createMenuUI...');
-        const centerX = this.cameras.main.centerX;
-        const centerY = this.cameras.main.centerY;
+        
+        // Use virtual world center coordinates (same coordinate system as game)
+        const centerX = this.virtualWidth / 2;
+        const centerY = this.virtualHeight / 2;
         
         console.log('🏠 MainMenuScene: Center coordinates:', centerX, centerY);
         
@@ -432,11 +465,11 @@ class MainMenuScene extends Phaser.Scene {
             
             // Game title image
             console.log('🏠 MainMenuScene: Creating game title image...');
-            const titleImage = this.add.image(centerX, centerY-(this.cameras.main.height*0.2), 'titleCard').setOrigin(0.5);
+            const titleImage = this.add.image(centerX, centerY - 150, 'titleCard').setOrigin(0.5);
             
-            // Make title responsive and bigger - scale with window size
-            const maxWidth = this.cameras.main.width * 1.2 // 90% of screen width (bigger)
-            const maxHeight = this.cameras.main.height * 0.6; // 50% of screen height (responsive)
+            // Make title responsive - scale relative to virtual dimensions
+            const maxWidth = this.virtualWidth * 0.7; // 70% of virtual width
+            const maxHeight = this.virtualHeight * 0.4; // 40% of virtual height
             const scaleX = maxWidth / titleImage.width;
             const scaleY = maxHeight / titleImage.height;
             const scale = Math.min(scaleX, scaleY, 2); // Allow scaling up to 2x
@@ -447,7 +480,7 @@ class MainMenuScene extends Phaser.Scene {
             
             // Menu buttons (moved up since we removed subtitle)
             console.log('🏠 MainMenuScene: Creating menu buttons...');
-            this.createMenuButtons(centerX, centerY + (this.cameras.main.height*0.05));
+            this.createMenuButtons(centerX, centerY + 50);
             
             console.log('🏠 MainMenuScene: ✅ Menu buttons created');
             
@@ -873,6 +906,89 @@ class MainMenuScene extends Phaser.Scene {
             volumeUpBtn.destroy();
             closeBtn.destroy();
         });
+    }
+    
+    createFullscreenTrigger() {
+        // Only needed for mobile devices
+        if (!window.DeviceManager || !window.DeviceManager.isMobile) return;
+        
+        console.log('📱 Creating mobile fullscreen trigger...');
+        
+        // Create a "Tap to Fullscreen" button in the top-left corner
+        const btnX = 100; // Virtual coordinates
+        const btnY = 50;
+        
+        const fullscreenBtn = this.add.text(btnX, btnY, '[ FULLSCREEN ]', {
+            fontSize: '24px',
+            fill: '#FFFFFF',
+            fontFamily: 'VT323',
+            backgroundColor: '#000000'
+        })
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true })
+        .setDepth(1000)
+        .setScrollFactor(0);
+        
+        fullscreenBtn.on('pointerdown', () => {
+            if (this.scale.isFullscreen) {
+                this.scale.stopFullscreen();
+            } else {
+                this.scale.startFullscreen();
+            }
+        });
+        
+        // Update button text based on state
+        this.scale.on('enterfullscreen', () => {
+            fullscreenBtn.setText('[ EXIT FULL ]');
+        });
+        
+        this.scale.on('leavefullscreen', () => {
+            fullscreenBtn.setText('[ FULLSCREEN ]');
+        });
+    }
+    
+    checkOrientation() {
+        if (!window.DeviceManager) return;
+        
+        // Create orientation warning overlay (hidden by default)
+        this.orientationOverlay = this.add.container(0, 0).setDepth(9999).setVisible(false);
+        
+        // Black background covering everything
+        // We use a large size to ensure coverage regardless of scale
+        const bg = this.add.rectangle(0, 0, 5000, 5000, 0x000000).setOrigin(0.5);
+        
+        const text = this.add.text(0, 0, 'PLEASE ROTATE DEVICE\nTO LANDSCAPE', {
+            fontSize: '48px',
+            fill: '#FFD700',
+            fontFamily: 'VT323',
+            align: 'center'
+        }).setOrigin(0.5);
+        
+        const icon = this.add.text(0, -100, '📱➡️📱', {
+            fontSize: '64px',
+            align: 'center'
+        }).setOrigin(0.5);
+        
+        this.orientationOverlay.add([bg, text, icon]);
+        
+        // Function to update overlay position and visibility
+        const updateOrientationCheck = () => {
+            if (window.DeviceManager.shouldShowRotatePrompt()) {
+                const centerX = this.cameras.main.midPoint.x;
+                const centerY = this.cameras.main.midPoint.y;
+                this.orientationOverlay.setPosition(centerX, centerY);
+                this.orientationOverlay.setVisible(true);
+                // Pause game inputs if possible
+            } else {
+                this.orientationOverlay.setVisible(false);
+            }
+        };
+        
+        // Check initially
+        updateOrientationCheck();
+        
+        // Check on resize
+        this.scale.on('resize', updateOrientationCheck);
     }
 }
 

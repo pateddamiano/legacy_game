@@ -5,8 +5,9 @@
 // Handles all visual interface elements and their updates
 
 class UIManager {
-    constructor(scene) {
-        this.scene = scene;
+    constructor(scene, uiScene) {
+        this.scene = scene; // Game scene (for logic/data)
+        this.uiScene = uiScene || scene; // UI scene (for rendering) - fallback to scene if not provided
         
         // UI state
         this.debugMode = false;
@@ -61,7 +62,7 @@ class UIManager {
     // ========================================
     
     initializeUI() {
-        // Create debug graphics layer
+        // Create debug graphics layer - MUST be on GameScene (this.scene) to align with world coordinates
         this.debugGraphics = this.scene.add.graphics();
         this.debugGraphics.setDepth(1500); // Below UI but above game objects
         
@@ -86,8 +87,9 @@ class UIManager {
     
     createDebugText() {
         // Add visual debug text on screen - positioned in bottom left corner
-        const screenHeight = 720; // Game screen height
-        this.debugText = this.scene.add.text(10, screenHeight - 10, 'Debug: OFF (Press D to toggle)', {
+        // Use virtual coordinates (1200x720)
+        const virtualHeight = 720;
+        this.debugText = this.uiScene.add.text(10, virtualHeight - 10, 'Debug: OFF (Press D to toggle)', {
             fontSize: '10px', // Smaller font size
             fill: '#ff0000',
             backgroundColor: '#ffffff',
@@ -104,13 +106,13 @@ class UIManager {
         const debugUIStartY = 250; // Start well below health bar
         
         // Character selection indicator (debug only)
-        this.characterIndicator = this.scene.add.rectangle(10, debugUIStartY, 200, 40, 0x000080);
+        this.characterIndicator = this.uiScene.add.rectangle(10, debugUIStartY, 200, 40, 0x000080);
         this.characterIndicator.setDepth(2000);
         this.characterIndicator.setScrollFactor(0);
         this.characterIndicator.setOrigin(0, 0);
         this.characterIndicator.setVisible(false); // Hidden by default
         
-        this.characterText = this.scene.add.text(15, debugUIStartY + 20, '', {
+        this.characterText = this.uiScene.add.text(15, debugUIStartY + 20, '', {
             fontSize: GAME_CONFIG.ui.fontSize.micro,
             fill: '#ffffff'
         }).setOrigin(0, 0.5);
@@ -119,13 +121,13 @@ class UIManager {
         this.characterText.setVisible(false); // Hidden by default
         
         // Attack state indicator (debug only)
-        this.attackIndicator = this.scene.add.rectangle(10, debugUIStartY + 50, 150, 30, 0x00ff00);
+        this.attackIndicator = this.uiScene.add.rectangle(10, debugUIStartY + 50, 150, 30, 0x00ff00);
         this.attackIndicator.setDepth(2000);
         this.attackIndicator.setScrollFactor(0);
         this.attackIndicator.setOrigin(0, 0);
         this.attackIndicator.setVisible(false); // Hidden by default
         
-        this.attackText = this.scene.add.text(15, debugUIStartY + 65, 'READY', {
+        this.attackText = this.uiScene.add.text(15, debugUIStartY + 65, 'READY', {
             fontSize: GAME_CONFIG.ui.fontSize.micro,
             fill: '#000000'
         }).setOrigin(0, 0.5);
@@ -141,7 +143,7 @@ class UIManager {
     createHealthBar() {
         // Create new futuristic health bar system
         if (typeof FuturisticHealthBar !== 'undefined') {
-            this.futuristicHealthBar = new FuturisticHealthBar(this.scene);
+            this.futuristicHealthBar = new FuturisticHealthBar(this.uiScene);
             this.futuristicHealthBar.create();
         } else {
             console.warn('⚠️ FuturisticHealthBar not loaded, falling back to legacy system');
@@ -152,52 +154,52 @@ class UIManager {
     
     // Legacy method - kept for fallback only
     createDualCharacterHealthDisplay() {
-        const displayX = 20;
-        const displayY = 20;
+        const displayX = 40;
+        const displayY = 80;
         const barWidth = 160;
         const barHeight = 20;
         const spacing = 10;
         
         // Tireek health bar
-        this.tireekHealthBorder = this.scene.add.rectangle(
+        this.tireekHealthBorder = this.uiScene.add.rectangle(
             displayX, displayY, barWidth + 4, barHeight + 4, 0x2a2a2a
         );
         this.tireekHealthBorder.setOrigin(0, 0);
         this.tireekHealthBorder.setDepth(2000);
         this.tireekHealthBorder.setScrollFactor(0);
         
-        this.tireekHealthBg = this.scene.add.rectangle(
+        this.tireekHealthBg = this.uiScene.add.rectangle(
             displayX + 2, displayY + 2, barWidth, barHeight, 0x404040
         );
         this.tireekHealthBg.setOrigin(0, 0);
         this.tireekHealthBg.setDepth(2001);
         this.tireekHealthBg.setScrollFactor(0);
         
-        this.tireekHealthGraphics = this.scene.add.graphics();
+        this.tireekHealthGraphics = this.uiScene.add.graphics();
         this.tireekHealthGraphics.setDepth(2002);
         this.tireekHealthGraphics.setScrollFactor(0);
         
         // Tryston health bar
-        this.trystonHealthBorder = this.scene.add.rectangle(
+        this.trystonHealthBorder = this.uiScene.add.rectangle(
             displayX + barWidth + spacing, displayY, barWidth + 4, barHeight + 4, 0x2a2a2a
         );
         this.trystonHealthBorder.setOrigin(0, 0);
         this.trystonHealthBorder.setDepth(2000);
         this.trystonHealthBorder.setScrollFactor(0);
         
-        this.trystonHealthBg = this.scene.add.rectangle(
+        this.trystonHealthBg = this.uiScene.add.rectangle(
             displayX + barWidth + spacing + 2, displayY + 2, barWidth, barHeight, 0x404040
         );
         this.trystonHealthBg.setOrigin(0, 0);
         this.trystonHealthBg.setDepth(2001);
         this.trystonHealthBg.setScrollFactor(0);
         
-        this.trystonHealthGraphics = this.scene.add.graphics();
+        this.trystonHealthGraphics = this.uiScene.add.graphics();
         this.trystonHealthGraphics.setDepth(2002);
         this.trystonHealthGraphics.setScrollFactor(0);
         
         // Character labels
-        this.tireekLabel = this.scene.add.text(displayX + 5, displayY - 25, 'TIREEK', {
+        this.tireekLabel = this.uiScene.add.text(displayX + 5, displayY - 25, 'TIREEK', {
             fontSize: GAME_CONFIG.ui.fontSize.micro,
             fill: '#FFD700',
             fontFamily: GAME_CONFIG.ui.fontFamily,
@@ -206,7 +208,7 @@ class UIManager {
         this.tireekLabel.setDepth(2003);
         this.tireekLabel.setScrollFactor(0);
         
-        this.trystonLabel = this.scene.add.text(displayX + barWidth + spacing + 5, displayY - 25, 'TRYSTON', {
+        this.trystonLabel = this.uiScene.add.text(displayX + barWidth + spacing + 5, displayY - 25, 'TRYSTON', {
             fontSize: GAME_CONFIG.ui.fontSize.micro,
             fill: '#FFD700',
             fontFamily: GAME_CONFIG.ui.fontFamily,
@@ -306,28 +308,40 @@ class UIManager {
     
     createLivesDisplay() {
         // Position below health bar (FuturisticHealthBar is at y:60, height ~84px, so lives at y:160 for spacing)
-        const livesX = 70;
-        const livesY = 160; // Moved down from 120 to avoid overlap
+        const livesX = 100;
+        const livesY = 300; // Moved down from 120 to avoid overlap
         const boxWidth = 120;
         const boxHeight = 40;
         const plusSize = 32; // Increased from 24 to 32
         const plusSpacing = 32; // Adjusted spacing for bigger symbols
         
         // Create container for lives display
-        this.livesContainer = this.scene.add.container(livesX, livesY);
+        this.livesContainer = this.uiScene.add.container(livesX, livesY);
         this.livesContainer.setDepth(2000);
         this.livesContainer.setScrollFactor(0);
         
+        // Scale the container to match the UI scene's scale factor
+        // This ensures UI elements appear at the correct size relative to the viewport
+        if (this.uiScene.uiScale !== undefined) {
+            this.livesContainer.setScale(this.uiScene.uiScale);
+            console.log(`❤️ LIVES_DEBUG: Applied UI scale ${this.uiScene.uiScale} to lives container`);
+        } else {
+            // Fallback: calculate scale from camera zoom if uiScale not set
+            const calculatedScale = this.uiScene.cameras.main.zoom || 1.0;
+            this.livesContainer.setScale(calculatedScale);
+            console.log(`❤️ LIVES_DEBUG: Applied calculated scale ${calculatedScale} to lives container`);
+        }
+        
         // Create gray box background with bezel
         // Outer border (bezel effect)
-        const bezelGraphics = this.scene.add.graphics();
+        const bezelGraphics = this.uiScene.add.graphics();
         bezelGraphics.fillStyle(0x000000, 0.6); // Dark outer border
         bezelGraphics.fillRoundedRect(0, 0, boxWidth, boxHeight, 4);
         bezelGraphics.setDepth(0);
         this.livesContainer.add(bezelGraphics);
         
         // Inner box (gray background)
-        this.livesBox = this.scene.add.rectangle(
+        this.livesBox = this.uiScene.add.rectangle(
             boxWidth / 2,
             boxHeight / 2,
             boxWidth - 4,
@@ -351,7 +365,7 @@ class UIManager {
             const plusX = plusStartX + (i * plusSpacing); // Relative to container, centered
             
             // Drop shadow (offset slightly down and right)
-            const shadow = this.scene.add.text(plusX + 2, plusY + 2, '+', {
+            const shadow = this.uiScene.add.text(plusX + 2, plusY + 2, '+', {
                 fontSize: `${plusSize}px`,
                 fontFamily: GAME_CONFIG.ui.fontFamily,
                 fontWeight: 'bold',
@@ -363,7 +377,7 @@ class UIManager {
             this.livesContainer.add(shadow);
             
             // Plus symbol (yellow)
-            const plusSymbol = this.scene.add.text(plusX, plusY, '+', {
+            const plusSymbol = this.uiScene.add.text(plusX, plusY, '+', {
                 fontSize: `${plusSize}px`,
                 fontFamily: GAME_CONFIG.ui.fontFamily,
                 fontWeight: 'bold',
@@ -416,7 +430,7 @@ class UIManager {
                     life.symbol.setAlpha(1.0);
                     
                     // Create flash animation and store reference
-                    this.livesFlashTween = this.scene.tweens.add({
+                    this.livesFlashTween = this.uiScene.tweens.add({
                         targets: [life.symbol, life.shadow],
                         alpha: 0.5,
                         duration: 1000,
@@ -440,12 +454,94 @@ class UIManager {
     
     createScoreDisplay() {
         // Create container for score display elements
-        this.scoreContainer = this.scene.add.container(this.scene.cameras.main.width - 100,100);
+        // Use virtual coordinates (1200x720) instead of screen coordinates
+        const virtualWidth = 1200;
+        const virtualHeight = 720;
+        
+        console.log('🎤 SCORE_POS_DEBUG: ====== Score Display Creation ======');
+        console.log('🎤 SCORE_POS_DEBUG: Virtual dimensions:', { virtualWidth, virtualHeight });
+        console.log('🎤 SCORE_POS_DEBUG: UI Scene camera state:', {
+            zoom: this.uiScene.cameras.main.zoom,
+            scrollX: this.uiScene.cameras.main.scrollX,
+            scrollY: this.uiScene.cameras.main.scrollY,
+            x: this.uiScene.cameras.main.x,
+            y: this.uiScene.cameras.main.y,
+            width: this.uiScene.cameras.main.width,
+            height: this.uiScene.cameras.main.height,
+            viewport: this.uiScene.cameras.main.getBounds()
+        });
+        console.log('🎤 SCORE_POS_DEBUG: UI Scene scale:', {
+            scaleWidth: this.uiScene.scale.width,
+            scaleHeight: this.uiScene.scale.height,
+            uiScale: this.uiScene.uiScale
+        });
+        
+        // Position in upper right corner
+        // IMPORTANT: The viewport is larger than the virtual world and centered
+        // Camera width: 2052, Virtual width: 1200
+        // With zoom 1.0, virtual coords map 1:1 to viewport coords
+        // The right edge of the screen/viewport in virtual coordinates is: cameraWidth
+        // We want to position at the right edge of the screen, not the right edge of the virtual world
+        const cameraWidth = this.uiScene.cameras.main.width;
+        
+        const rightMargin = 120; // Margin from right edge of screen
+        const topMargin = 170; // Margin from top edge (moved down from 20 to align better)
+        const textRightOffset = 10; // Text right edge is 10px left of container origin
+        // When container is scaled, child positions are also scaled
+        // Text at -10 with container scale 1.71 means text is at -17.1 in world space
+        // So to place text's right edge at (cameraWidth - margin), container should be at:
+        // containerX = cameraWidth - margin + (textRightOffset * scale)
+        const containerScale = this.uiScene.uiScale || 1.0;
+        const scaledTextOffset = textRightOffset * containerScale;
+        const containerX = cameraWidth - rightMargin + scaledTextOffset;
+        const containerY = topMargin;
+        
+        console.log('🎤 SCORE_POS_DEBUG: Calculated container position:', {
+            containerX,
+            containerY,
+            rightMargin,
+            textRightOffset,
+            scaledTextOffset,
+            cameraWidth,
+            virtualWidth,
+            containerScale,
+            calculation: `cameraWidth (${cameraWidth}) - rightMargin (${rightMargin}) + scaledTextOffset (${scaledTextOffset}) = ${containerX}`
+        });
+        
+        this.scoreContainer = this.uiScene.add.container(containerX, containerY);
         this.scoreContainer.setDepth(2003);
         this.scoreContainer.setScrollFactor(0);
         
+        console.log('🎤 SCORE_POS_DEBUG: Container created:', {
+            x: this.scoreContainer.x,
+            y: this.scoreContainer.y,
+            depth: this.scoreContainer.depth,
+            scrollFactor: this.scoreContainer.scrollFactorX,
+            scaleX: this.scoreContainer.scaleX,
+            scaleY: this.scoreContainer.scaleY
+        });
+        
+        // Scale the container to match the UI scene's scale factor
+        // This ensures UI elements appear at the correct size relative to the viewport
+        if (this.uiScene.uiScale !== undefined) {
+            this.scoreContainer.setScale(this.uiScene.uiScale);
+            console.log(`🎤 SCORE_POS_DEBUG: Applied UI scale ${this.uiScene.uiScale} to score container`);
+        } else {
+            // Fallback: calculate scale from camera zoom if uiScale not set
+            const calculatedScale = this.uiScene.cameras.main.zoom || 1.0;
+            this.scoreContainer.setScale(calculatedScale);
+            console.log(`🎤 SCORE_POS_DEBUG: Applied calculated scale ${calculatedScale} to score container`);
+        }
+        
+        console.log('🎤 SCORE_POS_DEBUG: Container after scaling:', {
+            x: this.scoreContainer.x,
+            y: this.scoreContainer.y,
+            scaleX: this.scoreContainer.scaleX,
+            scaleY: this.scoreContainer.scaleY
+        });
+        
         // Create the score text first (positioned to the left)
-        this.scoreText = this.scene.add.text(-10, 0, '0', {
+        this.scoreText = this.uiScene.add.text(-10, 0, '0', {
             fontSize: GAME_CONFIG.ui.fontSize.golden_microphone_count,
             fill: '#FFD700',  // Golden color
             fontFamily: GAME_CONFIG.ui.fontFamily,
@@ -464,7 +560,7 @@ class UIManager {
         this.scoreText.setOrigin(1, 0.5); // Right-aligned, vertically centered
         
         // Create the golden microphone sprite (positioned to the right of the text)
-        this.scoreMicrophone = this.scene.add.sprite(-100, 0, 'goldenMicrophone');
+        this.scoreMicrophone = this.uiScene.add.sprite(-100, 0, 'goldenMicrophone');
         this.scoreMicrophone.setScale(0.8); // Increased from 0.5 (64x64 image to ~51x51)
         this.scoreMicrophone.setOrigin(0, 0.5); // Left-aligned, vertically centered
         
@@ -503,13 +599,44 @@ class UIManager {
         const circleRadius = (diagonal / 2) + padding;
         
         // Create background circle to separate from background
-        this.scoreCircle = this.scene.add.graphics();
+        this.scoreCircle = this.uiScene.add.graphics();
         this.scoreCircle.fillStyle(0x000000, 0.50); // Black with low opacity
         this.scoreCircle.fillCircle(centerX, centerY, circleRadius); // Centered on the elements
         this.scoreCircle.setDepth(0); // Behind other elements
         
         // Add all elements to the container (circle first so it's behind)
         this.scoreContainer.add([this.scoreCircle, this.scoreMicrophone, this.scoreText]);
+        
+        console.log('🎤 SCORE_POS_DEBUG: Elements added to container');
+        console.log('🎤 SCORE_POS_DEBUG: Element positions relative to container:', {
+            text: { x: this.scoreText.x, y: this.scoreText.y, origin: this.scoreText.originX + ',' + this.scoreText.originY },
+            microphone: { x: this.scoreMicrophone.x, y: this.scoreMicrophone.y, origin: this.scoreMicrophone.originX + ',' + this.scoreMicrophone.originY }
+        });
+        
+        // Calculate world positions
+        const textWorldX = this.scoreContainer.x + (this.scoreText.x * this.scoreContainer.scaleX);
+        const textWorldY = this.scoreContainer.y + (this.scoreText.y * this.scoreContainer.scaleY);
+        const micWorldX = this.scoreContainer.x + (this.scoreMicrophone.x * this.scoreContainer.scaleX);
+        const micWorldY = this.scoreContainer.y + (this.scoreMicrophone.y * this.scoreContainer.scaleY);
+        
+        console.log('🎤 SCORE_POS_DEBUG: Calculated world positions:', {
+            textWorldX,
+            textWorldY,
+            micWorldX,
+            micWorldY,
+            containerX: this.scoreContainer.x,
+            containerY: this.scoreContainer.y,
+            containerScale: this.scoreContainer.scaleX
+        });
+        console.log('🎤 SCORE_POS_DEBUG: Expected vs Actual:', {
+            expectedContainerX: containerX,
+            actualContainerX: this.scoreContainer.x,
+            expectedTextRightEdge: containerX - 10,
+            calculatedTextRightEdge: textWorldX,
+            virtualWidth,
+            distanceFromRight: virtualWidth - textWorldX
+        });
+        console.log('🎤 SCORE_POS_DEBUG: ====== End Score Display Creation ======');
         
         console.log('🎤 Score display with golden microphone created');
     }
@@ -522,7 +649,7 @@ class UIManager {
         
         // Create a brief pulse effect when score changes (pulse the entire container)
         if (score > 0) {
-            this.scene.tweens.add({
+            this.uiScene.tweens.add({
                 targets: this.scoreContainer,
                 scaleX: 1.1,
                 scaleY: 1.1,
@@ -748,14 +875,16 @@ Legend:
     // ========================================
     
     createBossHealthBar() {
-        const cam = this.scene.cameras.main;
+        // Use virtual coordinates (1200x720) instead of screen coordinates
+        const virtualWidth = 1200;
+        const virtualHeight = 720;
         const barWidth = 400;
         const barHeight = 30;
-        const barX = cam.width / 2; // Center horizontally
-        const barY = cam.height - 80; // Position at bottom of screen with 80px margin from bottom
+        const barX = virtualWidth / 2; // Center horizontally
+        const barY = virtualHeight - 80; // Position at bottom of screen with 80px margin from bottom
         
         // Boss name text (positioned above the health bar)
-        this.bossNameText = this.scene.add.text(barX, barY - 35, '', {
+        this.bossNameText = this.uiScene.add.text(barX, barY - 35, '', {
             fontSize: GAME_CONFIG.ui.fontSize.body,
             fill: '#FFD700',
             fontFamily: GAME_CONFIG.ui.fontFamily,
@@ -769,7 +898,7 @@ Legend:
         this.bossNameText.setVisible(false);
         
         // Border
-        this.bossHealthBarBorder = this.scene.add.rectangle(
+        this.bossHealthBarBorder = this.uiScene.add.rectangle(
             barX,
             barY,
             barWidth + 6,
@@ -782,7 +911,7 @@ Legend:
         this.bossHealthBarBorder.setVisible(false);
         
         // Background
-        this.bossHealthBarBg = this.scene.add.rectangle(
+        this.bossHealthBarBg = this.uiScene.add.rectangle(
             barX,
             barY,
             barWidth,
@@ -795,7 +924,7 @@ Legend:
         this.bossHealthBarBg.setVisible(false);
         
         // Health fill graphics
-        this.bossHealthBarGraphics = this.scene.add.graphics();
+        this.bossHealthBarGraphics = this.uiScene.add.graphics();
         this.bossHealthBarGraphics.setDepth(2005);
         this.bossHealthBarGraphics.setScrollFactor(0);
         
@@ -929,15 +1058,18 @@ Legend:
         // Remove existing overlay if present
         this.hideDeathOverlay();
         
-        const centerX = this.scene.cameras.main.centerX;
-        const centerY = this.scene.cameras.main.centerY;
+        // Use virtual coordinates (1200x720)
+        const virtualWidth = 1200;
+        const virtualHeight = 720;
+        const centerX = virtualWidth / 2;
+        const centerY = virtualHeight / 2;
         
         // Create fully opaque black overlay (will fade in)
-        this.deathOverlay = this.scene.add.rectangle(
+        this.deathOverlay = this.uiScene.add.rectangle(
             centerX,
             centerY,
-            this.scene.cameras.main.width,
-            this.scene.cameras.main.height,
+            virtualWidth,
+            virtualHeight,
             0x000000,
             1.0
         );
@@ -946,7 +1078,7 @@ Legend:
         this.deathOverlay.setAlpha(0); // Start invisible for fade
         
         // Create message text (empty initially, will be typed out)
-        this.deathOverlayText = this.scene.add.text(
+        this.deathOverlayText = this.uiScene.add.text(
             centerX,
             centerY,
             '',
@@ -973,7 +1105,7 @@ Legend:
     
     fadeInGameOverScreen(callback) {
         // Fade in the black overlay
-        this.scene.tweens.add({
+        this.uiScene.tweens.add({
             targets: this.deathOverlay,
             alpha: 1,
             duration: 1000,
@@ -996,7 +1128,8 @@ Legend:
         }
         
         // Start typewriter effect
-        this.gameOverTypewriterTimer = this.scene.time.addEvent({
+        // Use scene.time since it's logical, but uiScene.time works too
+        this.gameOverTypewriterTimer = this.uiScene.time.addEvent({
             delay: this.gameOverTypewriterSpeed,
             callback: () => {
                 if (this.gameOverCharIndex < this.gameOverFullText.length) {
@@ -1025,15 +1158,18 @@ Legend:
         // Remove existing overlay if present
         this.hideDeathOverlay();
         
-        const centerX = this.scene.cameras.main.centerX;
-        const centerY = this.scene.cameras.main.centerY;
+        // Use virtual coordinates (1200x720)
+        const virtualWidth = 1200;
+        const virtualHeight = 720;
+        const centerX = virtualWidth / 2;
+        const centerY = virtualHeight / 2;
         
         // Create semi-transparent dark overlay
-        this.deathOverlay = this.scene.add.rectangle(
+        this.deathOverlay = this.uiScene.add.rectangle(
             centerX,
             centerY,
-            this.scene.cameras.main.width,
-            this.scene.cameras.main.height,
+            virtualWidth,
+            virtualHeight,
             0x000000,
             0.7
         );
@@ -1041,7 +1177,7 @@ Legend:
         this.deathOverlay.setScrollFactor(0);
         
         // Create message text
-        this.deathOverlayText = this.scene.add.text(
+        this.deathOverlayText = this.uiScene.add.text(
             centerX,
             centerY,
             message,
@@ -1059,7 +1195,7 @@ Legend:
         this.deathOverlayText.setScrollFactor(0);
         
         // Add pulsing animation
-        this.scene.tweens.add({
+        this.uiScene.tweens.add({
             targets: this.deathOverlayText,
             scaleX: 1.1,
             scaleY: 1.1,

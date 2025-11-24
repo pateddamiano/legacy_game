@@ -45,11 +45,23 @@ class AudioBootScene extends Phaser.Scene {
         // Initialize core systems
         this.initializeCoreServices();
         
+        // Use the same fixed virtual dimensions as all other scenes
+        this.virtualWidth = 1200;
+        this.virtualHeight = 720;
+        
+        // Apply layout manager for consistent aspect ratio across all scenes
+        LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight);
+        
+        // Handle window resizing
+        this.scale.on('resize', (gameSize) => {
+            LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight);
+        });
+        
         // Create animated tiled background
         this.createAnimatedBackground();
         
-        const centerX = this.cameras.main.centerX;
-        const centerY = this.cameras.main.centerY;
+        const centerX = this.virtualWidth / 2;
+        const centerY = this.virtualHeight / 2;
         
         // Create UI first before any loading callbacks can fire
         this.createBootUI(centerX, centerY);

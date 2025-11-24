@@ -76,7 +76,8 @@ class GameScene extends Phaser.Scene {
         console.log('🎯 GameScene: Assets already loaded, initializing systems...');
 
         // Initialize weapon system (needs scene reference)
-        this.weaponManager = new WeaponManager(this);
+        // uiScene will be set later in create(), so pass null for now
+        this.weaponManager = new WeaponManager(this, null);
         
         // Initialize effect system (needs scene reference for loading)
         this.effectSystem = new EffectSystem(this);
@@ -96,7 +97,10 @@ class GameScene extends Phaser.Scene {
         this.gameStateManager = new GameStateManager(this);
         this.environmentManager = new EnvironmentManager(this);
         this.audioManager = new AudioManager(this);
-        this.uiManager = new UIManager(this);
+        
+        // NOTE: UIManager initialization moved to create() method after uiScene is launched
+        // to ensure uiScene is available before initializing UIManager
+        
         this.inputManager = new InputManager(this);
         
         // World and level management
@@ -104,7 +108,7 @@ class GameScene extends Phaser.Scene {
         this.levelManager = new LevelManager(this);
         
         // Gameplay systems
-        this.dialogueManager = new DialogueManager(this);
+        // DialogueManager will be initialized after uiScene is available
         this.sceneElementManager = new SceneElementManager(this);
         this.itemPickupManager = new ItemPickupManager(this);
         this.eventManager = new EventManager(this);
@@ -156,11 +160,42 @@ class GameScene extends Phaser.Scene {
     async create() {
         console.log(`🎯 GameScene: Creating level ${this.selectedLevelId} with ${this.selectedCharacter}`);
         
+        // Launch and get reference to UI Scene
+        if (!this.scene.isActive('UIScene')) {
+            this.scene.launch('UIScene');
+        }
+        this.uiScene = this.scene.get('UIScene');
+        
+        // Bring UI Scene to top
+        this.scene.bringToTop('UIScene');
+        
+        // Apply responsive layout with fixed virtual dimensions
+        this.virtualWidth = 1200;
+        this.virtualHeight = 720;
+        LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight);
+        
+        // Handle window resizing
+        this.scale.on('resize', (gameSize) => {
+            console.log('📏 Resizing GameScene...');
+            LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight);
+        });
+        
         // No loading needed - assets already loaded in PreloadScene
         this.isLoading = false;
         
-        // Initialize all managers
+        // Initialize all managers (except UIManager, which needs uiScene)
         this.initializeManagers();
+        
+        // Initialize UI Manager AFTER uiScene is available
+        this.uiManager = new UIManager(this, this.uiScene);
+        
+        // Initialize DialogueManager AFTER uiScene is available (needs uiScene for positioning)
+        this.dialogueManager = new DialogueManager(this, this.uiScene);
+        
+        // Update WeaponManager with uiScene reference (created in preload before uiScene was available)
+        if (this.weaponManager) {
+            this.weaponManager.uiScene = this.uiScene;
+        }
         
         // Initialize CharacterManager with selected character
         this.characterManager.initialize(
@@ -996,6 +1031,9 @@ class GameScene extends Phaser.Scene {
     onLevelCleanup() {
         console.log('🎮 GameScene: Cleaning up level...');
         
+        // Remove resize listener to prevent memory leaks
+        this.scale.off('resize');
+        
         // Clear events
         if (this.eventManager) {
             this.eventManager.clearEvents();
@@ -1087,9 +1125,15 @@ class GameScene extends Phaser.Scene {
         const worldBounds = this.physics && this.physics.world && this.physics.world.bounds 
             ? this.physics.world.bounds 
             : { x: 0, width: 1200 };
+        // camera.width is in screen pixels, but we need world coordinates
+        // World width visible = screen width / zoom, or use virtualWidth directly
+        const virtualWidth = this.virtualWidth || 1200;
+        const cameraWorldWidth = virtualWidth; // This is the world width the camera can see
         const minCameraX = worldBounds.x;
-        const maxCameraX = worldBounds.x + worldBounds.width - this.cameras.main.width;
-        const cameraTargetX = Math.max(minCameraX, Math.min(maxCameraX, spawnPoint.x - this.cameras.main.width / 2));
+        const maxCameraX = worldBounds.x + worldBounds.width - cameraWorldWidth;
+        const cameraTargetX = Math.max(minCameraX, Math.min(maxCameraX, spawnPoint.x - cameraWorldWidth / 2));
+        
+        console.log(`🎯 Camera positioning: spawn at (${spawnPoint.x}, ${spawnPoint.y}), screen width=${this.cameras.main.width}, zoom=${this.cameras.main.zoom}, world width=${cameraWorldWidth}, targetX=${cameraTargetX}`);
         
         console.log(`🎯 Resetting camera scroll from (${this.cameras.main.scrollX}, ${this.cameras.main.scrollY}) to (${cameraTargetX}, 0)`);
         this.cameras.main.setScroll(cameraTargetX, 0);

@@ -4,8 +4,9 @@
 // Handles dialogue display, queue management, and player pause
 
 class DialogueManager {
-    constructor(scene) {
+    constructor(scene, uiScene = null) {
         this.scene = scene;
+        this.uiScene = uiScene || scene; // Use uiScene if provided, fallback to scene
         this.isActive = false;
         this.currentDialogue = null;
         this.dialogueQueue = [];
@@ -41,31 +42,48 @@ class DialogueManager {
         
         console.log('💬 Creating dialogue UI...');
         
-        // Create container for all dialogue elements
-        this.container = this.scene.add.container(0, 0);
+        // Use virtual coordinates (1200x720) to match other UI elements
+        const virtualWidth = 1200;
+        const virtualHeight = 720;
+        
+        // Create container for all dialogue elements on UIScene
+        // Container at (0, 0) - elements will be positioned absolutely
+        this.container = this.uiScene.add.container(0, 0);
         this.container.setDepth(10000); // Always on top
         this.container.setVisible(false);
         this.container.setScrollFactor(0); // Fixed to camera
         
+        // Scale the container to match the UI scene's scale factor
+        if (this.uiScene.uiScale !== undefined) {
+            this.container.setScale(this.uiScene.uiScale);
+            console.log(`💬 DIALOGUE_DEBUG: Applied UI scale ${this.uiScene.uiScale} to dialogue container`);
+        } else {
+            const calculatedScale = this.uiScene.cameras.main.zoom || 1.0;
+            this.container.setScale(calculatedScale);
+            console.log(`💬 DIALOGUE_DEBUG: Applied calculated scale ${calculatedScale} to dialogue container`);
+        }
+        
+        // Dialogue box background (right side, just past 50%)
+        // Use virtual coordinates instead of camera width to match other UI elements
+        const panelWidth = 520;
+        const panelHeight = 110;
+        const panelX = Math.floor(virtualWidth * 0.72); // slightly right of center (864 in virtual coords)
+        const panelY = Math.floor(virtualHeight * 0.50); // centered vertically (360 in virtual coords)
+        
         // Semi-transparent overlay (optional, for pausing effect)
-        this.overlay = this.scene.add.rectangle(
-            this.scene.cameras.main.centerX,
-            this.scene.cameras.main.centerY,
-            this.scene.cameras.main.width,
-            this.scene.cameras.main.height,
+        // Use virtual coordinates to match other UI elements
+        this.overlay = this.uiScene.add.rectangle(
+            virtualWidth / 2,
+            virtualHeight / 2,
+            virtualWidth,
+            virtualHeight,
             0x000000,
             0.3
         );
         this.overlay.setScrollFactor(0);
         
-        // Dialogue box background (right side, just past 50%)
-        const cam = this.scene.cameras.main;
-        const panelWidth = 520;
-        const panelHeight = 110;
-        const panelX = Math.floor(cam.width * 0.72); // slightly right of center
-        const panelY = Math.floor(cam.height * 0.50); // centered vertically
-        
-        this.dialogueBox = this.scene.add.rectangle(
+        // Dialogue box background - positioned absolutely
+        this.dialogueBox = this.uiScene.add.rectangle(
             panelX,
             panelY,
             panelWidth,
@@ -77,7 +95,7 @@ class DialogueManager {
         this.dialogueBox.setScrollFactor(0);
         
         // Speaker name
-        this.speakerText = this.scene.add.text(
+        this.speakerText = this.uiScene.add.text(
             panelX - Math.floor(panelWidth / 2) + 16,
             panelY - Math.floor(panelHeight / 2) + 10,
             '',
@@ -91,7 +109,7 @@ class DialogueManager {
         this.speakerText.setScrollFactor(0);
         
         // Message text
-        this.messageText = this.scene.add.text(
+        this.messageText = this.uiScene.add.text(
             panelX - Math.floor(panelWidth / 2) + 16,
             panelY - Math.floor(panelHeight / 2) + 38,
             '',
@@ -105,7 +123,7 @@ class DialogueManager {
         this.messageText.setScrollFactor(0);
         
         // Continue prompt
-        this.continuePrompt = this.scene.add.text(
+        this.continuePrompt = this.uiScene.add.text(
             panelX + Math.floor(panelWidth / 2) - 10,
             panelY + Math.floor(panelHeight / 2) - 18,
             '[SPACE]',
@@ -453,6 +471,16 @@ class DialogueManager {
             // Reset jumping state
             if (this.scene.isJumping !== undefined) {
                 this.scene.isJumping = false;
+            }
+        }
+        
+        // Clear all projectiles (especially boss rating weapons) when dialogue starts
+        // This prevents weapons from continuing to fly during dialogue
+        if (this.scene.weaponManager) {
+            const projectileCount = this.scene.weaponManager.projectiles?.length || 0;
+            if (projectileCount > 0) {
+                this.scene.weaponManager.clearAllProjectiles();
+                console.log(`💬 Cleared ${projectileCount} projectiles (including boss rating weapons) when dialogue started`);
             }
         }
         

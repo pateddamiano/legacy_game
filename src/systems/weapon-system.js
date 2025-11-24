@@ -273,8 +273,9 @@ class Projectile {
 // ========================================
 
 class WeaponManager {
-    constructor(scene) {
+    constructor(scene, uiScene = null) {
         this.scene = scene;
+        this.uiScene = uiScene || scene; // Use uiScene if provided, fallback to scene
         this.projectiles = [];
         this.weapons = {}; // Available weapons
         this.currentWeapon = null;
@@ -339,6 +340,8 @@ class WeaponManager {
     }
     
     createWeaponUI() {
+        console.log('🎯 WEAPON_UI_DEBUG: ====== Weapon UI Creation ======');
+        
         // Position next to health bar on the right
         // Health bar is at x: 70, width: 350, so right edge is at 420
         // Health bar center Y is approximately 60 + (46 + 38) / 2 = 102
@@ -347,58 +350,169 @@ class WeaponManager {
         const healthBarY = 60;
         const healthBarTotalHeight = 46 + 38; // nameTextHeight + healthBarHeight
         
-        const spacing = 40; // Space between health bar and weapon icon
-        const centerX = healthBarX + healthBarWidth + spacing + 45; // Add radius to center the circle
-        const centerY = healthBarY + (healthBarTotalHeight / 2) - 10; // Vertically centered with health bar
+        const spacing = 80; // Space between health bar and weapon icon
         const radius = 45; // Increased from 35
         
-        // Weapon icon background
-        this.weaponUI = this.scene.add.group();
+        // Calculate position - account for BOTH health bar and weapon container scaling
+        // Health bar container is at (70, 60) with scale 1.71, width 350
+        // So health bar's right edge in world coords: 70 + (350 * 1.71) = 668.5
+        // Weapon container will also be scaled, so its center needs to account for scaled radius
+        const containerScale = this.uiScene.uiScale || 1.0;
+        const scaledHealthBarWidth = healthBarWidth * containerScale;
+        const scaledRadius = radius * containerScale;
+        const healthBarRightEdge = healthBarX + scaledHealthBarWidth;
+        const centerX = healthBarRightEdge + spacing + scaledRadius;
+        const centerY = healthBarY + (healthBarTotalHeight / 2) + 50; // Vertically centered with health bar
         
-        // Background circle for weapon icon
-        const bg = this.scene.add.circle(centerX, centerY, radius, 0x333333);
+        console.log('🎯 WEAPON_UI_DEBUG: Position calculation with scaling:', {
+            healthBarX,
+            healthBarWidth,
+            containerScale,
+            scaledHealthBarWidth,
+            healthBarRightEdge: healthBarX + scaledHealthBarWidth,
+            spacing,
+            radius,
+            scaledRadius,
+            centerX,
+            centerY,
+            calculation: `centerX = ${healthBarX} + (${healthBarWidth} * ${containerScale}) + ${spacing} + (${radius} * ${containerScale}) = ${centerX}`
+        });
+        
+        console.log('🎯 WEAPON_UI_DEBUG: Calculated positions:', {
+            healthBarX,
+            healthBarWidth,
+            healthBarY,
+            healthBarTotalHeight,
+            spacing,
+            centerX,
+            centerY,
+            radius,
+            calculation: `centerX = ${healthBarX} + ${healthBarWidth} + ${spacing} + 45 = ${centerX}`
+        });
+        
+        console.log('🎯 WEAPON_UI_DEBUG: UI Scene state:', {
+            uiSceneExists: !!this.uiScene,
+            uiScale: this.uiScene?.uiScale,
+            cameraZoom: this.uiScene?.cameras?.main?.zoom,
+            cameraWidth: this.uiScene?.cameras?.main?.width,
+            cameraHeight: this.uiScene?.cameras?.main?.height
+        });
+        
+        // Create container for weapon UI elements (instead of group, so we can scale it)
+        this.weaponUIContainer = this.uiScene.add.container(centerX, centerY);
+        this.weaponUIContainer.setDepth(2000); // Match other UI elements depth (health bar, lives use 2000)
+        this.weaponUIContainer.setScrollFactor(0);
+        
+        console.log('🎯 WEAPON_UI_DEBUG: Container created:', {
+            x: this.weaponUIContainer.x,
+            y: this.weaponUIContainer.y,
+            depth: this.weaponUIContainer.depth,
+            scrollFactor: this.weaponUIContainer.scrollFactorX,
+            scaleX: this.weaponUIContainer.scaleX,
+            scaleY: this.weaponUIContainer.scaleY
+        });
+        
+        // Scale the container to match the UI scene's scale factor
+        if (this.uiScene.uiScale !== undefined) {
+            this.weaponUIContainer.setScale(this.uiScene.uiScale);
+            console.log(`🎯 WEAPON_UI_DEBUG: Applied UI scale ${this.uiScene.uiScale} to weapon container`);
+        } else {
+            // Fallback: calculate scale from camera zoom if uiScale not set
+            const calculatedScale = this.uiScene.cameras.main.zoom || 1.0;
+            this.weaponUIContainer.setScale(calculatedScale);
+            console.log(`🎯 WEAPON_UI_DEBUG: Applied calculated scale ${calculatedScale} to weapon container`);
+        }
+        
+        console.log('🎯 WEAPON_UI_DEBUG: Container after scaling:', {
+            x: this.weaponUIContainer.x,
+            y: this.weaponUIContainer.y,
+            scaleX: this.weaponUIContainer.scaleX,
+            scaleY: this.weaponUIContainer.scaleY
+        });
+        
+        // Keep weaponUI as a group for backward compatibility, but elements are in container
+        this.weaponUI = this.uiScene.add.group();
+        
+        console.log('🎯 WEAPON_UI_DEBUG: Creating elements...');
+        
+        // Background circle for weapon icon (positioned relative to container center at 0, 0)
+        const bg = this.uiScene.add.circle(0, 0, radius, 0x333333);
         bg.setStrokeStyle(4, 0x666666); // Increased stroke from 3 to 4
         bg.setScrollFactor(0);
-        bg.setDepth(1000);
+        bg.setDepth(0); // Relative depth within container
+        this.weaponUIContainer.add(bg);
         this.weaponUI.add(bg);
+        console.log('🎯 WEAPON_UI_DEBUG: Background circle created:', { x: bg.x, y: bg.y, radius, visible: bg.visible });
         
-        // Weapon icon (static vinyl)
-        this.weaponIcon = this.scene.add.image(centerX, centerY, 'vinylWeapon');
+        // Weapon icon (static vinyl) - positioned at container center
+        this.weaponIcon = this.uiScene.add.image(0, 0, 'vinylWeapon');
         this.weaponIcon.setScale(1.4); // Increased from 0.8
         this.weaponIcon.setScrollFactor(0);
-        this.weaponIcon.setDepth(1001);
+        this.weaponIcon.setDepth(1); // Relative depth within container
+        this.weaponUIContainer.add(this.weaponIcon);
         this.weaponUI.add(this.weaponIcon);
+        console.log('🎯 WEAPON_UI_DEBUG: Weapon icon created:', {
+            x: this.weaponIcon.x,
+            y: this.weaponIcon.y,
+            scale: this.weaponIcon.scaleX,
+            textureKey: this.weaponIcon.texture?.key,
+            visible: this.weaponIcon.visible,
+            alpha: this.weaponIcon.alpha
+        });
         
         // Cooldown overlay (dark semi-transparent circle)
-        this.cooldownOverlay = this.scene.add.circle(centerX, centerY, radius, 0x000000, 0.7);
+        this.cooldownOverlay = this.uiScene.add.circle(0, 0, radius, 0x000000, 0.7);
         this.cooldownOverlay.setScrollFactor(0);
-        this.cooldownOverlay.setDepth(1002);
+        this.cooldownOverlay.setDepth(2); // Relative depth within container
         this.cooldownOverlay.setVisible(false);
+        this.weaponUIContainer.add(this.cooldownOverlay);
         this.weaponUI.add(this.cooldownOverlay);
+        console.log('🎯 WEAPON_UI_DEBUG: Cooldown overlay created:', { x: this.cooldownOverlay.x, y: this.cooldownOverlay.y, visible: this.cooldownOverlay.visible });
         
         // Radial progress indicator (arc that fills as cooldown progresses)
-        this.cooldownProgress = this.scene.add.graphics();
+        this.cooldownProgress = this.uiScene.add.graphics();
         this.cooldownProgress.setScrollFactor(0);
-        this.cooldownProgress.setDepth(1003);
+        this.cooldownProgress.setDepth(3); // Relative depth within container
         this.cooldownProgress.setVisible(false);
+        this.weaponUIContainer.add(this.cooldownProgress);
         this.weaponUI.add(this.cooldownProgress);
+        console.log('🎯 WEAPON_UI_DEBUG: Cooldown progress graphics created:', { visible: this.cooldownProgress.visible });
         
-        // Store UI position for drawing
+        // Store UI position for drawing (absolute position)
         this.uiCenter = { x: centerX, y: centerY };
         this.uiRadius = radius;
         
-        // Weapon key text (positioned below the icon)
-        const keyText = this.scene.add.text(centerX, centerY + radius + 10, 'Q', {
+        // Weapon key text (positioned below the icon, relative to container)
+        const keyText = this.uiScene.add.text(0, radius + 10, 'Q', {
             fontSize: GAME_CONFIG.ui.fontSize.micro,
             fill: '#ffffff',
             stroke: '#000000',
             strokeThickness: 2
         }).setOrigin(0.5);
         keyText.setScrollFactor(0);
-        keyText.setDepth(1001);
+        keyText.setDepth(1); // Relative depth within container
+        this.weaponUIContainer.add(keyText);
         this.weaponUI.add(keyText);
+        console.log('🎯 WEAPON_UI_DEBUG: Key text created:', {
+            x: keyText.x,
+            y: keyText.y,
+            text: keyText.text,
+            visible: keyText.visible
+        });
         
-        console.log('🎯 Weapon UI created with radial progress');
+        console.log('🎯 WEAPON_UI_DEBUG: Container children count:', this.weaponUIContainer.list.length);
+        console.log('🎯 WEAPON_UI_DEBUG: Container final state:', {
+            x: this.weaponUIContainer.x,
+            y: this.weaponUIContainer.y,
+            scaleX: this.weaponUIContainer.scaleX,
+            scaleY: this.weaponUIContainer.scaleY,
+            visible: this.weaponUIContainer.visible,
+            alpha: this.weaponUIContainer.alpha,
+            depth: this.weaponUIContainer.depth
+        });
+        console.log('🎯 WEAPON_UI_DEBUG: ====== End Weapon UI Creation ======');
+        
+        console.log('🎯 Weapon UI created with radial progress on UIScene');
     }
     
     // ========================================
@@ -490,8 +604,10 @@ class WeaponManager {
         if (progress <= 0) return;
         
         // Draw the progress arc
-        const centerX = this.uiCenter.x;
-        const centerY = this.uiCenter.y;
+        // Use relative coordinates (0, 0) since cooldownProgress is inside the container
+        // The container is positioned at uiCenter, so graphics should draw relative to container center
+        const centerX = 0;
+        const centerY = 0;
         const radius = this.uiRadius - 4; // Slightly smaller than background circle
         
         // Calculate angle (start from top, go clockwise)

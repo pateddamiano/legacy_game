@@ -32,10 +32,15 @@ if (window.DEBUG_MODE) {
 // Game configuration
 const config = {
     type: Phaser.AUTO,
-    width: 1200,
-    height: 720,
+    scale: {
+        mode: Phaser.Scale.RESIZE,
+        parent: 'game-container',
+        width: '100%',
+        height: '100%',
+        autoCenter: Phaser.Scale.NO_CENTER
+    },
     parent: 'game-container',
-    backgroundColor: '#87CEEB',
+    backgroundColor: '#000000', // Black background for letterboxing
     physics: {
         default: 'arcade',
         arcade: {
@@ -48,6 +53,7 @@ const config = {
         AudioBootScene,      // Audio activation and essential asset loading
         MainMenuScene,       // Main menu navigation
         IntroDialogueScene,  // Story intro before gameplay
+        UIScene,             // UI Overlay (always active on top of game)
         GameScene            // Actual gameplay with dynamic character switching
         // TODO: Add more scenes as we build them:
         // VictoryScene, GameOverScene, etc.
@@ -60,6 +66,11 @@ console.log('🎮 Config:', config);
 console.log('🎮 Available scenes:', config.scene.map(s => s.name || s.key || 'Unknown'));
 
 const game = new Phaser.Game(config);
+
+// Initialize Device Manager
+if (window.DeviceManager) {
+    window.DeviceManager.initialize(game);
+}
 
 console.log('🎮 ✅ Phaser Game instance created successfully');
 console.log('🎮 Game object:', game);
