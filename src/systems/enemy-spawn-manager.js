@@ -145,7 +145,12 @@ class EnemySpawnManager {
             
             // Aggressive cleanup: Remove enemies that are far from player
             if (enemy.sprite && enemy.sprite.active) {
-                // FIRST: Check centralized protection system
+                // FIRST: Never cleanup bosses - they are always protected
+                if (enemy.isBoss) {
+                    return; // Bosses should never be cleaned up by the spawn manager
+                }
+                
+                // SECOND: Check centralized protection system
                 if (this.scene.eventEnemyProtection && this.scene.eventEnemyProtection.isProtectedFromCleanup(enemy)) {
                     // Enemy is protected by the centralized system - skip all cleanup
                     return;

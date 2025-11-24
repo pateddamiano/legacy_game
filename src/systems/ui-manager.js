@@ -752,10 +752,10 @@ Legend:
         const barWidth = 400;
         const barHeight = 30;
         const barX = cam.width / 2; // Center horizontally
-        const barY = 100; // Below player health bars
+        const barY = cam.height - 80; // Position at bottom of screen with 80px margin from bottom
         
-        // Boss name text
-        this.bossNameText = this.scene.add.text(barX, barY - 30, '', {
+        // Boss name text (positioned above the health bar)
+        this.bossNameText = this.scene.add.text(barX, barY - 35, '', {
             fontSize: GAME_CONFIG.ui.fontSize.body,
             fill: '#FFD700',
             fontFamily: GAME_CONFIG.ui.fontFamily,

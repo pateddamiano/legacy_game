@@ -274,6 +274,9 @@ class EventManager {
             case 'dialogue':
                 this.sceneActions.executeDialogue(action);
                 break;
+            case 'setDialogueStyle':
+                this.sceneActions.executeSetDialogueStyle(action);
+                break;
             case 'wait':
                 this.sceneActions.executeWait(action);
                 break;
@@ -316,6 +319,9 @@ class EventManager {
             case 'loadLevel':
                 this.sceneActions.executeLoadLevel(action);
                 break;
+            case 'playMusic':
+                this.sceneActions.executePlayMusic(action);
+                break;
             case 'clearEnemiesOffscreen':
                 this.enemyActions.executeClearEnemiesOffscreen(action);
                 break;
@@ -336,6 +342,9 @@ class EventManager {
                 break;
             case 'spawnSubwayCarCycle':
                 this.specialActions.executeSpawnSubwayCarCycle(action);
+                break;
+            case 'stopSubwayCarCycle':
+                this.specialActions.executeStopSubwayCarCycle(action);
                 break;
             case 'spawnBoss':
                 this.bossActions.executeSpawnBoss(action);
@@ -493,6 +502,69 @@ class EventManager {
         // 7. Clear extras (event NPCs like the critic)
         if (this.scene.extrasManager) {
             this.scene.extrasManager.clearAll();
+        }
+        
+        // 7.5. Clear boss-specific state
+        // Hide boss health bar
+        if (this.scene.uiManager && this.scene.uiManager.hideBossHealthBar) {
+            this.scene.uiManager.hideBossHealthBar();
+            console.log('🎬 Hid boss health bar during cleanup');
+        }
+        
+        // Clear bosses array
+        if (this.scene.bosses) {
+            const bossCount = this.scene.bosses.length;
+            this.scene.bosses = [];
+            console.log(`🎬 Cleared ${bossCount} bosses from bosses array`);
+        }
+        
+        // Clear eventEnemyMap (maps boss/enemy IDs to indices)
+        if (this.scene.eventEnemyMap) {
+            const mapSize = this.scene.eventEnemyMap.size;
+            this.scene.eventEnemyMap.clear();
+            console.log(`🎬 Cleared ${mapSize} entries from eventEnemyMap`);
+        }
+        
+        // Reset boss state in GameStateManager
+        if (this.scene.gameStateManager) {
+            this.scene.gameStateManager.setBossActive(false);
+            this.scene.gameStateManager.setBossDefeated(false);
+            console.log('🎬 Reset boss state in GameStateManager');
+        }
+        
+        // Stop subway car cycle if active (direct cleanup, no action advancement)
+        if (this.specialActions && this.specialActions.subwayCarCycleActive) {
+            console.log('🎬 Stopping subway car cycle during cleanup');
+            this.specialActions.subwayCarCycleActive = false;
+            
+            // Cancel the next spawn timer if it exists
+            if (this.specialActions.subwayCarSpawnTimer) {
+                this.scene.time.removeEvent(this.specialActions.subwayCarSpawnTimer);
+                this.specialActions.subwayCarSpawnTimer = null;
+            }
+            
+            // Destroy all active subway cars
+            const carsToDestroy = Array.from(this.specialActions.activeSubwayCars);
+            carsToDestroy.forEach(carId => {
+                const entity = this.specialActions.getEntity(carId);
+                if (entity) {
+                    entity.subwayMovementActive = false;
+                    entity.setVelocityX(0);
+                }
+                if (this.scene.extrasManager) {
+                    this.scene.extrasManager.destroyExtraById(carId);
+                }
+            });
+            
+            // Clear the active cars set
+            this.specialActions.activeSubwayCars.clear();
+            
+            // Stop subway passing sound
+            if (this.scene.audioManager) {
+                this.scene.audioManager.stopSubwayPassing();
+            }
+            
+            console.log('🎬 Subway car cycle stopped during cleanup');
         }
         
         // 8. Clear all projectiles

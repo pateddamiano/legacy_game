@@ -414,6 +414,9 @@ class AudioBootScene extends Phaser.Scene {
         this.load.image('ratingWeapon3', 'assets/characters/critic/spritesheets/rating_weapons/3_1frame.png');
         this.load.image('ratingWeapon4', 'assets/characters/critic/spritesheets/rating_weapons/4_1frame.png');
 
+        // Load "not good" text image for boss pre-jump punch effect
+        this.load.image('notGoodText', 'assets/characters/critic/spritesheets/not_good_text.png');
+
         // Pickup assets
         this.load.image('goldenMicrophone', 'assets/pickups/GoldenMicrophone_64x64.png');
         

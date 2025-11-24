@@ -101,13 +101,14 @@ const ENEMY_TYPE_CONFIGS = {
     crackhead: {
         // Base stats (inherits from ENEMY_CONFIG if not specified)
         health: 10,                    // Weak but numerous
-        speed: 400,                   // Slow, shambling movement
-        attackCooldown: 300,         // Slower attacks
-        playerDamage: 5,             // Less damage (increased from 2)
+        speed: 400,                   // 
+        attackCooldown: 150,         // Faster attacks
+        playerDamage: 7,             // Less damage (increased from 2)
         attackTypes: ['jab', 'bottle_attack'],
-        detectionRange: 900,         // Less aggressive - shorter detection range (increased from 600)
+        detectionRange: 900,         // aggressive - longer detection range (increased from 600)
         baseScale: 0.65,              // Base size multiplier (1.0 = normal size, 0.8 = smaller, 1.2 = larger)
-        description: "Weak but numerous crackhead enemies"
+        description: "Weak but numerous crackhead enemies",
+        attackRange: 200
     },
     
     green_thug: {
@@ -135,15 +136,17 @@ const ENEMY_TYPE_CONFIGS = {
     },
     
     critic: {
-        // Special boss-like enemy
-        health: 50,                   // High health (boss-tier)
+        // Regular enemy critic (for scripted events like level 1)
+        // Note: Boss critics use BOSS_TYPE_CONFIGS in boss-system.js
+        // This config is only for regular enemy critics used in events
+        health: 50,                   // Medium-high health (for scripted enemies)
         speed: 150,                   // Slower movement (dramatic)
-        attackCooldown: 300,         // Slower attacks
-        playerDamage: 9,             // High damage
+        attackCooldown: 200,         // Standard attack speed
+        playerDamage: 8,             // Medium-high damage
         attackTypes: ['enemy_punch'],
-        detectionRange: 2000,        // Very aggressive - long detection range
+        detectionRange: 2000,        // Long detection range
         baseScale: 0.85,              // Base size multiplier (1.0 = normal size)
-        description: "The Critic - formidable opponent"
+        description: "The Critic - regular enemy version (for scripted events)"
     }
 };
 
@@ -760,7 +763,7 @@ class Enemy {
         } else if (this.characterConfig.name === 'black_thug') {
             windupDelay = 250; // Medium punch windup
         } else if (this.characterConfig.name === 'crackhead') {
-            windupDelay = 350; // Slower bottle attacks
+            windupDelay = 100; // Slower bottle attacks
         }
         
         // Lock animation and play attack
@@ -849,10 +852,16 @@ class Enemy {
         }
         
         if (this.health <= 0) {
-            // Check if this enemy is protected from death
-            if (this.scene.eventEnemyProtection && this.scene.eventEnemyProtection.isProtectedFromCleanup(this)) {
+            // BOSSES: Allow bosses to die even when protected (they have their own defeat logic)
+            // Check if this enemy is protected from death (but not if it's a boss)
+            if (this.isBoss) {
+                // Boss defeat is handled in boss-system.js takeDamage() override
+                // Don't prevent death for bosses - allow health to stay at 0
+                this.health = 0; // Ensure health is exactly 0
+                return; // Let boss-system.js handle the defeat logic
+            } else if (this.scene.eventEnemyProtection && this.scene.eventEnemyProtection.isProtectedFromCleanup(this)) {
                 // console.log(`🛡️ Death blocked for protected enemy: ${this.characterConfig.name} (health set to 1)`);
-                this.health = 1; // Keep alive with minimal health
+                this.health = 1; // Keep alive with minimal health (only for non-boss enemies)
                 return;
             }
             

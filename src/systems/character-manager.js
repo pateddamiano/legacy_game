@@ -209,6 +209,12 @@ class CharacterManager {
         const currentChar = this.selectedCharacter;
         const newChar = currentChar === 'tireek' ? 'tryston' : 'tireek';
 
+        // SAFETY CHECK: Ensure we are not switching TO a dead character when forced
+        if (forceSwitch && this.characters[newChar].health <= 0) {
+             console.error(`🛑 Blocked switch to dead character ${newChar} (HP: ${this.characters[newChar].health})`);
+             return { success: false, reason: "target_dead" };
+        }
+
         // Check if the other character is available (not dead)
         if (this.characters[newChar].health <= 0) {
             return false;
@@ -547,36 +553,121 @@ class CharacterManager {
             return;
         }
         
-        const activeChar = this.characters[this.selectedCharacter];
-        console.log(`${this.selectedCharacter} is down!`);
+        const activeCharName = this.selectedCharacter;
+        const activeCharData = this.characters[activeCharName];
+        
+        // Explicitly verify health of both characters
+        const tireekHealth = this.characters.tireek.health;
+        const trystonHealth = this.characters.tryston.health;
+        
+        console.log(`💀 Handle Character Down: ${activeCharName} (Health: ${activeCharData.health})`);
+        console.log(`💀 Status Check: Tireek=${tireekHealth}, Tryston=${trystonHealth}`);
+
+        // 1. Prevent Self-Switching: If the currently active character is actually alive
+        if (activeCharData.health > 0) {
+            console.warn(`⚠️ Character down aborted: Active character ${activeCharName} is still alive (${activeCharData.health} HP)!`);
+            return;
+        }
         
         // Check if both characters are down
-        const bothDown = this.characters.tireek.health <= 0 && this.characters.tryston.health <= 0;
+        const bothDown = tireekHealth <= 0 && trystonHealth <= 0;
         
         if (bothDown) {
-            console.log("Both characters are down! Game Over!");
+            console.log("💀 Both characters are down! Game Over!");
             this.handleGameOver(onGameOver);
         } else {
+            // 2. Guaranteed Switch: One character is dead, the other is alive
             // Determine which character is still alive
-            const aliveCharacter = this.characters.tireek.health > 0 ? 'tireek' : 'tryston';
-            console.log(`One character down, switching to alive character: ${aliveCharacter}`);
+            const aliveCharacterName = tireekHealth > 0 ? 'tireek' : 'tryston';
+            console.log(`❤️ SURVIVOR FOUND: Switching to ${aliveCharacterName} (${this.characters[aliveCharacterName].health} HP)`);
 
             // Force switch to the alive character, regardless of cooldowns or current animation states
             // We pass 'true' for forceSwitch to bypass checks
-            // We also need to ensure we're switching TO the alive character
-            
-            // If the selected character is the one that died (which should be the case if we're here),
-            // switchCharacter will naturally switch to the other one.
-            // But let's verify logic: switchCharacter toggles between tireek/tryston.
-            // If current is tireek (dead) -> switches to tryston.
-            // If current is tryston (dead) -> switches to tireek.
-            // This logic holds up as long as one is dead and one is alive.
-            
             const switchResult = this.switchCharacter(true, animationManager, isJumping, eventCameraLocked);
+            
+            // 3. Fail-Safe Fallback
             if (!switchResult || !switchResult.success) {
-                // Fallback if switch fails for some reason (shouldn't happen with force=true)
-                console.error("CRITICAL: Failed to switch to alive character! Forcing Game Over.");
-                this.handleGameOver(onGameOver);
+                console.error("CRITICAL: Standard switch failed! Executing MANUAL FORCE SWITCH.");
+                
+                try {
+                    // Manually force the state change to ensure game continues
+                    const deadCharName = activeCharName;
+                    const deadSprite = this.characters[deadCharName].sprite;
+                    const aliveSprite = this.characters[aliveCharacterName].sprite;
+                    const currentTime = this.scene.time.now;
+
+                    // Hide dead character
+                    if (deadSprite) {
+                        deadSprite.setVisible(false);
+                        deadSprite.setActive(false);
+                        if (deadSprite.body) deadSprite.body.enable = false;
+                    }
+                    this.characters[deadCharName].isActive = false;
+
+                    // Show and activate alive character
+                    this.selectedCharacter = aliveCharacterName;
+                    this.currentCharacterConfig = this.characters[aliveCharacterName].config;
+                    
+                    if (aliveSprite) {
+                        // Ensure it's positioned correctly (at dead character's pos)
+                        if (deadSprite) {
+                            aliveSprite.setPosition(deadSprite.x, deadSprite.y);
+                        }
+                        
+                        aliveSprite.setVisible(true);
+                        aliveSprite.setActive(true);
+                        if (aliveSprite.body) {
+                            aliveSprite.body.enable = true;
+                            aliveSprite.body.velocity.x = 0;
+                            aliveSprite.body.velocity.y = 0;
+                        }
+                        
+                        // Reset animation
+                        if (aliveSprite.anims) {
+                            aliveSprite.anims.play(`${aliveCharacterName}_idle`, true);
+                        }
+                    }
+                    
+                    this.characters[aliveCharacterName].isActive = true;
+                    this.characters[aliveCharacterName].lastSwitchTime = currentTime;
+
+                    // Update UI
+                    if (this.uiManager) {
+                        this.uiManager.updateHealthBar(this.characters[aliveCharacterName].health, this.characters[aliveCharacterName].maxHealth);
+                        this.uiManager.updateDualCharacterHealth(
+                            this.characters.tireek.health,
+                            this.characters.tryston.health,
+                            this.selectedCharacter
+                        );
+                        this.uiManager.updateCharacterDisplay(this.currentCharacterConfig);
+                    }
+                    
+                    // Update scene references if needed (GameScene usually handles this via update loop or direct ref)
+                    // Note: We can't easily update GameScene.player from here if it's just a property, 
+                    // but SceneManager usually queries CharacterManager.getActiveCharacter().
+                    // However, GameScene often caches 'this.player'.
+                    if (this.scene.player && this.scene.player !== aliveSprite) {
+                        console.log("Updating scene.player reference from manual switch");
+                        this.scene.player = aliveSprite;
+                        
+                        // Update physics/combat manager refs if they exist on scene
+                        if (this.scene.playerPhysicsManager) this.scene.playerPhysicsManager.player = aliveSprite;
+                        if (this.scene.combatManager) this.scene.combatManager.player = aliveSprite;
+                        if (this.scene.animationManager) this.scene.animationManager.sprite = aliveSprite;
+
+                        // Re-setup camera if needed
+                        if (!this.eventCameraLocked && this.scene.cameras && this.scene.cameras.main) {
+                            this.scene.cameras.main.startFollow(aliveSprite, true, 0.1, 0);
+                        }
+                    }
+                    
+                    console.log("✅ Manual force switch complete");
+                    
+                } catch (e) {
+                    console.error("❌ MANUAL SWITCH CRASHED:", e);
+                    // Only if manual switch ALSO crashes do we game over
+                    this.handleGameOver(onGameOver);
+                }
             }
         }
     }

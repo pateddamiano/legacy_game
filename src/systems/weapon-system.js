@@ -29,8 +29,8 @@ const WEAPON_CONFIG = {
         name: '0-Star Rating',
         spriteKey: 'ratingWeapon0',
         spinningKey: 'ratingWeapon0', // Static image that will rotate
-        damage: 15,
-        speed: 600,
+        damage: 14,
+        speed: 400,
         range: 600,
         cooldown: 2000,
         size: { width: 48, height: 48 },
@@ -43,8 +43,8 @@ const WEAPON_CONFIG = {
         name: '1-Star Rating',
         spriteKey: 'ratingWeapon1',
         spinningKey: 'ratingWeapon1',
-        damage: 18,
-        speed: 650,
+        damage: 12,
+        speed: 500,
         range: 650,
         cooldown: 2000,
         size: { width: 48, height: 48 },
@@ -57,8 +57,8 @@ const WEAPON_CONFIG = {
         name: '2-Star Rating',
         spriteKey: 'ratingWeapon2',
         spinningKey: 'ratingWeapon2',
-        damage: 22,
-        speed: 700,
+        damage: 10,
+        speed: 500,
         range: 700,
         cooldown: 2000,
         size: { width: 48, height: 48 },
@@ -71,8 +71,8 @@ const WEAPON_CONFIG = {
         name: '3-Star Rating',
         spriteKey: 'ratingWeapon3',
         spinningKey: 'ratingWeapon3',
-        damage: 25,
-        speed: 750,
+        damage: 8,
+        speed: 500,
         range: 750,
         cooldown: 2000,
         size: { width: 48, height: 48 },
@@ -85,8 +85,8 @@ const WEAPON_CONFIG = {
         name: '4-Star Rating',
         spriteKey: 'ratingWeapon4',
         spinningKey: 'ratingWeapon4',
-        damage: 28,
-        speed: 800,
+        damage: 6,
+        speed: 500,
         range: 800,
         cooldown: 2000,
         size: { width: 48, height: 48 },
@@ -113,10 +113,39 @@ class Projectile {
         this.active = true;
         this.throwSound = null; // Store reference to the sound
         
+        // Check if this is a rating weapon (boss projectile)
+        const isRatingWeapon = (weaponConfig.spriteKey && weaponConfig.spriteKey.startsWith('ratingWeapon')) ||
+                               (weaponConfig.name && weaponConfig.name.includes('Rating'));
+        
+        // Create drop shadow for rating weapons
+        this.shadow = null;
+        this.groundY = null; // Store ground level for shadow positioning
+        if (isRatingWeapon) {
+            // Calculate ground level - use the throw Y position (boss's Y position) as ground level
+            // The boss's sprite Y position is where they're standing, so that's the ground level
+            // For level 2 boss arena, boss spawns at y: 425, which is the ground level
+            
+            // MANUAL TUNING: Adjust this value to move the shadow up/down relative to the boss's center
+            // Positive value moves shadow down (towards feet), negative moves it up
+            const shadowYOffset = 70; 
+            let groundLevel = y + shadowYOffset;
+            
+            // The boss's Y position is their center, but for the shadow we want it at ground level
+            // Since the boss is standing on the ground, their Y position IS the ground level
+            // (in a side-scrolling beat 'em up, Y position represents ground level)
+            this.groundY = groundLevel;
+            
+            // Create a bigger shadow on the ground (at ground level where boss's feet are)
+            this.shadow = scene.add.ellipse(x, groundLevel, 50, 25, 0x000000, 0.5);
+            this.shadow.setDepth(groundLevel - 1); // Shadow should be below everything
+            this.shadow.setScrollFactor(1); // Scroll with world
+        }
+        
         // Create projectile sprite
         this.sprite = scene.physics.add.sprite(x, y, weaponConfig.spinningKey);
         this.sprite.setScale(1.5); // Make it visible
-        this.sprite.setDepth(500); // Above characters but below UI
+        // Depth will be set dynamically based on player position
+        this.isRatingWeapon = isRatingWeapon;
         
         // Set up physics with improved hitbox
         this.sprite.body.setSize(weaponConfig.hitbox.width, weaponConfig.hitbox.height);
@@ -158,6 +187,36 @@ class Projectile {
     update() {
         if (!this.active || !this.sprite.active) return;
         
+        // Update shadow position for rating weapons
+        if (this.isRatingWeapon && this.shadow && this.shadow.active && this.groundY !== null) {
+            // Shadow follows projectile X position, stays on ground level
+            this.shadow.x = this.sprite.x;
+            this.shadow.y = this.groundY; // Shadow stays at ground level (boss's feet level)
+            this.shadow.setDepth(this.groundY - 1); // Shadow depth based on ground level
+        }
+        
+        // Update depth dynamically for rating weapons based on player position
+        if (this.isRatingWeapon && this.scene.player) {
+            const playerSprite = this.scene.player.sprite || this.scene.player;
+            if (playerSprite && playerSprite.active) {
+                // If player is in front (lower Y = closer to camera), weapon goes behind
+                // If player is behind (higher Y = further from camera), weapon goes in front
+                const playerY = playerSprite.y;
+                const weaponY = this.sprite.y;
+                
+                if (playerY < weaponY) {
+                    // Player is in front (closer to camera), weapon goes behind
+                    this.sprite.setDepth(weaponY - 10);
+                } else {
+                    // Player is behind (further from camera), weapon goes in front
+                    this.sprite.setDepth(weaponY + 10);
+                }
+            } else {
+                // Fallback: use Y position for depth
+                this.sprite.setDepth(this.sprite.y);
+            }
+        }
+        
         // Check if projectile has traveled too far
         const distanceTraveled = Math.abs(this.sprite.x - this.startX);
         if (distanceTraveled > this.range) {
@@ -179,6 +238,12 @@ class Projectile {
         // Stop the throw sound if it's still playing
         if (this.throwSound && this.throwSound.isPlaying) {
             this.throwSound.stop();
+        }
+        
+        // Destroy shadow if it exists
+        if (this.shadow && this.shadow.active) {
+            this.shadow.destroy();
+            this.shadow = null;
         }
         
         if (this.sprite && this.sprite.active) {
@@ -456,6 +521,13 @@ class WeaponManager {
         this.projectiles.forEach(projectile => {
             if (!projectile.active) return;
             
+            // Check if this is a boss projectile (rating weapon)
+            const weaponConfig = projectile.weaponConfig;
+            const isBossProjectile = weaponConfig && (
+                (weaponConfig.spriteKey && weaponConfig.spriteKey.startsWith('ratingWeapon')) ||
+                (weaponConfig.name && weaponConfig.name.includes('Rating'))
+            );
+            
             enemies.forEach(enemy => {
                 if (!enemy.sprite || !enemy.sprite.active) return;
                 
@@ -472,17 +544,22 @@ class WeaponManager {
                     return; // Enemy is dying/dead, skip collision
                 }
                 
+                // Boss projectiles should not damage bosses (bosses can't hit themselves)
+                if (isBossProjectile && enemy.isBoss) {
+                    return; // Skip collision - boss projectile hitting boss
+                }
+                
                 // Check vertical distance first (street-level tolerance)
                 const verticalDistance = Math.abs(projectile.sprite.y - enemy.sprite.y);
-                const weaponConfig = this.weapons[this.currentWeapon];
+                const currentWeaponConfig = this.weapons[this.currentWeapon];
                 
-                if (verticalDistance > weaponConfig.verticalTolerance) {
+                if (verticalDistance > currentWeaponConfig.verticalTolerance) {
                     return; // Skip collision if too far apart vertically
                 }
                 
                 // Check horizontal collision with more generous threshold
                 const horizontalDistance = Math.abs(projectile.sprite.x - enemy.sprite.x);
-                const collisionThreshold = weaponConfig.collisionThreshold || 50;
+                const collisionThreshold = currentWeaponConfig.collisionThreshold || 50;
                 
                 // If collision detected (more forgiving horizontal distance)
                 if (horizontalDistance < collisionThreshold) {
@@ -572,6 +649,46 @@ class WeaponManager {
                 // Play rating weapon hit sound effect
                 if (this.scene.audioManager) {
                     this.scene.audioManager.playRatingWeaponHit();
+                }
+                
+                // Apply knockback to player (push away from projectile)
+                if (playerSprite && playerSprite.body) {
+                    const knockbackForce = 400; // Knockback force in pixels/second
+                    const knockbackDuration = 300; // Knockback duration in ms
+                    
+                    // Calculate direction: push player away from projectile
+                    const dx = playerSprite.x - projectile.sprite.x;
+                    const knockbackDirection = dx > 0 ? 1 : -1; // Push away from projectile
+                    const knockbackVelocity = knockbackDirection * knockbackForce;
+                    
+                    // Set knockback flag on player to prevent input manager from overriding
+                    if (playerSprite.isKnockedBack === undefined) {
+                        playerSprite.isKnockedBack = false;
+                    }
+                    playerSprite.isKnockedBack = true;
+                    playerSprite.knockbackEndTime = this.scene.time.now + knockbackDuration;
+                    
+                    // Apply knockback velocity
+                    playerSprite.setVelocityX(knockbackVelocity);
+                    
+                    // Clear knockback after duration
+                    this.scene.time.delayedCall(knockbackDuration, () => {
+                        if (playerSprite && playerSprite.body && playerSprite.active) {
+                            // Clear knockback flag
+                            playerSprite.isKnockedBack = false;
+                            playerSprite.knockbackEndTime = null;
+                            
+                            // Only clear velocity if player isn't actively moving
+                            // If player is pressing movement keys, let input manager handle velocity
+                            const currentVelX = playerSprite.body.velocity.x;
+                            // Only reset if velocity is still from knockback (similar magnitude and direction)
+                            if (Math.abs(currentVelX - knockbackVelocity) < 50) {
+                                playerSprite.setVelocityX(0);
+                            }
+                        }
+                    });
+                    
+                    console.log(`💥 Player knocked back by rating weapon: ${knockbackVelocity}px/s for ${knockbackDuration}ms`);
                 }
                 
                 // Deal damage to player

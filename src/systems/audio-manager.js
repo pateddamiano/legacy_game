@@ -679,6 +679,10 @@ class AudioManager {
             case 'black_thug':
                 soundKey = 'enemyBlackThugAttack';
                 break;
+            case 'critic':
+                // Boss critic uses black thug attack sound (similar punch attack)
+                soundKey = 'enemyBlackThugAttack';
+                break;
             default:
                 console.warn(`🔊 Unknown enemy type: ${enemyType}, using crackhead sound`);
                 soundKey = 'enemyCrackheadAttack';
@@ -837,6 +841,93 @@ class AudioManager {
         } else {
             this.playBackgroundMusic(newMusicKey, true);
         }
+    }
+    
+    // Change music with customizable fade out/in durations and volume
+    changeMusic(musicKey, options = {}) {
+        if (!musicKey) {
+            console.warn('🎵 changeMusic: musicKey is required');
+            return;
+        }
+        
+        // Extract options with defaults
+        const fadeOutDuration = options.fadeOutDuration !== undefined 
+            ? options.fadeOutDuration 
+            : this.config.backgroundMusic.fadeOutDuration;
+        const fadeInDuration = options.fadeInDuration !== undefined 
+            ? options.fadeInDuration 
+            : this.config.backgroundMusic.fadeInDuration;
+        const volume = options.volume !== undefined 
+            ? options.volume 
+            : null; // null means use default config volume
+        
+        // Check if music is available and enabled
+        if (!this.config.backgroundMusic.enabled || this.musicMuted) {
+            console.log(`🎵 Background music disabled or muted: ${musicKey}`);
+            return;
+        }
+        
+        // Check if sound exists in cache
+        if (!this.scene.cache.audio.has(musicKey)) {
+            console.warn(`🎵 Music not found in cache: ${musicKey}`);
+            return;
+        }
+        
+        // If there's current music playing, fade it out first
+        if (this.currentBackgroundMusic && this.currentBackgroundMusic.isPlaying) {
+            const musicToStop = this.currentBackgroundMusic;
+            this.currentBackgroundMusic = null; // Clear reference immediately
+            
+            // Fade out current music
+            this.scene.tweens.add({
+                targets: musicToStop,
+                volume: 0,
+                duration: fadeOutDuration,
+                ease: 'Linear',
+                onComplete: () => {
+                    try {
+                        if (musicToStop && musicToStop.isPlaying) {
+                            musicToStop.stop();
+                        }
+                        musicToStop.destroy();
+                    } catch (e) {
+                        // Ignore errors if already destroyed
+                    }
+                    // After fade out completes, start new music
+                    this.playNewMusic(musicKey, fadeInDuration, volume);
+                }
+            });
+        } else {
+            // No current music, just play new music
+            this.playNewMusic(musicKey, fadeInDuration, volume);
+        }
+        
+        console.log(`🎵 Changing music to: ${musicKey} (fade out: ${fadeOutDuration}ms, fade in: ${fadeInDuration}ms)`);
+    }
+    
+    // Helper method to play new music with fade in
+    playNewMusic(musicKey, fadeInDuration, customVolume) {
+        // Determine volume: use custom volume if provided, otherwise use default config volume
+        const targetVolume = customVolume !== null ? customVolume : this.config.backgroundMusic.volume;
+        
+        // Play the new music
+        this.currentBackgroundMusic = this.sound.add(musicKey, {
+            volume: 0, // Start at 0 for fade in
+            loop: this.config.backgroundMusic.loop
+        });
+        
+        this.currentBackgroundMusic.play();
+        
+        // Fade in
+        this.scene.tweens.add({
+            targets: this.currentBackgroundMusic,
+            volume: targetVolume,
+            duration: fadeInDuration,
+            ease: 'Linear',
+            onComplete: () => {
+                console.log(`🎵 Music ${musicKey} faded in to volume ${Math.round(targetVolume * 100)}%`);
+            }
+        });
     }
     
     // Set music mood (could be used for dynamic music changes)

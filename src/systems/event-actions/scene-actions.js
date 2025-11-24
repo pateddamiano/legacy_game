@@ -161,6 +161,91 @@ class SceneActions {
         
         // Don't advance - wait for zone check in update loop
     }
+    
+    executePlayMusic(action) {
+        const musicKey = action.musicKey;
+        if (!musicKey) {
+            console.warn('🎬 PlayMusic action missing musicKey');
+            this.advanceAction();
+            return;
+        }
+        
+        console.log(`🎬 Changing music to: ${musicKey}`);
+        
+        // Get audio manager from scene
+        if (!this.scene.audioManager) {
+            console.warn('🎬 AudioManager not available');
+            this.advanceAction();
+            return;
+        }
+        
+        // Build options object from action properties
+        const options = {};
+        if (action.fadeOutDuration !== undefined) {
+            options.fadeOutDuration = action.fadeOutDuration;
+        }
+        if (action.fadeInDuration !== undefined) {
+            options.fadeInDuration = action.fadeInDuration;
+        }
+        if (action.volume !== undefined) {
+            options.volume = action.volume;
+        }
+        
+        // Change music (non-blocking - music fades are handled asynchronously)
+        this.scene.audioManager.changeMusic(musicKey, options);
+        
+        // Advance immediately since music transition is async
+        this.advanceAction();
+    }
+    
+    executeSetDialogueStyle(action) {
+        console.log('🎬 Setting dialogue style');
+        
+        // Get dialogue manager from scene
+        if (!this.scene.dialogueManager) {
+            console.warn('🎬 DialogueManager not available');
+            this.advanceAction();
+            return;
+        }
+        
+        // Build config object from action properties
+        const config = {};
+        
+        // Position
+        if (action.position) {
+            config.position = {
+                x: action.position.x,
+                y: action.position.y
+            };
+        }
+        
+        // Size
+        if (action.size) {
+            config.size = {
+                width: action.size.width,
+                height: action.size.height
+            };
+        }
+        
+        // Text sizes
+        if (action.textSizes) {
+            config.textSizes = {
+                speaker: action.textSizes.speaker,
+                message: action.textSizes.message
+            };
+        }
+        
+        // Word wrap width
+        if (action.wordWrapWidth !== undefined) {
+            config.wordWrapWidth = action.wordWrapWidth;
+        }
+        
+        // Apply configuration
+        this.scene.dialogueManager.configureDialogue(config);
+        
+        // Advance immediately (configuration is synchronous)
+        this.advanceAction();
+    }
 }
 
 // Export for use in event-manager.js

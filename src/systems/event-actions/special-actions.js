@@ -9,6 +9,10 @@ class SpecialActions {
         this.scene = eventManager.scene;
         // Track active subway cars for sound management
         this.activeSubwayCars = new Set();
+        // Track the next spawn timer so we can cancel it
+        this.subwayCarSpawnTimer = null;
+        // Track if the cycle is active
+        this.subwayCarCycleActive = false;
     }
     
     advanceAction() {
@@ -242,8 +246,17 @@ class SpecialActions {
 
     executeSpawnSubwayCarCycle(action) {
         console.log('🎬 Starting subway car spawning cycle');
+        
+        // Mark cycle as active
+        this.subwayCarCycleActive = true;
 
         const spawnNextCar = () => {
+            // Check if cycle was stopped
+            if (!this.subwayCarCycleActive) {
+                console.log('🎬 Subway car cycle stopped, not spawning more cars');
+                return;
+            }
+
             // Generate unique ID for this subway car instance
             const carId = `extra_subway_car_${Date.now()}`;
 
@@ -278,15 +291,54 @@ class SpecialActions {
             }
 
             // Schedule next spawn with random delay (3-6 seconds as set by user)
+            // Only if cycle is still active
+            if (this.subwayCarCycleActive) {
             const delay = Phaser.Math.Between(4000, 8000);
             console.log(`🎬 Next subway car in ${delay}ms`);
-            this.scene.time.delayedCall(delay, spawnNextCar);
+                this.subwayCarSpawnTimer = this.scene.time.delayedCall(delay, spawnNextCar);
+            }
         };
 
         // Start the cycle
         spawnNextCar();
 
         // Advance to next action immediately (cycle continues in background)
+        this.advanceAction();
+    }
+    
+    executeStopSubwayCarCycle(action) {
+        console.log('🎬 Stopping subway car spawning cycle');
+        
+        // Stop the cycle
+        this.subwayCarCycleActive = false;
+        
+        // Cancel the next spawn timer if it exists
+        if (this.subwayCarSpawnTimer) {
+            this.scene.time.removeEvent(this.subwayCarSpawnTimer);
+            this.subwayCarSpawnTimer = null;
+        }
+        
+        // Destroy all active subway cars
+        const carsToDestroy = Array.from(this.activeSubwayCars);
+        carsToDestroy.forEach(carId => {
+            console.log(`🎬 Destroying subway car: ${carId}`);
+            const entity = this.getEntity(carId);
+            if (entity) {
+                entity.subwayMovementActive = false;
+                entity.setVelocityX(0);
+            }
+            this.scene.extrasManager.destroyExtraById(carId);
+        });
+        
+        // Clear the active cars set
+        this.activeSubwayCars.clear();
+        
+        // Stop subway passing sound
+        if (this.scene.audioManager) {
+            this.scene.audioManager.stopSubwayPassing();
+        }
+        
+        // Advance to next action
         this.advanceAction();
     }
 }

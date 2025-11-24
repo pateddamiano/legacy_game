@@ -74,6 +74,7 @@ class DialogueManager {
             0.85
         );
         this.dialogueBox.setStrokeStyle(3, 0xFFD700);
+        this.dialogueBox.setScrollFactor(0);
         
         // Speaker name
         this.speakerText = this.scene.add.text(
@@ -87,6 +88,7 @@ class DialogueManager {
                 fontStyle: 'bold'
             }
         );
+        this.speakerText.setScrollFactor(0);
         
         // Message text
         this.messageText = this.scene.add.text(
@@ -100,6 +102,7 @@ class DialogueManager {
                 wordWrap: { width: panelWidth - 32 }
             }
         );
+        this.messageText.setScrollFactor(0);
         
         // Continue prompt
         this.continuePrompt = this.scene.add.text(
@@ -115,6 +118,7 @@ class DialogueManager {
         );
         this.continuePrompt.setOrigin(1, 0.5);
         this.continuePrompt.setAlpha(0);
+        this.continuePrompt.setScrollFactor(0);
         
         // Add all elements to container
         this.container.add([
@@ -149,6 +153,23 @@ class DialogueManager {
 
         console.log(`💬 Showing dialogue: "${dialogue.text}" (speaker: ${dialogue.speaker || 'narrator'})`);
 
+        // HARD STOP: Disable input immediately and clear all input states to prevent skipping
+        if (this.scene.inputManager) {
+            this.scene.inputManager.disabled = true;
+            // Clear all input states to prevent queued inputs from skipping dialogue
+            if (this.scene.inputManager.inputState) {
+                this.scene.inputManager.inputState.left = false;
+                this.scene.inputManager.inputState.right = false;
+                this.scene.inputManager.inputState.up = false;
+                this.scene.inputManager.inputState.down = false;
+                this.scene.inputManager.inputState.jump = false;
+                this.scene.inputManager.inputState.attack = false;
+                this.scene.inputManager.inputState.weapon = false;
+                this.scene.inputManager.inputState.switchCharacter = false;
+            }
+            console.log(`💬 Input disabled and cleared to prevent dialogue skipping`);
+        }
+
         // PAUSE GAMEPLAY FIRST - before showing dialogue
         if (dialogue.pauseGame !== false) {
             this.pauseGameplay();
@@ -157,7 +178,7 @@ class DialogueManager {
         this.isActive = true;
         this.currentDialogue = dialogue;
         this.onDialogueComplete = callback;
-
+        
         // Update game state
         if (this.scene.gameStateManager) {
             this.scene.gameStateManager.setDialogueActive(true);
@@ -166,6 +187,19 @@ class DialogueManager {
         
         // Show UI
         this.container.setVisible(true);
+        
+        // Clear any existing space key listeners to prevent immediate skip
+        if (this.spaceKey) {
+            this.spaceKey.off('down');
+            this.spaceKey = null;
+        }
+        
+        // Clear keyboard state more aggressively
+        if (this.scene.input && this.scene.input.keyboard) {
+            const spaceKeyObj = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+            // Reset the key state by removing and re-adding
+            spaceKeyObj.reset();
+        }
         
         // Respect per-dialogue background dim preference (default: dim)
         // Note: Event dialogues will have their overlay controlled by EventManager
@@ -195,8 +229,11 @@ class DialogueManager {
             });
         }
         
-        // Set up input for manual dismissal
+        // Set up input for manual dismissal with a delay to prevent immediate skip
+        // This ensures any queued input from attack button presses is cleared
+        this.scene.time.delayedCall(150, () => {
         this.setupDialogueInput();
+        });
     }
     
     startTypewriter() {
@@ -353,6 +390,13 @@ class DialogueManager {
         // Remove previous listeners
         if (this.spaceKey) {
             this.spaceKey.off('down');
+            this.spaceKey = null;
+        }
+        
+        // Reset space key state to prevent immediate trigger from queued inputs
+        if (this.scene.input && this.scene.input.keyboard) {
+            const tempKey = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+            tempKey.reset();
         }
         
         // Set up space key to advance dialogue
@@ -377,6 +421,41 @@ class DialogueManager {
     pauseGameplay() {
         console.log('💬 Pausing gameplay for dialogue');
         
+        // ALWAYS stop player animations and sounds when dialogue starts
+        // This prevents stuck animations/sounds even if event system has control
+        if (this.scene.player && this.scene.player.body) {
+            // Stop player movement immediately
+            this.scene.player.body.setVelocity(0, 0);
+            
+            // Stop running sound effect immediately
+            if (this.scene.audioManager) {
+                this.scene.audioManager.stopPlayerRunning();
+            }
+            
+            // Force stop any active animations and reset to idle
+            const charName = this.scene.currentCharacterConfig?.name || 'tireek';
+            if (this.scene.animationManager) {
+                const currentState = this.scene.animationManager.currentState;
+                console.log(`💬 Stopping player animation: ${currentState} -> idle`);
+                
+                // Clear any animation locks (attack, airkick, run, etc.)
+                this.scene.animationManager.animationLocked = false;
+                this.scene.animationManager.lockTimer = 0;
+                this.scene.animationManager.currentState = 'idle';
+                
+                // Play idle animation to stop any active animations
+                this.scene.player.anims.play(`${charName}_idle`, true);
+            } else {
+                // Fallback: just play idle animation
+                this.scene.player.anims.play(`${charName}_idle`, true);
+            }
+            
+            // Reset jumping state
+            if (this.scene.isJumping !== undefined) {
+                this.scene.isJumping = false;
+            }
+        }
+        
         // Check if event system already has control
         const eventManager = this.scene.eventManager;
         const playerPausedByEvent = eventManager && eventManager.pausedEntities.player;
@@ -384,7 +463,7 @@ class DialogueManager {
         console.log(`💬 PAUSE CHECK - eventManager exists: ${!!eventManager}, pausedEntities.player: ${eventManager?.pausedEntities.player}, enemies: ${eventManager?.pausedEntities.enemies.length}`);
         
         if (playerPausedByEvent || enemiesPausedByEvent) {
-            console.log('💬 Event system already has control - minimal dialogue pause');
+            console.log('💬 Event system already has control - minimal dialogue pause (animations/sounds already stopped)');
             // Don't interfere with event system's pause state
             // Just pause physics if not already paused
             if (this.scene.physics && this.scene.physics.world && !this.scene.physics.world.isPaused) {
@@ -459,6 +538,179 @@ class DialogueManager {
         if (this.scene.gameStateManager) {
             this.scene.gameStateManager.resumeGame();
         }
+    }
+    
+    // ========================================
+    // DIALOGUE CONFIGURATION
+    // ========================================
+    
+    // Configure dialogue box position and size
+    setDialoguePosition(x, y) {
+        if (!this.dialogueBox || !this.container) {
+            console.warn('💬 Cannot set dialogue position - UI not created yet');
+            return;
+        }
+        
+        // Use provided coordinates or keep current position
+        const screenX = x !== undefined ? x : this.dialogueBox.x;
+        const screenY = y !== undefined ? y : this.dialogueBox.y;
+        
+        // Update dialogue box position
+        this.dialogueBox.setPosition(screenX, screenY);
+        
+        // Recalculate text positions based on box center and current size
+        const boxWidth = this.dialogueBox.width;
+        const boxHeight = this.dialogueBox.height;
+        const halfWidth = Math.floor(boxWidth / 2);
+        const halfHeight = Math.floor(boxHeight / 2);
+        
+        // Update speaker text position (relative to box center)
+        if (this.speakerText) {
+            this.speakerText.setPosition(
+                screenX - halfWidth + 16,
+                screenY - halfHeight + 10
+            );
+        }
+        
+        // Update message text position (relative to box center)
+        if (this.messageText) {
+            this.messageText.setPosition(
+                screenX - halfWidth + 16,
+                screenY - halfHeight + 38
+            );
+        }
+        
+        // Update continue prompt position (relative to box center)
+        if (this.continuePrompt) {
+            this.continuePrompt.setPosition(
+                screenX + halfWidth - 10,
+                screenY + halfHeight - 18
+            );
+        }
+        
+        console.log(`💬 Dialogue position set to: (${screenX}, ${screenY})`);
+    }
+    
+    // Configure dialogue box size
+    setDialogueSize(width, height) {
+        if (!this.dialogueBox) {
+            console.warn('💬 Cannot set dialogue size - UI not created yet');
+            return;
+        }
+        
+        const newWidth = width !== undefined ? width : this.dialogueBox.width;
+        const newHeight = height !== undefined ? height : this.dialogueBox.height;
+        
+        // Update dialogue box size
+        this.dialogueBox.setSize(newWidth, newHeight);
+        
+        // Update text positions to stay within box
+        const halfWidth = Math.floor(newWidth / 2);
+        const halfHeight = Math.floor(newHeight / 2);
+        
+        if (this.speakerText) {
+            this.speakerText.setPosition(
+                this.dialogueBox.x - halfWidth + 16,
+                this.dialogueBox.y - halfHeight + 10
+            );
+        }
+        
+        if (this.messageText) {
+            this.messageText.setPosition(
+                this.dialogueBox.x - halfWidth + 16,
+                this.dialogueBox.y - halfHeight + 38
+            );
+            // Update word wrap width
+            if (this.messageText.style) {
+                this.messageText.style.wordWrapWidth = newWidth - 32;
+            }
+        }
+        
+        if (this.continuePrompt) {
+            this.continuePrompt.setPosition(
+                this.dialogueBox.x + halfWidth - 10,
+                this.dialogueBox.y + halfHeight - 18
+            );
+        }
+        
+        console.log(`💬 Dialogue size set to: ${newWidth}x${newHeight}`);
+    }
+    
+    // Configure text sizes
+    setTextSizes(speakerSize, messageSize) {
+        if (!this.speakerText || !this.messageText) {
+            console.warn('💬 Cannot set text sizes - UI not created yet');
+            return;
+        }
+        
+        if (speakerSize !== undefined) {
+            this.speakerText.setFontSize(speakerSize);
+            console.log(`💬 Speaker text size set to: ${speakerSize}`);
+        }
+        
+        if (messageSize !== undefined) {
+            this.messageText.setFontSize(messageSize);
+            console.log(`💬 Message text size set to: ${messageSize}`);
+        }
+    }
+    
+    // Configure word wrap width for message text
+    setWordWrapWidth(width) {
+        if (!this.messageText) {
+            console.warn('💬 Cannot set word wrap width - UI not created yet');
+            return;
+        }
+        
+        if (this.messageText.style) {
+            this.messageText.style.wordWrapWidth = width;
+            console.log(`💬 Word wrap width set to: ${width}`);
+        }
+    }
+    
+    // Comprehensive configuration method
+    configureDialogue(config) {
+        if (!config) {
+            console.warn('💬 configureDialogue: config object required');
+            return;
+        }
+        
+        console.log('💬 configureDialogue called with config:', JSON.stringify(config, null, 2));
+        
+        // Ensure UI is created
+        if (!this.container) {
+            console.log('💬 UI not created yet, creating now...');
+            this.createDialogueUI();
+        } else {
+            console.log('💬 UI already exists, applying configuration...');
+        }
+        
+        // Position
+        if (config.position) {
+            console.log(`💬 Setting position: (${config.position.x}, ${config.position.y})`);
+            this.setDialoguePosition(config.position.x, config.position.y);
+        }
+        
+        // Size
+        if (config.size) {
+            console.log(`💬 Setting size: ${config.size.width}x${config.size.height}`);
+            this.setDialogueSize(config.size.width, config.size.height);
+        }
+        
+        // Text sizes
+        if (config.textSizes) {
+            console.log(`💬 Setting text sizes: speaker=${config.textSizes.speaker}, message=${config.textSizes.message}`);
+            this.setTextSizes(config.textSizes.speaker, config.textSizes.message);
+        }
+        
+        // Word wrap
+        if (config.wordWrapWidth !== undefined) {
+            console.log(`💬 Setting word wrap width: ${config.wordWrapWidth}`);
+            this.setWordWrapWidth(config.wordWrapWidth);
+        }
+        
+        console.log('💬 Dialogue configuration complete. Current box position:', 
+            this.dialogueBox ? `(${this.dialogueBox.x}, ${this.dialogueBox.y})` : 'N/A',
+            'Size:', this.dialogueBox ? `${this.dialogueBox.width}x${this.dialogueBox.height}` : 'N/A');
     }
     
     // ========================================

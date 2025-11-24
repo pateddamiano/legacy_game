@@ -174,7 +174,12 @@ class InputManager {
             speed = this.movementConfig.airkickSpeed; // Slower speed during air kick (200)
         }
         
-        // Horizontal movement
+        // Check if player is being knocked back - don't override knockback velocity
+        const isKnockedBack = player.isKnockedBack === true && 
+                              (player.knockbackEndTime === undefined || this.scene.time.now < player.knockbackEndTime);
+        
+        // Horizontal movement (skip if being knocked back)
+        if (!isKnockedBack) {
         if (this.inputState.left) {
             body.setVelocityX(-speed);
             player.setFlipX(true); // Face left
@@ -185,6 +190,12 @@ class InputManager {
             isMoving = true;
         } else {
             body.setVelocityX(0); // Stop horizontal movement
+            }
+        } else {
+            // During knockback, don't override velocity but still track if player is trying to move
+            if (this.inputState.left || this.inputState.right) {
+                isMoving = true; // Player is trying to move, but knockback takes priority
+            }
         }
         
         // Vertical movement (beat 'em up style) - only when not jumping
