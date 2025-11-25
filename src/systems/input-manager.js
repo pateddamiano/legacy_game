@@ -150,7 +150,10 @@ class InputManager {
                 if (this.inputState.up) moveY = -1;
                 else if (this.inputState.down) moveY = 1;
                 
-                this.unifiedInput.setMovementFromKeyboard(moveX, moveY);
+                // Only update keyboard movement if touch is not currently driving movement
+                if (!this.unifiedInput.isTouchActive()) {
+                    this.unifiedInput.setMovementFromKeyboard(moveX, moveY);
+                }
             }
             
             // Update discrete input state (single presses) with safety checks

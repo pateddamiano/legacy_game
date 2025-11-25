@@ -170,8 +170,15 @@ class GameScene extends Phaser.Scene {
         }
         this.uiScene = this.scene.get('UIScene');
         
-        // Bring UI Scene to top
+        // Launch touch controls scene that renders overlay UI above everything
+        if (!this.scene.isActive('TouchControlsScene')) {
+            this.scene.launch('TouchControlsScene');
+        }
+        this.touchControlsScene = this.scene.get('TouchControlsScene');
+        
+        // Ensure ordering: GameScene < UIScene < TouchControlsScene
         this.scene.bringToTop('UIScene');
+        this.scene.bringToTop('TouchControlsScene');
         
         // Apply responsive layout with fixed virtual dimensions
         this.virtualWidth = 1200;
@@ -198,7 +205,12 @@ class GameScene extends Phaser.Scene {
         
         // Initialize TouchControlsOverlay AFTER uiScene is available
         if (window.TouchControlsOverlay && this.unifiedInputController) {
-            this.touchControlsOverlay = new TouchControlsOverlay(this, this.uiScene, this.unifiedInputController);
+            this.touchControlsOverlay = new TouchControlsOverlay(
+                this,
+                this.uiScene,
+                this.unifiedInputController,
+                this.touchControlsScene
+            );
             this.touchControlsOverlay.create();
             
             // Set visibility based on DeviceManager

@@ -9,11 +9,16 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --vh: 1vh;
+        }
+        
         html, body {
             margin: 0;
             padding: 0;
             width: 100%;
-            height: 100%;
+            height: calc(var(--vh, 1vh) * 100);
+            min-height: calc(var(--vh, 1vh) * 100);
             overflow: hidden;
             background-color: #000; /* Black background for letterboxing */
             font-family: 'VT323', monospace;
@@ -24,7 +29,7 @@
         
         #game-container {
             width: 100%;
-            height: 100%;
+            height: calc(var(--vh, 1vh) * 100);
             display: block;
         }
         
@@ -32,13 +37,101 @@
             display: none; /* Hide HTML controls as they interfere with full screen */
         }
         
+        #startup-overlay {
+            position: fixed;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(0,0,0,0.95), rgba(30,30,60,0.95));
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            font-family: 'VT323', monospace;
+        }
+        
+        .startup-card {
+            width: min(420px, 90vw);
+            background: rgba(10,10,20,0.9);
+            border: 2px solid #FFD700;
+            border-radius: 12px;
+            padding: 32px 36px;
+            text-align: center;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+        }
+        
+        .startup-card h1 {
+            margin: 0 0 12px;
+            font-size: 36px;
+            letter-spacing: 2px;
+            color: #FFD700;
+        }
+        
+        .startup-card p {
+            margin: 0 0 18px;
+            font-size: 20px;
+            color: #b9b9d6;
+        }
+        
+        .startup-step {
+            margin: 18px 0 24px;
+            padding: 18px;
+            border: 1px dashed rgba(255,255,255,0.3);
+            border-radius: 8px;
+        }
+        
+        .startup-step h2 {
+            margin: 0 0 8px;
+            font-size: 24px;
+            color: #FFD700;
+        }
+        
+        .startup-step button {
+            margin-top: 10px;
+            width: 100%;
+            padding: 12px;
+            font-size: 20px;
+            border: none;
+            border-radius: 6px;
+            background: #FFD700;
+            color: #1a1a1a;
+            cursor: pointer;
+            transition: opacity 0.2s ease;
+        }
+        
+        .startup-step button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        
+        .startup-hidden {
+            display: none;
+        }
+        
+        .startup-status {
+            font-size: 18px;
+            color: #ff9393;
+        }
     </style>
 </head>
 <body>
     
+    <div id="startup-overlay">
+        <div class="startup-card">
+            <h1>Legacy Game</h1>
+            <p>Before we begin, complete these quick steps for the best experience.</p>
+            
+            <div class="startup-step" data-step="rotate">
+                <h2>Step 1 · Landscape Mode</h2>
+                <p class="startup-status" id="orientation-status">Rotate your device to landscape.</p>
+                <button id="orientation-confirm" disabled>I’m in landscape</button>
+            </div>
+            
+            <button id="start-game-btn" class="startup-hidden">Launch Game</button>
+        </div>
+    </div>
     
-        <div>
-            <div id="game-container"></div>
+    <div>
+        <div id="game-container"></div>
     </div>
     
     <!-- Phaser 3 CDN -->
@@ -117,6 +210,7 @@
     <script src="src/scenes/IntroDialogueScene.js?v=2.3.0"></script>
     <script src="src/scenes/CharacterSelectScene.js?v=4.0.0"></script>
     <script src="src/scenes/UIScene.js?v=1.0.0"></script>
+    <script src="src/scenes/TouchControlsScene.js?v=1.0.0"></script>
     <script src="src/scenes/game-scene.js?v=8.7.0"></script>
 
     <!-- Test Scripts -->
@@ -124,5 +218,76 @@
 
     <!-- Main Game Entry Point - Load last -->
     <script src="game.js?v=6.8.0"></script>
+    
+    <script>
+        (function () {
+            const overlay = document.getElementById('startup-overlay');
+            if (!overlay) return;
+            
+            const rotateStep = overlay.querySelector('[data-step="rotate"]');
+            const fullscreenStep = overlay.querySelector('[data-step="fullscreen"]');
+            const orientationStatus = document.getElementById('orientation-status');
+            const fullscreenStatus = document.getElementById('fullscreen-status');
+            const rotateBtn = document.getElementById('orientation-confirm');
+            const fullscreenBtn = document.getElementById('fullscreen-confirm');
+            const startBtn = document.getElementById('start-game-btn');
+            const gameContainer = document.getElementById('game-container') || document.documentElement;
+            
+            const isLandscape = () => window.innerWidth >= window.innerHeight;
+            
+            function updateOrientationState() {
+                if (isLandscape()) {
+                    orientationStatus.textContent = 'Looks good! Tap to continue.';
+                    rotateBtn.disabled = false;
+                } else {
+                    orientationStatus.textContent = 'Please rotate your device to landscape.';
+                    rotateBtn.disabled = true;
+                }
+            }
+            
+            rotateBtn.addEventListener('click', () => {
+                rotateStep.classList.add('startup-hidden');
+                startBtn.classList.remove('startup-hidden');
+            });
+            
+            function startGameWhenReady() {
+                if (window.startLegacyGame) {
+                    window.startLegacyGame();
+                    overlay.remove();
+                } else {
+                    setTimeout(startGameWhenReady, 100);
+                }
+            }
+            
+            startBtn.addEventListener('click', () => {
+                startBtn.disabled = true;
+                startBtn.textContent = 'Launching…';
+                startGameWhenReady();
+            });
+            
+            window.addEventListener('resize', updateOrientationState);
+            updateOrientationState();
+            
+            // If desktop already landscape, allow immediate continue
+            if (isLandscape()) {
+                rotateBtn.disabled = false;
+            }
+        })();
+
+        (function setupDynamicVh() {
+            const setVh = () => {
+                const vhSource = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+                const vh = vhSource * 0.01;
+                document.documentElement.style.setProperty('--vh', `${vh}px`);
+            };
+            
+            setVh();
+            window.addEventListener('resize', setVh);
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener('resize', setVh);
+                window.visualViewport.addEventListener('scroll', setVh);
+            }
+        })();
+    </script>
 </body>
 </html> 

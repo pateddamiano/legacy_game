@@ -234,7 +234,25 @@ class Projectile {
         }
     }
     
+    handleWeaponUiScaleChanged(newScale, viewportInfo) {
+        this.currentUiScale = newScale ?? this.currentUiScale;
+        this.viewportInfo = viewportInfo || this.viewportInfo;
+        this.positionWeaponUI();
+    }
+
+    positionWeaponUI() {
+        if (!this.weaponUIContainer) return;
+        const scale = this.currentUiScale ?? this.uiScene?.uiScale ?? 1;
+        const posX = (this.weaponUiConfig?.x || 70) * scale;
+        const posY = (this.weaponUiConfig?.y || 60) * scale;
+        this.weaponUIContainer.setScale(scale);
+        this.weaponUIContainer.setPosition(posX, posY);
+    }
+    
     destroy() {
+        if (this.uiScene?.events?.off) {
+            this.uiScene.events.off('uiScaleChanged', this.handleWeaponUiScaleChanged, this);
+        }
         // Stop the throw sound if it's still playing
         if (this.throwSound && this.throwSound.isPlaying) {
             this.throwSound.stop();
@@ -284,6 +302,10 @@ class WeaponManager {
         // UI elements for weapon display
         this.weaponUI = null;
         this.cooldownIndicator = null;
+        this.weaponUIContainer = null;
+        this.currentUiScale = this.uiScene?.uiScale ?? 1;
+        this.viewportInfo = this.uiScene?.viewportInfo ?? null;
+        this.weaponUiConfig = null;
         
         console.log('🎯 WeaponManager initialized!');
     }
@@ -350,45 +372,11 @@ class WeaponManager {
         const healthBarY = 60;
         const healthBarTotalHeight = 46 + 38; // nameTextHeight + healthBarHeight
         
-        const spacing = 80; // Space between health bar and weapon icon
+        const spacing = 40; // Space between health bar and weapon icon
         const radius = 45; // Increased from 35
-        
-        // Calculate position - account for BOTH health bar and weapon container scaling
-        // Health bar container is at (70, 60) with scale 1.71, width 350
-        // So health bar's right edge in world coords: 70 + (350 * 1.71) = 668.5
-        // Weapon container will also be scaled, so its center needs to account for scaled radius
-        const containerScale = this.uiScene.uiScale || 1.0;
-        const scaledHealthBarWidth = healthBarWidth * containerScale;
-        const scaledRadius = radius * containerScale;
-        const healthBarRightEdge = healthBarX + scaledHealthBarWidth;
-        const centerX = healthBarRightEdge + spacing + scaledRadius;
-        const centerY = healthBarY + (healthBarTotalHeight / 2) + 50; // Vertically centered with health bar
-        
-        console.log('🎯 WEAPON_UI_DEBUG: Position calculation with scaling:', {
-            healthBarX,
-            healthBarWidth,
-            containerScale,
-            scaledHealthBarWidth,
-            healthBarRightEdge: healthBarX + scaledHealthBarWidth,
-            spacing,
-            radius,
-            scaledRadius,
-            centerX,
-            centerY,
-            calculation: `centerX = ${healthBarX} + (${healthBarWidth} * ${containerScale}) + ${spacing} + (${radius} * ${containerScale}) = ${centerX}`
-        });
-        
-        console.log('🎯 WEAPON_UI_DEBUG: Calculated positions:', {
-            healthBarX,
-            healthBarWidth,
-            healthBarY,
-            healthBarTotalHeight,
-            spacing,
-            centerX,
-            centerY,
-            radius,
-            calculation: `centerX = ${healthBarX} + ${healthBarWidth} + ${spacing} + 45 = ${centerX}`
-        });
+        const centerX = healthBarX + healthBarWidth + spacing + radius; // Add radius to center the circle
+        const centerY = healthBarY + (healthBarTotalHeight / 2) - 10; // Vertically centered with health bar
+        this.weaponUiConfig = { x: centerX, y: centerY };
         
         console.log('🎯 WEAPON_UI_DEBUG: UI Scene state:', {
             uiSceneExists: !!this.uiScene,
@@ -412,24 +400,8 @@ class WeaponManager {
             scaleY: this.weaponUIContainer.scaleY
         });
         
-        // Scale the container to match the UI scene's scale factor
-        if (this.uiScene.uiScale !== undefined) {
-            this.weaponUIContainer.setScale(this.uiScene.uiScale);
-            console.log(`🎯 WEAPON_UI_DEBUG: Applied UI scale ${this.uiScene.uiScale} to weapon container`);
-        } else {
-            // Fallback: calculate scale from camera zoom if uiScale not set
-            const calculatedScale = this.uiScene.cameras.main.zoom || 1.0;
-            this.weaponUIContainer.setScale(calculatedScale);
-            console.log(`🎯 WEAPON_UI_DEBUG: Applied calculated scale ${calculatedScale} to weapon container`);
-        }
-        
-        console.log('🎯 WEAPON_UI_DEBUG: Container after scaling:', {
-            x: this.weaponUIContainer.x,
-            y: this.weaponUIContainer.y,
-            scaleX: this.weaponUIContainer.scaleX,
-            scaleY: this.weaponUIContainer.scaleY
-        });
-        
+        this.positionWeaponUI();
+
         // Keep weaponUI as a group for backward compatibility, but elements are in container
         this.weaponUI = this.uiScene.add.group();
         
@@ -513,6 +485,10 @@ class WeaponManager {
         console.log('🎯 WEAPON_UI_DEBUG: ====== End Weapon UI Creation ======');
         
         console.log('🎯 Weapon UI created with radial progress on UIScene');
+        
+        if (this.uiScene?.events?.on) {
+            this.uiScene.events.on('uiScaleChanged', this.handleWeaponUiScaleChanged, this);
+        }
     }
     
     // ========================================

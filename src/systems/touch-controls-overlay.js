@@ -27,6 +27,8 @@ class VirtualJoystick {
         // Visual elements
         this.baseCircle = null;
         this.knobCircle = null;
+        this.outerRing = null;
+        this.outerGlow = null;
         this.container = null;
         
         // Output vector
@@ -37,19 +39,44 @@ class VirtualJoystick {
     create(container) {
         // Create container for joystick elements
         this.container = this.scene.add.container(this.baseX, this.baseY);
-        this.container.setDepth(3000); // Above game, below UI text
+        const layerDepth = (this.config && typeof this.config.layerDepth === 'number') ? this.config.layerDepth : 5000;
+        this.container.setDepth(layerDepth); // Above game and UI HUD
         this.container.setScrollFactor(0); // Fixed to camera
         
+        const baseColor = this.config.baseColor ?? 0x5c5c5c;
+        const baseOpacity = (this.config.baseOpacity ?? this.config.opacity ?? 0.95);
+        const outerRingRadiusOffset = this.config.outerRingRadiusOffset ?? 12;
+        const outerRingThickness = this.config.outerRingThickness ?? 6;
+        const outerRingColor = this.config.outerRingColor ?? 0xffffff;
+        const outerRingOpacity = this.config.outerRingOpacity ?? 0.85;
+        const glowColor = this.config.glowColor ?? 0xffffff;
+        const glowOpacity = (typeof this.config.glowOpacity === 'number') ? this.config.glowOpacity : 0.25;
+        const glowRadiusOffset = this.config.glowRadiusOffset ?? (outerRingRadiusOffset + 10);
+        
         // Base circle (background)
-        this.baseCircle = this.scene.add.circle(0, 0, this.baseRadius, this.config.baseColor, this.config.opacity);
-        this.baseCircle.setStrokeStyle(2, 0xFFFFFF, 0.5);
+        this.baseCircle = this.scene.add.circle(0, 0, this.baseRadius, baseColor, baseOpacity);
+        
+        // Soft glow behind the base
+        this.outerGlow = this.scene.add.circle(0, 0, this.baseRadius + glowRadiusOffset, glowColor, glowOpacity);
+        if (this.outerGlow.setBlendMode) {
+            this.outerGlow.setBlendMode(Phaser.BlendModes.ADD);
+        }
+        
+        // Decorative outer ring
+        this.outerRing = this.scene.add.circle(0, 0, this.baseRadius + outerRingRadiusOffset, 0x000000, 0);
+        this.outerRing.setStrokeStyle(outerRingThickness, outerRingColor, outerRingOpacity);
         
         // Knob circle (movable)
-        this.knobCircle = this.scene.add.circle(0, 0, this.knobRadius, this.config.knobColor, this.config.opacity);
-        this.knobCircle.setStrokeStyle(2, 0xFFFFFF, 0.7);
+        const knobColor = this.config.knobColor ?? 0xffffff;
+        const knobOpacity = this.config.knobOpacity ?? this.config.opacity ?? 1;
+        const knobStrokeColor = this.config.knobStrokeColor ?? 0xffffff;
+        const knobStrokeAlpha = this.config.knobStrokeAlpha ?? 0.9;
+        const knobStrokeWidth = this.config.knobStrokeWidth ?? 3;
+        this.knobCircle = this.scene.add.circle(0, 0, this.knobRadius, knobColor, knobOpacity);
+        this.knobCircle.setStrokeStyle(knobStrokeWidth, knobStrokeColor, knobStrokeAlpha);
         
         // Add to container
-        this.container.add([this.baseCircle, this.knobCircle]);
+        this.container.add([this.outerGlow, this.baseCircle, this.outerRing, this.knobCircle]);
         
         // Make base circle interactive for touch detection
         this.baseCircle.setInteractive({ useHandCursor: false });
@@ -81,6 +108,9 @@ class VirtualJoystick {
     }
     
     onTouchStart(pointer) {
+        // Skip if already tracking a pointer
+        if (this.activePointerId !== null) return;
+        
         // Convert pointer position to world coordinates
         const worldX = pointer.worldX;
         const worldY = pointer.worldY;
@@ -95,6 +125,7 @@ class VirtualJoystick {
         if (distance <= this.baseRadius) {
             this.activePointerId = pointer.id;
             this.updateKnobPosition(worldX, worldY);
+            console.log(`📱 Joystick touch started, pointer ID: ${pointer.id}`);
         }
     }
     
@@ -108,6 +139,8 @@ class VirtualJoystick {
     
     onTouchEnd(pointer) {
         if (this.activePointerId !== pointer.id) return;
+        
+        console.log(`📱 Joystick touch ended, pointer ID: ${pointer.id}`);
         
         // Snap knob back to center
         this.knobX = 0;
@@ -189,6 +222,7 @@ class ActionButton {
         
         // Visual elements
         this.background = null;
+        this.glow = null;
         this.labelText = null;
         this.container = null;
         
@@ -197,18 +231,35 @@ class ActionButton {
     }
     
     create(container) {
+        console.log(`📱 Creating button: ${this.label} at (${this.x}, ${this.y}), size: ${this.size}`);
+        
         // Create container for button elements
         this.container = this.scene.add.container(this.x, this.y);
-        this.container.setDepth(3000); // Above game, below UI text
+        const layerDepth = (this.config && typeof this.config.layerDepth === 'number') ? this.config.layerDepth : 5000;
+        this.container.setDepth(layerDepth); // Above game and UI HUD
         this.container.setScrollFactor(0); // Fixed to camera
+        
+        console.log(`📱 Button ${this.label} - depth: ${layerDepth}, scene: ${this.scene.scene.key}`);
+        
+        // Soft glow (like joystick)
+        const glowColor = this.config.glowColor ?? 0x6fd3ff;
+        const glowOpacity = (typeof this.config.glowOpacity === 'number') ? this.config.glowOpacity : 0.25;
+        const glowRadius = (this.size / 2) + 10;
+        this.glow = this.scene.add.circle(0, 0, glowRadius, glowColor, glowOpacity);
+        if (this.glow.setBlendMode) {
+            this.glow.setBlendMode(Phaser.BlendModes.ADD);
+        }
         
         // Background circle
         this.background = this.scene.add.circle(0, 0, this.size / 2, this.config.backgroundColor, this.config.opacity);
-        this.background.setStrokeStyle(2, 0xFFFFFF, 0.7);
+        const strokeColor = this.config.strokeColor ?? 0xFFFFFF;
+        const strokeAlpha = this.config.strokeAlpha ?? 0.7;
+        const strokeWidth = this.config.strokeWidth ?? 3;
+        this.background.setStrokeStyle(strokeWidth, strokeColor, strokeAlpha);
         
         // Label text
         this.labelText = this.scene.add.text(0, 0, this.label, {
-            fontSize: `${Math.floor(this.size * 0.4)}px`,
+            fontSize: `${Math.floor(this.size * 0.22)}px`,
             fill: `#${this.config.textColor.toString(16).padStart(6, '0')}`,
             fontFamily: GAME_CONFIG.ui.fontFamily,
             fontWeight: 'bold',
@@ -217,7 +268,7 @@ class ActionButton {
         this.labelText.setOrigin(0.5);
         
         // Add to container
-        this.container.add([this.background, this.labelText]);
+        this.container.add([this.glow, this.background, this.labelText]);
         
         // Make interactive
         this.background.setInteractive({ useHandCursor: false });
@@ -241,8 +292,12 @@ class ActionButton {
     }
     
     onTouchStart(pointer) {
+        // Skip if already tracking a pointer
+        if (this.activePointerId !== null) return;
+        
         this.activePointerId = pointer.id;
         this.isPressed = true;
+        console.log(`📱 Button ${this.label} pressed, pointer ID: ${pointer.id}`);
         
         // Visual feedback: scale down
         this.container.setScale(this.config.pressScale);
@@ -251,6 +306,7 @@ class ActionButton {
     onTouchEnd(pointer) {
         if (this.activePointerId !== pointer.id) return;
         
+        console.log(`📱 Button ${this.label} released, pointer ID: ${pointer.id}`);
         this.isPressed = false;
         this.activePointerId = null;
         
@@ -280,9 +336,10 @@ class ActionButton {
 // ========================================
 
 class TouchControlsOverlay {
-    constructor(scene, uiScene, unifiedInputController) {
+    constructor(scene, uiScene, unifiedInputController, renderScene = null) {
         this.scene = scene; // Game scene (for input events)
         this.uiScene = uiScene; // UI scene (for rendering)
+        this.renderScene = renderScene || uiScene; // Scene actually drawing the controls
         this.unifiedInput = unifiedInputController;
         
         // Virtual joystick
@@ -299,10 +356,55 @@ class TouchControlsOverlay {
         // Visibility state
         this.visible = false;
         
+        // Cached viewport info from UIScene
+        this.viewportInfo = null;
+        this.screenMetrics = null;
+        
         // Configuration
         this.config = window.TOUCH_CONTROLS_CONFIG || {
-            joystick: { baseRadius: 80, knobRadius: 30, marginLeft: 60, marginBottom: 60, opacity: 0.85, baseColor: 0x000000, knobColor: 0xFFFFFF },
-            buttons: { size: 70, spacing: 100, marginRight: 60, marginBottom: 60, opacity: 0.85, backgroundColor: 0x000000, textColor: 0xFFFFFF, pressScale: 0.9 }
+            joystick: {
+                baseRadius: 72,
+                knobRadius: 30,
+                marginLeft: 60,
+                marginBottom: 60,
+                opacity: 0.45,
+                baseColor: 0x5c5c5c,
+                baseOpacity: 0.25,
+                knobColor: 0xffffff,
+                knobOpacity: 0.5,
+                outerRingColor: 0xffffff,
+                outerRingOpacity: 0.8,
+                outerRingThickness: 6,
+                outerRingRadiusOffset: 14,
+                glowColor: 0x6fd3ff,
+                glowOpacity: 0.25,
+                glowRadiusOffset: 26,
+                horizontalPadding: 32,
+                verticalPadding: 48,
+                verticalOffset: 0,
+                layerDepth: 6000,
+                placementMode: 'auto',
+                screenAnchorX: 0.08,
+                screenAnchorY: 0.74,
+                screenOffsetX: 0,
+                screenOffsetY: 0,
+                minScreenPaddingX: 48,
+                minScreenPaddingY: 72,
+                pillarMinWidth: 140,
+                pillarAnchorRatio: 0.55,
+                pillarAnchorY: 0.62,
+                pillarOffsetX: 0
+            },
+            buttons: {
+                size: 70,
+                spacing: 100,
+                marginRight: 60,
+                marginBottom: 60,
+                opacity: 0.85,
+                backgroundColor: 0x000000,
+                textColor: 0xFFFFFF,
+                pressScale: 0.9
+            }
         };
         
         // Virtual dimensions
@@ -315,6 +417,7 @@ class TouchControlsOverlay {
     create() {
         // Get UI scale from UIScene (for responsive scaling)
         const uiScale = this.uiScene.uiScale || 1.0;
+        this.viewportInfo = this.uiScene.viewportInfo || null;
         
         // Calculate responsive scale (clamp between min and max)
         const config = window.TOUCH_CONTROLS_CONFIG || this.config;
@@ -322,9 +425,9 @@ class TouchControlsOverlay {
         const maxScale = config.maxScale || 1.2;
         const responsiveScale = Math.max(minScale, Math.min(maxScale, uiScale));
         
-        // Calculate positions using virtual coordinates
-        const joystickX = this.config.joystick.marginLeft + this.config.joystick.baseRadius;
-        const joystickY = this.virtualHeight - this.config.joystick.marginBottom - this.config.joystick.baseRadius;
+        // Calculate current screen metrics so controls can live outside the gameplay viewport
+        const metrics = this.getScreenMetrics();
+        this.screenMetrics = metrics;
         
         // Scale joystick sizes
         const scaledBaseRadius = this.config.joystick.baseRadius * responsiveScale;
@@ -335,11 +438,19 @@ class TouchControlsOverlay {
         const finalBaseRadius = Math.max(scaledBaseRadius, minTouchTarget);
         const finalKnobRadius = Math.max(scaledKnobRadius, minTouchTarget * 0.375);
         
+        const displayBaseRadius = finalBaseRadius * responsiveScale;
+        const joystickPosition = this.calculateJoystickPosition(
+            metrics.screenWidth,
+            metrics.screenHeight,
+            metrics.viewport,
+            displayBaseRadius
+        );
+        
         // Create virtual joystick
         this.joystick = new VirtualJoystick(
-            this.uiScene,
-            joystickX,
-            joystickY,
+            this.renderScene,
+            joystickPosition.x,
+            joystickPosition.y,
             finalBaseRadius,
             finalKnobRadius,
             this.config.joystick
@@ -351,10 +462,20 @@ class TouchControlsOverlay {
             this.joystick.container.setScale(responsiveScale);
         }
         
-        // Calculate button positions (diamond layout)
-        const buttonCenterX = this.virtualWidth - this.config.buttons.marginRight - (this.config.buttons.spacing * 0.7);
-        const buttonCenterY = this.virtualHeight - this.config.buttons.marginBottom - (this.config.buttons.spacing * 0.5);
+        // Calculate button positions (diamond layout) using actual screen dimensions
+        // Align button center vertically with the joystick
+        const buttonCenterX = metrics.screenWidth - this.config.buttons.marginRight - (this.config.buttons.spacing * 0.7);
+        const buttonCenterY = joystickPosition.y; // Align with joystick Y position
         const spacing = this.config.buttons.spacing;
+        
+        console.log('📱 Button positions:', {
+            screenWidth: metrics.screenWidth,
+            screenHeight: metrics.screenHeight,
+            joystickY: joystickPosition.y,
+            buttonCenterX,
+            buttonCenterY,
+            spacing
+        });
         
         // Scale button size
         const scaledButtonSize = this.config.buttons.size * responsiveScale;
@@ -363,11 +484,11 @@ class TouchControlsOverlay {
         // Create action buttons in diamond pattern
         // Top: Jump
         this.buttons.jump = new ActionButton(
-            this.uiScene,
+            this.renderScene,
             buttonCenterX,
             buttonCenterY - spacing,
             finalButtonSize,
-            'J',
+            'JUMP',
             'jump',
             this.config.buttons
         );
@@ -376,13 +497,13 @@ class TouchControlsOverlay {
             this.buttons.jump.container.setScale(responsiveScale);
         }
         
-        // Left: Punch
+        // Left: Attack (Punch)
         this.buttons.punch = new ActionButton(
-            this.uiScene,
+            this.renderScene,
             buttonCenterX - spacing,
             buttonCenterY,
             finalButtonSize,
-            'P',
+            'ATTACK',
             'punch',
             this.config.buttons
         );
@@ -391,13 +512,13 @@ class TouchControlsOverlay {
             this.buttons.punch.container.setScale(responsiveScale);
         }
         
-        // Right: Character Switch
+        // Right: Switch (Character Switch)
         this.buttons.characterSwitch = new ActionButton(
-            this.uiScene,
+            this.renderScene,
             buttonCenterX + spacing,
             buttonCenterY,
             finalButtonSize,
-            'C',
+            'SWITCH',
             'characterSwitch',
             this.config.buttons
         );
@@ -406,13 +527,13 @@ class TouchControlsOverlay {
             this.buttons.characterSwitch.container.setScale(responsiveScale);
         }
         
-        // Bottom: Record Throw
+        // Bottom: Throw (Record Throw)
         this.buttons.recordThrow = new ActionButton(
-            this.uiScene,
+            this.renderScene,
             buttonCenterX,
             buttonCenterY + spacing,
             finalButtonSize,
-            'T',
+            'THROW',
             'recordThrow',
             this.config.buttons
         );
@@ -429,8 +550,8 @@ class TouchControlsOverlay {
         
         // Listen for UI scale changes (on window resize)
         if (this.uiScene) {
-            this.uiScene.events.on('uiScaleChanged', (newScale) => {
-                this.updateScale(newScale);
+            this.uiScene.events.on('uiScaleChanged', (newScale, viewportInfo) => {
+                this.updateScale(newScale, viewportInfo);
             });
         }
         
@@ -441,7 +562,11 @@ class TouchControlsOverlay {
      * Update scale of all controls (called on window resize)
      * @param {number} newScale - New UI scale factor
      */
-    updateScale(newScale) {
+    updateScale(newScale, viewportInfo = null) {
+        if (viewportInfo) {
+            this.viewportInfo = viewportInfo;
+        }
+        
         const config = window.TOUCH_CONTROLS_CONFIG || this.config;
         const minScale = config.minScale || 0.8;
         const maxScale = config.maxScale || 1.2;
@@ -458,6 +583,7 @@ class TouchControlsOverlay {
         });
         
         this.currentScale = responsiveScale;
+        this.repositionJoystick(responsiveScale);
         console.log('📱 Touch controls scale updated to:', responsiveScale);
     }
     
@@ -504,14 +630,17 @@ class TouchControlsOverlay {
     
     setVisible(visible) {
         this.visible = visible;
+        console.log(`📱 Setting touch controls visibility to: ${visible}`);
         
         if (this.joystick) {
             this.joystick.setVisible(visible);
+            console.log(`📱 Joystick visibility set to: ${visible}`);
         }
         
-        Object.values(this.buttons).forEach(button => {
+        Object.values(this.buttons).forEach((button, index) => {
             if (button) {
                 button.setVisible(visible);
+                console.log(`📱 Button ${button.label} visibility set to: ${visible}`);
             }
         });
     }
@@ -526,6 +655,99 @@ class TouchControlsOverlay {
                 button.destroy();
             }
         });
+    }
+    
+    getScreenMetrics() {
+        const scaleManager = (this.renderScene && this.renderScene.scale) || (this.uiScene && this.uiScene.scale);
+        const screenWidth = (window.visualViewport && window.visualViewport.width) ||
+            window.innerWidth ||
+            (scaleManager ? scaleManager.width : this.virtualWidth);
+        const screenHeight = (window.visualViewport && window.visualViewport.height) ||
+            window.innerHeight ||
+            (scaleManager ? scaleManager.height : this.virtualHeight);
+        const viewport = this.viewportInfo || (this.uiScene ? this.uiScene.viewportInfo : null) || {
+            x: 0,
+            y: 0,
+            width: this.virtualWidth,
+            height: this.virtualHeight
+        };
+        
+        return {
+            screenWidth,
+            screenHeight,
+            viewport
+        };
+    }
+    
+    calculateJoystickPosition(screenWidth, screenHeight, viewport, displayBaseRadius) {
+        const joystickConfig = this.config.joystick || {};
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const horizontalPadding = joystickConfig.horizontalPadding || 32;
+        const verticalPadding = joystickConfig.verticalPadding || 48;
+        const placementMode = joystickConfig.placementMode || 'auto'; // auto | screen | pillar
+        const anchorX = typeof joystickConfig.screenAnchorX === 'number' ? joystickConfig.screenAnchorX : 0.1;
+        const anchorY = typeof joystickConfig.screenAnchorY === 'number' ? joystickConfig.screenAnchorY : 0.7;
+        const screenOffsetX = joystickConfig.screenOffsetX || 0;
+        const screenOffsetY = joystickConfig.screenOffsetY || 0;
+        const minScreenPaddingX = joystickConfig.minScreenPaddingX || horizontalPadding;
+        const minScreenPaddingY = joystickConfig.minScreenPaddingY || verticalPadding;
+        
+        // Base screen-anchored position (percent of actual display)
+        const screenAnchoredX = clamp(
+            (screenWidth * anchorX) + screenOffsetX,
+            displayBaseRadius + minScreenPaddingX,
+            screenWidth - displayBaseRadius - minScreenPaddingX
+        );
+        const screenAnchoredY = clamp(
+            (screenHeight * anchorY) + screenOffsetY,
+            displayBaseRadius + minScreenPaddingY,
+            screenHeight - displayBaseRadius - minScreenPaddingY
+        );
+        
+        const leftSafeArea = viewport ? viewport.x : 0;
+        const hasPillarSpace = leftSafeArea > (joystickConfig.pillarMinWidth || (displayBaseRadius * 1.25));
+        const shouldUsePillar = (placementMode === 'pillar') || (placementMode === 'auto' && hasPillarSpace);
+        
+        if (shouldUsePillar && hasPillarSpace) {
+            const pillarAnchorRatio = (typeof joystickConfig.pillarAnchorRatio === 'number') ? joystickConfig.pillarAnchorRatio : 0.5;
+            const pillarOffsetX = joystickConfig.pillarOffsetX || 0;
+            const pillarAnchorY = (typeof joystickConfig.pillarAnchorY === 'number') ? joystickConfig.pillarAnchorY : anchorY;
+            const pillarX = clamp(
+                (leftSafeArea * pillarAnchorRatio) - pillarOffsetX,
+                displayBaseRadius + horizontalPadding,
+                screenAnchoredX
+            );
+            const viewportTop = viewport ? viewport.y : 0;
+            const viewportHeight = viewport ? viewport.height : screenHeight;
+            const pillarY = clamp(
+                viewportTop + (viewportHeight * pillarAnchorY),
+                displayBaseRadius + verticalPadding,
+                screenHeight - displayBaseRadius - verticalPadding
+            );
+            return { x: pillarX, y: pillarY };
+        }
+        
+        // Fallback to pure screen anchoring so controls remain independent of the game window
+        return {
+            x: screenAnchoredX,
+            y: screenAnchoredY
+        };
+    }
+    
+    repositionJoystick(scaleFactor) {
+        if (!this.joystick || !this.joystick.container) return;
+        
+        const metrics = this.getScreenMetrics();
+        this.screenMetrics = metrics;
+        const scale = scaleFactor || this.currentScale || 1;
+        const displayBaseRadius = this.joystick.baseRadius * scale;
+        const { x, y } = this.calculateJoystickPosition(
+            metrics.screenWidth,
+            metrics.screenHeight,
+            metrics.viewport,
+            displayBaseRadius
+        );
+        this.joystick.container.setPosition(x, y);
     }
 }
 

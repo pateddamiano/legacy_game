@@ -112,9 +112,6 @@ class MainMenuScene extends Phaser.Scene {
             console.log('🏠 MainMenuScene: Creating menu UI...');
             this.createMenuUI();
             
-            // Create fullscreen trigger (mobile only)
-            this.createFullscreenTrigger();
-            
             // Check orientation and show prompt if needed
             this.checkOrientation();
             
@@ -949,130 +946,6 @@ class MainMenuScene extends Phaser.Scene {
         });
     }
     
-    createFullscreenTrigger() {
-        // Show on mobile devices or if explicitly enabled
-        const shouldShow = (window.DeviceManager && window.DeviceManager.isMobile) || 
-                          (window.DEBUG_MODE && window.DeviceManager);
-        
-        if (!shouldShow) return;
-        
-        console.log('📱 Creating mobile fullscreen trigger in MainMenuScene...');
-        
-        // Create a "Tap to Fullscreen" button in the top-left corner
-        const btnX = 100; // Virtual coordinates
-        const btnY = 50;
-        
-        // Create button background for better visibility
-        const btnBg = this.add.rectangle(btnX, btnY, 180, 40, 0x000000, 0.8);
-        btnBg.setStrokeStyle(2, 0xFFFFFF, 0.7);
-        btnBg.setScrollFactor(0);
-        btnBg.setDepth(1000);
-        btnBg.setInteractive({ useHandCursor: true });
-        
-        // Create button text
-        const fullscreenBtn = this.add.text(btnX, btnY, '[ FULLSCREEN ]', {
-            fontSize: '20px',
-            fill: '#FFFFFF',
-            fontFamily: GAME_CONFIG.ui.fontFamily || 'VT323',
-            fontStyle: 'bold'
-        });
-        fullscreenBtn.setOrigin(0.5);
-        fullscreenBtn.setScrollFactor(0);
-        fullscreenBtn.setDepth(1001);
-        fullscreenBtn.setInteractive({ useHandCursor: true });
-        
-        // Store reference for state updates
-        this.fullscreenButton = fullscreenBtn;
-        this.fullscreenButtonBg = btnBg;
-        
-        // Toggle fullscreen on click - use game's scale manager
-        const toggleFullscreen = (pointer) => {
-            console.log('📱 Fullscreen button clicked');
-            console.log('📱 Scale manager:', this.game.scale);
-            console.log('📱 Is fullscreen:', this.game.scale.isFullscreen);
-            
-            try {
-                const scaleManager = this.game.scale;
-                
-                if (scaleManager.isFullscreen) {
-                    console.log('📱 Attempting to exit fullscreen...');
-                    scaleManager.stopFullscreen();
-                } else {
-                    console.log('📱 Attempting to enter fullscreen...');
-                    // Request fullscreen - Phaser will handle the API
-                    scaleManager.startFullscreen();
-                }
-            } catch (error) {
-                console.error('📱 Fullscreen error:', error);
-                // Fallback to native fullscreen API
-                try {
-                    const element = document.getElementById('game-container') || document.documentElement;
-                    if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement) {
-                        console.log('📱 Using native fullscreen API (enter)...');
-                        if (element.requestFullscreen) {
-                            element.requestFullscreen();
-                        } else if (element.webkitRequestFullscreen) {
-                            element.webkitRequestFullscreen();
-                        } else if (element.msRequestFullscreen) {
-                            element.msRequestFullscreen();
-                        } else if (element.mozRequestFullScreen) {
-                            element.mozRequestFullScreen();
-                        }
-                    } else {
-                        console.log('📱 Using native fullscreen API (exit)...');
-                        if (document.exitFullscreen) {
-                            document.exitFullscreen();
-                        } else if (document.webkitExitFullscreen) {
-                            document.webkitExitFullscreen();
-                        } else if (document.msExitFullscreen) {
-                            document.msExitFullscreen();
-                        } else if (document.mozCancelFullScreen) {
-                            document.mozCancelFullScreen();
-                        }
-                    }
-                } catch (fallbackError) {
-                    console.error('📱 Fullscreen fallback also failed:', fallbackError);
-                    alert('Fullscreen is not supported in this browser. Please use F11 or your browser\'s fullscreen option.');
-                }
-            }
-        };
-        
-        btnBg.on('pointerdown', toggleFullscreen);
-        fullscreenBtn.on('pointerdown', toggleFullscreen);
-        
-        // Update button text based on fullscreen state - use game's scale manager
-        const scaleManager = this.game.scale;
-        scaleManager.on('fullscreenchange', () => {
-            if (this.fullscreenButton) {
-                if (scaleManager.isFullscreen) {
-                    this.fullscreenButton.setText('[ EXIT FULL ]');
-                } else {
-                    this.fullscreenButton.setText('[ FULLSCREEN ]');
-                }
-            }
-        });
-        
-        // Also listen to Phaser's fullscreen events
-        scaleManager.on('enterfullscreen', () => {
-            if (this.fullscreenButton) {
-                this.fullscreenButton.setText('[ EXIT FULL ]');
-            }
-        });
-        
-        scaleManager.on('leavefullscreen', () => {
-            if (this.fullscreenButton) {
-                this.fullscreenButton.setText('[ FULLSCREEN ]');
-            }
-        });
-        
-        // Check initial state
-        if (scaleManager.isFullscreen) {
-            fullscreenBtn.setText('[ EXIT FULL ]');
-        }
-        
-        console.log('📱 Fullscreen button created in MainMenuScene');
-    }
-    
     checkOrientation() {
         if (!window.DeviceManager) return;
         
@@ -1097,24 +970,91 @@ class MainMenuScene extends Phaser.Scene {
         
         this.orientationOverlay.add([bg, text, icon]);
         
+        let viewportSettleTimer = null;
+        const scheduleViewportSettle = () => {
+            if (viewportSettleTimer) {
+                clearTimeout(viewportSettleTimer);
+            }
+            viewportSettleTimer = setTimeout(() => {
+                LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight);
+            }, 200);
+        };
+        
         // Function to update overlay position and visibility
         const updateOrientationCheck = () => {
-            if (window.DeviceManager.shouldShowRotatePrompt()) {
+            if (window.DeviceManager) {
+                window.DeviceManager.checkOrientation();
+            }
+            const shouldShow = window.DeviceManager.shouldShowRotatePrompt();
+            if (shouldShow) {
+                this.wasPortrait = true;
                 const centerX = this.cameras.main.midPoint.x;
                 const centerY = this.cameras.main.midPoint.y;
                 this.orientationOverlay.setPosition(centerX, centerY);
                 this.orientationOverlay.setVisible(true);
                 // Pause game inputs if possible
             } else {
+                if (this.wasPortrait) {
+                    console.log('📱 Orientation restored to landscape, restarting MainMenuScene for clean layout.');
+                    this.wasPortrait = false;
+                    // Restart the scene to ensure full layout reset
+                    this.scene.restart();
+                    return;
+                }
                 this.orientationOverlay.setVisible(false);
+                // Ensure layout re-applies after overlay hides
+                setTimeout(() => LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight), 0);
             }
         };
         
         // Check initially
         updateOrientationCheck();
         
-        // Check on resize
+        // Check on Phaser scale resize
         this.scale.on('resize', updateOrientationCheck);
+        
+        // Additional listeners for native resize/orientation events (some mobile browsers skip Phaser resize)
+        const reapplyLayout = () => {
+            if (this.scale?.refresh) {
+                this.scale.refresh();
+            }
+            LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight);
+            updateOrientationCheck();
+        };
+        
+        this.orientationResizeHandler = () => {
+            // Allow visualViewport to update before recalculating
+            setTimeout(reapplyLayout, 50);
+        };
+        
+        this.orientationChangeHandler = () => {
+            // Slightly longer delay on orientationchange for mobile browsers
+            setTimeout(reapplyLayout, 200);
+        };
+        
+        if (window.visualViewport) {
+            this.visualViewportHandler = () => {
+                setTimeout(reapplyLayout, 50);
+            };
+            window.visualViewport.addEventListener('resize', this.visualViewportHandler);
+            window.visualViewport.addEventListener('scroll', scheduleViewportSettle);
+        }
+        
+        window.addEventListener('resize', this.orientationResizeHandler);
+        window.addEventListener('orientationchange', this.orientationChangeHandler);
+        
+        // Clean up listeners when scene shuts down
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            window.removeEventListener('resize', this.orientationResizeHandler);
+            window.removeEventListener('orientationchange', this.orientationChangeHandler);
+            if (window.visualViewport && this.visualViewportHandler) {
+                window.visualViewport.removeEventListener('resize', this.visualViewportHandler);
+                window.visualViewport.removeEventListener('scroll', scheduleViewportSettle);
+            }
+            if (viewportSettleTimer) {
+                clearTimeout(viewportSettleTimer);
+            }
+        });
     }
 }
 

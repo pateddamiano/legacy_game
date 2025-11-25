@@ -56,10 +56,20 @@ const LayoutManager = {
      * @param {number} targetHeight - Virtual height
      */
     applyToScene(scene, targetWidth, targetHeight) {
-        // Get dimensions from Phaser Scale Manager (which syncs with window)
-        const scaleWidth = scene.scale.width;
-        const scaleHeight = scene.scale.height;
+        if (!scene || !scene.cameras || !scene.cameras.main) {
+            console.warn('📏 LayoutManager: Scene camera not ready, skipping layout.');
+            return {
+                x: 0,
+                y: 0,
+                width: targetWidth,
+                height: targetHeight,
+                scale: 1
+            };
+        }
         
+        const camera = scene.cameras.main;
+        const scaleWidth = scene.scale ? scene.scale.width : targetWidth;
+        const scaleHeight = scene.scale ? scene.scale.height : targetHeight;
         
         // Always use window dimensions for calculation (more reliable than scale manager)
         // Prefer visualViewport for mobile, fall back to window.inner* for desktop
@@ -74,16 +84,16 @@ const LayoutManager = {
         const viewport = this.calculateGameViewport(calcWidth, calcHeight, targetWidth, targetHeight);
         
         // Apply the scale as zoom so that targetWidth x targetHeight fits in the viewport
-        scene.cameras.main.setZoom(viewport.scale);
+        camera.setZoom(viewport.scale);
         
         // Set camera bounds to match the virtual world size
-        scene.cameras.main.setBounds(0, 0, targetWidth, targetHeight);
+        camera.setBounds(0, 0, targetWidth, targetHeight);
         
         // Set viewport to the calculated centered rectangle (in screen pixels)
-        scene.cameras.main.setViewport(viewport.x, viewport.y, viewport.width, viewport.height);
+        camera.setViewport(viewport.x, viewport.y, viewport.width, viewport.height);
         
         // Center the camera on the middle of the virtual world
-        scene.cameras.main.centerOn(targetWidth / 2, targetHeight / 2);
+        camera.centerOn(targetWidth / 2, targetHeight / 2);
         
         console.log(`📏 Layout updated: Viewport ${viewport.width}x${viewport.height} at (${viewport.x}, ${viewport.y}), Zoom: ${viewport.scale.toFixed(2)}`);
         

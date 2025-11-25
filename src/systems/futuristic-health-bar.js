@@ -73,8 +73,8 @@ class FuturisticHealthBar {
         
         // Configuration
         this.config = {
-            x: 110,
-            y: 130,
+            x: 70,
+            y: 60,
             width: 350, // Match health bar width
             height: 50, // Will be extended to fit name + health bar
             borderWidth: 8,
@@ -111,25 +111,17 @@ class FuturisticHealthBar {
             height: this.scene.cameras.main.height
         });
         
-        // Create main container
+        // Create main container (position & scale will be applied via virtual coordinate helper)
         this.container = this.scene.add.container(this.config.x, this.config.y);
         this.container.setDepth(2000);
         this.container.setScrollFactor(0);
-        
-        // Scale the container to match the UI scene's scale factor
-        // This ensures UI elements appear at the correct size relative to the viewport
-        // The camera zoom is 1.0 for correct positioning, but we need to scale elements to match viewport
-        if (this.scene.uiScale !== undefined) {
-            this.container.setScale(this.scene.uiScale);
-            console.log(`🔍 HEALTHBAR_DEBUG: Applied UI scale ${this.scene.uiScale} to health bar container`);
-        } else {
-            // Fallback: calculate scale from camera zoom if uiScale not set
-            const calculatedScale = this.scene.cameras.main.zoom || 1.0;
-            this.container.setScale(calculatedScale);
-            console.log(`🔍 HEALTHBAR_DEBUG: Applied calculated scale ${calculatedScale} to health bar container`);
-        }
+        this.updateContainerTransform(this.scene?.uiScale, this.scene?.viewportInfo);
         
         console.log('🔍 HEALTHBAR_DEBUG: Container created at:', { x: this.container.x, y: this.container.y, depth: this.container.depth });
+        
+        if (this.scene?.events?.on) {
+            this.scene.events.on('uiScaleChanged', this.handleUiScaleChanged, this);
+        }
         
         // Determine initial positions based on active character
         // Active card is at (0, 0), inactive card is offset left and above
@@ -159,6 +151,89 @@ class FuturisticHealthBar {
         this.startGlowAnimation();
         
         console.log('✨ FuturisticHealthBar created');
+    }
+
+    handleUiScaleChanged(newScale, viewportInfo) {
+        this.updateContainerTransform(newScale, viewportInfo);
+    }
+
+    updateContainerTransform(newScale, viewportInfo) {
+        if (!this.container) return;
+        
+        const camera = this.scene?.cameras?.main;
+        const uiScale = (typeof newScale === 'number')
+            ? newScale
+            : (this.scene?.uiScale ?? camera?.zoom ?? 1);
+        
+        const screenX = this.config.x * uiScale;
+        const screenY = this.config.y * uiScale;
+        
+        this.container.setScale(uiScale);
+        this.container.setPosition(screenX, screenY);
+        
+        this.logPositionDiagnostics('updateContainerTransform', viewportInfo, uiScale);
+    }
+
+    logPositionDiagnostics(context = 'unspecified', viewportInfo = null, forcedScale = null) {
+        if (!this.container || !this.scene || !this.scene.cameras?.main) {
+            console.warn('🔍 HEALTHBAR_DEBUG: Unable to log position diagnostics (missing camera/container)', { context });
+            return;
+        }
+        
+        const camera = this.scene.cameras.main;
+        const viewport = viewportInfo || this.scene.viewportInfo || camera.viewport || {
+            x: 0,
+            y: 0,
+            width: camera.width,
+            height: camera.height
+        };
+        const uiScale = forcedScale ?? this.scene.uiScale ?? camera.zoom ?? 1;
+        const zoom = camera.zoom ?? 1;
+        const scrollX = camera.scrollX ?? 0;
+        const scrollY = camera.scrollY ?? 0;
+        
+        const actualMarginX = (this.container.x - scrollX) * zoom;
+        const actualMarginY = (this.container.y - scrollY) * zoom;
+        const expectedMarginX = this.config.x * uiScale;
+        const expectedMarginY = this.config.y * uiScale;
+        
+        const actualScreenX = viewport.x + actualMarginX;
+        const actualScreenY = viewport.y + actualMarginY;
+        const expectedScreenX = viewport.x + expectedMarginX;
+        const expectedScreenY = viewport.y + expectedMarginY;
+        
+        console.log('🔍 HEALTHBAR_DEBUG: Position diagnostics', {
+            context,
+            uiScale,
+            viewport,
+            camera: {
+                zoom,
+                scrollX,
+                scrollY
+            },
+            configPosition: {
+                x: this.config.x,
+                y: this.config.y
+            },
+            containerPosition: {
+                x: this.container.x,
+                y: this.container.y,
+                scaleX: this.container.scaleX,
+                scaleY: this.container.scaleY
+            },
+            expectedScreenPosition: {
+                x: expectedScreenX,
+                y: expectedScreenY
+            },
+            actualScreenPosition: {
+                x: actualScreenX,
+                y: actualScreenY
+            },
+            marginDeltaPx: {
+                x: actualMarginX - expectedMarginX,
+                y: actualMarginY - expectedMarginY
+            }
+        });
     }
     
     createCard(characterName, offsetX, offsetY) {
@@ -549,22 +624,25 @@ class FuturisticHealthBar {
     }
     
     updateShadow(card, containerX, containerY, height, isActive) {
-        if (!card.shadow) return;
+        if (!card.shadow || !this.container) return;
         
-        // Calculate absolute position (container position + card position within container)
-        const absoluteX = this.config.x + containerX;
-        const absoluteY = this.config.y + containerY;
+        const scale = this.container.scaleX || 1;
+        const absoluteX = this.container.x + (containerX * scale);
+        const absoluteY = this.container.y + (containerY * scale);
+        const width = (this.config.width + card.shadowBlur) * scale;
+        const rectHeight = (height + card.shadowBlur) * scale;
+        const offset = card.shadowOffset * scale;
+        const cornerRadius = 4 * scale;
         
         card.shadow.clear();
-        // Active card gets brighter shadow, inactive gets dimmer shadow
         const shadowOpacity = isActive ? 0.3 : 0.15;
-        card.shadow.fillStyle(0x000000, shadowOpacity); // Black with opacity based on active state
+        card.shadow.fillStyle(0x000000, shadowOpacity);
         card.shadow.fillRoundedRect(
-            absoluteX + card.shadowOffset,
-            absoluteY + card.shadowOffset,
-            this.config.width + card.shadowBlur,
-            height + card.shadowBlur,
-            4 // Corner radius
+            absoluteX + offset,
+            absoluteY + offset,
+            width,
+            rectHeight,
+            cornerRadius
         );
     }
     
@@ -893,6 +971,10 @@ class FuturisticHealthBar {
     // ========================================
     
     destroy() {
+        if (this.scene?.events?.off) {
+            this.scene.events.off('uiScaleChanged', this.handleUiScaleChanged, this);
+        }
+        
         // Stop all tweens
         if (this.glowTween) {
             this.glowTween.stop();

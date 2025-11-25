@@ -25,6 +25,13 @@ class UIManager {
         this.scoreContainer = null;
         this.scoreMicrophone = null;
         
+        this.currentUiScale = this.uiScene?.uiScale ?? 1;
+        this.viewportInfo = this.uiScene?.viewportInfo ?? null;
+        
+        if (this.uiScene?.events?.on) {
+            this.uiScene.events.on('uiScaleChanged', this.handleUiScaleChanged, this);
+        }
+        
         // Boss health bar elements
         this.bossHealthBar = null;
         this.bossHealthBarBg = null;
@@ -308,29 +315,21 @@ class UIManager {
     
     createLivesDisplay() {
         // Position below health bar (FuturisticHealthBar is at y:60, height ~84px, so lives at y:160 for spacing)
-        const livesX = 100;
-        const livesY = 300; // Moved down from 120 to avoid overlap
+        const livesX = 70;
+        const livesY = 160; // Moved down from 120 to avoid overlap
         const boxWidth = 120;
         const boxHeight = 40;
         const plusSize = 32; // Increased from 24 to 32
         const plusSpacing = 32; // Adjusted spacing for bigger symbols
         
         // Create container for lives display
+        this.livesConfig = { x: livesX, y: livesY };
         this.livesContainer = this.uiScene.add.container(livesX, livesY);
         this.livesContainer.setDepth(2000);
         this.livesContainer.setScrollFactor(0);
         
-        // Scale the container to match the UI scene's scale factor
-        // This ensures UI elements appear at the correct size relative to the viewport
-        if (this.uiScene.uiScale !== undefined) {
-            this.livesContainer.setScale(this.uiScene.uiScale);
-            console.log(`❤️ LIVES_DEBUG: Applied UI scale ${this.uiScene.uiScale} to lives container`);
-        } else {
-            // Fallback: calculate scale from camera zoom if uiScale not set
-            const calculatedScale = this.uiScene.cameras.main.zoom || 1.0;
-            this.livesContainer.setScale(calculatedScale);
-            console.log(`❤️ LIVES_DEBUG: Applied calculated scale ${calculatedScale} to lives container`);
-        }
+        this.updateLivesTransform();
+        console.log(`❤️ LIVES_DEBUG: Lives container positioned with scale ${this.currentUiScale}`);
         
         // Create gray box background with bezel
         // Outer border (bezel effect)
@@ -395,6 +394,28 @@ class UIManager {
         
         console.log('❤️ Lives display created');
     }
+
+    handleUiScaleChanged(newScale, viewportInfo) {
+        if (typeof newScale === 'number') {
+            this.currentUiScale = newScale;
+        }
+        if (viewportInfo) {
+            this.viewportInfo = viewportInfo;
+        }
+        this.updateLivesTransform();
+        this.updateScoreTransform();
+    }
+
+    updateLivesTransform() {
+        if (!this.livesContainer || !this.livesConfig) return;
+        
+        const scale = this.currentUiScale ?? 1;
+        const screenX = this.livesConfig.x * scale;
+        const screenY = this.livesConfig.y * scale;
+        
+        this.livesContainer.setScale(scale);
+        this.livesContainer.setPosition(screenX, screenY);
+    }
     
     updateLivesDisplay(lives, flashLostLife = false) {
         if (!this.livesPlusSymbols || this.livesPlusSymbols.length === 0) {
@@ -453,92 +474,16 @@ class UIManager {
     // ========================================
     
     createScoreDisplay() {
-        // Create container for score display elements
-        // Use virtual coordinates (1200x720) instead of screen coordinates
         const virtualWidth = 1200;
-        const virtualHeight = 720;
+        const containerX = virtualWidth - 100;
+        const containerY = 100;
         
-        console.log('🎤 SCORE_POS_DEBUG: ====== Score Display Creation ======');
-        console.log('🎤 SCORE_POS_DEBUG: Virtual dimensions:', { virtualWidth, virtualHeight });
-        console.log('🎤 SCORE_POS_DEBUG: UI Scene camera state:', {
-            zoom: this.uiScene.cameras.main.zoom,
-            scrollX: this.uiScene.cameras.main.scrollX,
-            scrollY: this.uiScene.cameras.main.scrollY,
-            x: this.uiScene.cameras.main.x,
-            y: this.uiScene.cameras.main.y,
-            width: this.uiScene.cameras.main.width,
-            height: this.uiScene.cameras.main.height,
-            viewport: this.uiScene.cameras.main.getBounds()
-        });
-        console.log('🎤 SCORE_POS_DEBUG: UI Scene scale:', {
-            scaleWidth: this.uiScene.scale.width,
-            scaleHeight: this.uiScene.scale.height,
-            uiScale: this.uiScene.uiScale
-        });
-        
-        // Position in upper right corner
-        // IMPORTANT: The viewport is larger than the virtual world and centered
-        // Camera width: 2052, Virtual width: 1200
-        // With zoom 1.0, virtual coords map 1:1 to viewport coords
-        // The right edge of the screen/viewport in virtual coordinates is: cameraWidth
-        // We want to position at the right edge of the screen, not the right edge of the virtual world
-        const cameraWidth = this.uiScene.cameras.main.width;
-        
-        const rightMargin = 120; // Margin from right edge of screen
-        const topMargin = 170; // Margin from top edge (moved down from 20 to align better)
-        const textRightOffset = 10; // Text right edge is 10px left of container origin
-        // When container is scaled, child positions are also scaled
-        // Text at -10 with container scale 1.71 means text is at -17.1 in world space
-        // So to place text's right edge at (cameraWidth - margin), container should be at:
-        // containerX = cameraWidth - margin + (textRightOffset * scale)
-        const containerScale = this.uiScene.uiScale || 1.0;
-        const scaledTextOffset = textRightOffset * containerScale;
-        const containerX = cameraWidth - rightMargin + scaledTextOffset;
-        const containerY = topMargin;
-        
-        console.log('🎤 SCORE_POS_DEBUG: Calculated container position:', {
-            containerX,
-            containerY,
-            rightMargin,
-            textRightOffset,
-            scaledTextOffset,
-            cameraWidth,
-            virtualWidth,
-            containerScale,
-            calculation: `cameraWidth (${cameraWidth}) - rightMargin (${rightMargin}) + scaledTextOffset (${scaledTextOffset}) = ${containerX}`
-        });
-        
+        // Create container for score display elements
+        this.scoreConfig = { x: containerX, y: containerY };
         this.scoreContainer = this.uiScene.add.container(containerX, containerY);
         this.scoreContainer.setDepth(2003);
         this.scoreContainer.setScrollFactor(0);
-        
-        console.log('🎤 SCORE_POS_DEBUG: Container created:', {
-            x: this.scoreContainer.x,
-            y: this.scoreContainer.y,
-            depth: this.scoreContainer.depth,
-            scrollFactor: this.scoreContainer.scrollFactorX,
-            scaleX: this.scoreContainer.scaleX,
-            scaleY: this.scoreContainer.scaleY
-        });
-        
-        // Scale the container to match the UI scene's scale factor
-        // This ensures UI elements appear at the correct size relative to the viewport
-        if (this.uiScene.uiScale !== undefined) {
-            this.scoreContainer.setScale(this.uiScene.uiScale);
-            console.log(`🎤 SCORE_POS_DEBUG: Applied UI scale ${this.uiScene.uiScale} to score container`);
-        } else {
-            // Fallback: calculate scale from camera zoom if uiScale not set
-            const calculatedScale = this.uiScene.cameras.main.zoom || 1.0;
-            this.scoreContainer.setScale(calculatedScale);
-            console.log(`🎤 SCORE_POS_DEBUG: Applied calculated scale ${calculatedScale} to score container`);
-        }
-        
-        console.log('🎤 SCORE_POS_DEBUG: Container after scaling:', {
-            x: this.scoreContainer.x,
-            y: this.scoreContainer.y,
-            scaleX: this.scoreContainer.scaleX,
-            scaleY: this.scoreContainer.scaleY
-        });
+        this.updateScoreTransform();
         
         // Create the score text first (positioned to the left)
         this.scoreText = this.uiScene.add.text(-10, 0, '0', {
@@ -607,38 +552,16 @@ class UIManager {
         // Add all elements to the container (circle first so it's behind)
         this.scoreContainer.add([this.scoreCircle, this.scoreMicrophone, this.scoreText]);
         
-        console.log('🎤 SCORE_POS_DEBUG: Elements added to container');
-        console.log('🎤 SCORE_POS_DEBUG: Element positions relative to container:', {
-            text: { x: this.scoreText.x, y: this.scoreText.y, origin: this.scoreText.originX + ',' + this.scoreText.originY },
-            microphone: { x: this.scoreMicrophone.x, y: this.scoreMicrophone.y, origin: this.scoreMicrophone.originX + ',' + this.scoreMicrophone.originY }
-        });
-        
-        // Calculate world positions
-        const textWorldX = this.scoreContainer.x + (this.scoreText.x * this.scoreContainer.scaleX);
-        const textWorldY = this.scoreContainer.y + (this.scoreText.y * this.scoreContainer.scaleY);
-        const micWorldX = this.scoreContainer.x + (this.scoreMicrophone.x * this.scoreContainer.scaleX);
-        const micWorldY = this.scoreContainer.y + (this.scoreMicrophone.y * this.scoreContainer.scaleY);
-        
-        console.log('🎤 SCORE_POS_DEBUG: Calculated world positions:', {
-            textWorldX,
-            textWorldY,
-            micWorldX,
-            micWorldY,
-            containerX: this.scoreContainer.x,
-            containerY: this.scoreContainer.y,
-            containerScale: this.scoreContainer.scaleX
-        });
-        console.log('🎤 SCORE_POS_DEBUG: Expected vs Actual:', {
-            expectedContainerX: containerX,
-            actualContainerX: this.scoreContainer.x,
-            expectedTextRightEdge: containerX - 10,
-            calculatedTextRightEdge: textWorldX,
-            virtualWidth,
-            distanceFromRight: virtualWidth - textWorldX
-        });
-        console.log('🎤 SCORE_POS_DEBUG: ====== End Score Display Creation ======');
-        
         console.log('🎤 Score display with golden microphone created');
+    }
+
+    updateScoreTransform() {
+        if (!this.scoreContainer || !this.scoreConfig) return;
+        const scale = this.currentUiScale ?? 1;
+        const screenX = this.scoreConfig.x * scale;
+        const screenY = this.scoreConfig.y * scale;
+        this.scoreContainer.setScale(scale);
+        this.scoreContainer.setPosition(screenX, screenY);
     }
     
     updateScoreDisplay(score) {
@@ -1027,6 +950,9 @@ Legend:
     
     // Cleanup method for scene destruction
     destroy() {
+        if (this.uiScene?.events?.off) {
+            this.uiScene.events.off('uiScaleChanged', this.handleUiScaleChanged, this);
+        }
         if (this.debugGraphics) {
             this.debugGraphics.destroy();
         }

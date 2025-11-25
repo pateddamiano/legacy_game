@@ -41,7 +41,7 @@ class AudioManager {
             // Background music settings
             backgroundMusic: {
                 enabled: true,
-                volume: 0.3,
+                volume: 0.35,
                 loop: true,
                 fadeInDuration: 2000, // 2 seconds fade in
                 fadeOutDuration: 1000 // 1 second fade out
@@ -61,7 +61,7 @@ class AudioManager {
                 enemyAttack: { volume: 0.4 },
                 combo: { volume: 0.5 },
                 powerUp: { volume: 0.7 },
-                gameOver: { volume: 0.8 }
+                gameOver: { volume: 0.6 }
             },
 
             // Sound effect spam prevention
@@ -726,7 +726,7 @@ class AudioManager {
     }
     
     playMicrophonePickup() {
-        this.playSoundEffect('microphonePickup', 0.4);
+        this.playSoundEffect('microphonePickup', 0.2);
     }
     
     // Other game events

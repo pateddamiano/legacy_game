@@ -29,55 +29,72 @@ if (window.DEBUG_MODE) {
     console.log('🧪 Debug mode: OFF');
 }
 
-// Game configuration
-const config = {
-    type: Phaser.AUTO,
-    scale: {
-        mode: Phaser.Scale.RESIZE,
-        parent: 'game-container',
-        width: '100%',
-        height: '100%',
-        autoCenter: Phaser.Scale.NO_CENTER,
-        fullscreenTarget: 'game-container' // Enable fullscreen on the game container
-    },
-    parent: 'game-container',
-    backgroundColor: '#000000', // Black background for letterboxing
-    physics: {
-        default: 'arcade',
-        arcade: {
-            gravity: { y: 0 },
-            debug: false
+(() => {
+    let gameInstance = null;
+    
+    function bootPhaserGame() {
+        if (gameInstance) {
+            console.warn('🎮 Game already started, ignoring duplicate start request.');
+            return gameInstance;
         }
-    },
-    // New scene order for proper game flow - Start with audio activation
-    scene: [
-        AudioBootScene,      // Audio activation and essential asset loading
-        MainMenuScene,       // Main menu navigation
-        IntroDialogueScene,  // Story intro before gameplay
-        UIScene,             // UI Overlay (always active on top of game)
-        GameScene            // Actual gameplay with dynamic character switching
-        // TODO: Add more scenes as we build them:
-        // VictoryScene, GameOverScene, etc.
-    ]
-};
-
-// Start the game
-console.log('🎮 ===== STARTING PHASER GAME =====');
-console.log('🎮 Config:', config);
-console.log('🎮 Available scenes:', config.scene.map(s => s.name || s.key || 'Unknown'));
-
-const game = new Phaser.Game(config);
-
-// Initialize Device Manager
-if (window.DeviceManager) {
-    window.DeviceManager.initialize(game);
-}
-
-// Initialize Fullscreen Manager
-if (window.FullscreenManager) {
-    window.FullscreenManager.initialize(game);
-}
-
-console.log('🎮 ✅ Phaser Game instance created successfully');
-console.log('🎮 Game object:', game);
-console.log('🚀 Legacy Game started with new scene architecture!'); 
+        
+        // Game configuration
+        const config = {
+            type: Phaser.AUTO,
+            scale: {
+                mode: Phaser.Scale.RESIZE,
+                parent: 'game-container',
+                width: '100%',
+                height: '100%',
+                autoCenter: Phaser.Scale.NO_CENTER,
+                fullscreenTarget: 'game-container' // Enable fullscreen on the game container
+            },
+            parent: 'game-container',
+            backgroundColor: '#000000', // Black background for letterboxing
+            input: {
+                activePointers: 10, // Enable multi-touch (up to 10 simultaneous touches)
+                touch: true,
+                mouse: true
+            },
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    gravity: { y: 0 },
+                    debug: false
+                }
+            },
+            scene: [
+                AudioBootScene,
+                MainMenuScene,
+                IntroDialogueScene,
+                UIScene,
+                TouchControlsScene,
+                GameScene
+            ]
+        };
+        
+        console.log('🎮 ===== STARTING PHASER GAME =====');
+        console.log('🎮 Config:', config);
+        console.log('🎮 Available scenes:', config.scene.map(s => s.name || s.key || 'Unknown'));
+        
+        gameInstance = new Phaser.Game(config);
+        
+        if (window.DeviceManager) {
+            window.DeviceManager.initialize(gameInstance);
+        }
+        
+        if (window.FullscreenManager) {
+            window.FullscreenManager.initialize(gameInstance);
+        }
+        
+        console.log('🎮 ✅ Phaser Game instance created successfully');
+        console.log('🎮 Game object:', gameInstance);
+        console.log('🚀 Legacy Game started with new scene architecture!');
+        
+        return gameInstance;
+    }
+    
+    window.startLegacyGame = function startLegacyGame() {
+        return bootPhaserGame();
+    };
+})();
