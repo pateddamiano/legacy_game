@@ -33,6 +33,7 @@ class UIManager {
         }
         
         // Boss health bar elements
+        this.bossHealthBarContainer = null;
         this.bossHealthBar = null;
         this.bossHealthBarBg = null;
         this.bossHealthBarBorder = null;
@@ -40,6 +41,7 @@ class UIManager {
         this.bossNameText = null;
         this.bossHealthBarVisible = false;
         this.currentBoss = null;
+        this.bossHealthBarConfig = null;
         
         // Lives display elements
         this.livesContainer = null;
@@ -404,6 +406,7 @@ class UIManager {
         }
         this.updateLivesTransform();
         this.updateScoreTransform();
+        this.updateBossHealthBarTransform();
     }
 
     updateLivesTransform() {
@@ -569,6 +572,17 @@ class UIManager {
         
         // Always update position (doesn't conflict with pulse animation)
         this.scoreContainer.setPosition(screenX, screenY);
+    }
+
+    updateBossHealthBarTransform() {
+        if (!this.bossHealthBarContainer || !this.bossHealthBarConfig) return;
+        
+        const scale = this.currentUiScale ?? 1;
+        const screenX = this.bossHealthBarConfig.x * scale;
+        const screenY = this.bossHealthBarConfig.y * scale;
+        
+        this.bossHealthBarContainer.setScale(scale);
+        this.bossHealthBarContainer.setPosition(screenX, screenY);
     }
     
     updateScoreDisplay(score) {
@@ -812,16 +826,24 @@ Legend:
     // ========================================
     
     createBossHealthBar() {
-        // Use virtual coordinates (1200x720) instead of screen coordinates
+        // Use virtual coordinates (1200x720) for positioning
         const virtualWidth = 1200;
         const virtualHeight = 720;
         const barWidth = 400;
         const barHeight = 30;
-        const barX = virtualWidth / 2; // Center horizontally
-        const barY = virtualHeight - 80; // Position at bottom of screen with 80px margin from bottom
+        const containerX = virtualWidth / 2; // Center horizontally
+        const containerY = virtualHeight - 80; // Position at bottom of screen with 80px margin from bottom
         
-        // Boss name text (positioned above the health bar)
-        this.bossNameText = this.uiScene.add.text(barX, barY - 35, '', {
+        // Store config for transform updates
+        this.bossHealthBarConfig = { x: containerX, y: containerY };
+        
+        // Create container for boss health bar elements
+        this.bossHealthBarContainer = this.uiScene.add.container(containerX, containerY);
+        this.bossHealthBarContainer.setDepth(2003);
+        this.bossHealthBarContainer.setScrollFactor(0);
+        
+        // Boss name text (positioned above the health bar, relative to container)
+        this.bossNameText = this.uiScene.add.text(0, -35, '', {
             fontSize: GAME_CONFIG.ui.fontSize.body,
             fill: '#FFD700',
             fontFamily: GAME_CONFIG.ui.fontFamily,
@@ -830,46 +852,47 @@ Legend:
             strokeThickness: 3
         });
         this.bossNameText.setOrigin(0.5, 0.5);
-        this.bossNameText.setDepth(2004);
-        this.bossNameText.setScrollFactor(0);
         this.bossNameText.setVisible(false);
         
-        // Border
+        // Border (relative to container)
         this.bossHealthBarBorder = this.uiScene.add.rectangle(
-            barX,
-            barY,
+            0,
+            0,
             barWidth + 6,
             barHeight + 6,
             0x000000
         );
         this.bossHealthBarBorder.setOrigin(0.5, 0.5);
-        this.bossHealthBarBorder.setDepth(2003);
-        this.bossHealthBarBorder.setScrollFactor(0);
         this.bossHealthBarBorder.setVisible(false);
         
-        // Background
+        // Background (relative to container)
         this.bossHealthBarBg = this.uiScene.add.rectangle(
-            barX,
-            barY,
+            0,
+            0,
             barWidth,
             barHeight,
             0x404040
         );
         this.bossHealthBarBg.setOrigin(0.5, 0.5);
-        this.bossHealthBarBg.setDepth(2004);
-        this.bossHealthBarBg.setScrollFactor(0);
         this.bossHealthBarBg.setVisible(false);
         
-        // Health fill graphics
+        // Health fill graphics (relative to container)
         this.bossHealthBarGraphics = this.uiScene.add.graphics();
-        this.bossHealthBarGraphics.setDepth(2005);
-        this.bossHealthBarGraphics.setScrollFactor(0);
+        
+        // Add all elements to container
+        this.bossHealthBarContainer.add([
+            this.bossHealthBarBorder,
+            this.bossHealthBarBg,
+            this.bossHealthBarGraphics,
+            this.bossNameText
+        ]);
         
         // Store dimensions
         this.bossBarWidth = barWidth;
         this.bossBarHeight = barHeight;
-        this.bossBarX = barX;
-        this.bossBarY = barY;
+        
+        // Apply initial transform
+        this.updateBossHealthBarTransform();
         
         console.log('👹 Boss health bar created');
     }
@@ -940,13 +963,13 @@ Legend:
             healthColor = 0x8B0000; // Dark red
         }
         
-        // Draw the health bar fill
+        // Draw the health bar fill (relative to container at 0,0)
         if (currentWidth > 0) {
             // Main health bar fill
             this.bossHealthBarGraphics.fillStyle(healthColor);
             this.bossHealthBarGraphics.fillRect(
-                this.bossBarX - this.bossBarWidth / 2,
-                this.bossBarY - this.bossBarHeight / 2,
+                -this.bossBarWidth / 2,
+                -this.bossBarHeight / 2,
                 currentWidth,
                 this.bossBarHeight
             );
@@ -954,8 +977,8 @@ Legend:
             // Add highlight
             this.bossHealthBarGraphics.fillStyle(0xffffff, 0.3);
             this.bossHealthBarGraphics.fillRect(
-                this.bossBarX - this.bossBarWidth / 2,
-                this.bossBarY - this.bossBarHeight / 2,
+                -this.bossBarWidth / 2,
+                -this.bossBarHeight / 2,
                 currentWidth,
                 this.bossBarHeight * 0.4
             );
@@ -972,6 +995,9 @@ Legend:
         }
         if (this.healthBarGraphics) {
             this.healthBarGraphics.destroy();
+        }
+        if (this.bossHealthBarContainer) {
+            this.bossHealthBarContainer.destroy();
         }
         if (this.bossHealthBarGraphics) {
             this.bossHealthBarGraphics.destroy();
