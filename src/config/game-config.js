@@ -26,6 +26,12 @@ const GAME_CONFIG = {
         jumpForce: 400,
         verticalSpeed: 3
     },
+
+    // Input modifiers
+    input: {
+        touchMovementMultiplier: 1.25, // Make analog stick feel snappier without changing keyboard
+        touchDeadZone: 0.04            // Ignore very slight ghost inputs near center
+    },
     
     // Enemy settings
     enemy: {

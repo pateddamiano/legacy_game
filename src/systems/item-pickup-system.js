@@ -76,7 +76,8 @@ const ITEM_TYPES = {
 
 const ITEM_PICKUP_CONFIG = {
     // 📏 SPAWN SETTINGS
-    spawnOffscreenDistance: 50,  // how far off-screen items spawn (in pixels)
+    spawnOffscreenDistance: 200,  // how far off-screen items spawn (in pixels)
+    spawnLeftProbability: 0.1,    // 10% chance to spawn left, 90% right (encourages forward movement)
     
     // 🎮 GENERAL SETTINGS
     particleEffectDuration: 500,
@@ -412,21 +413,25 @@ class ItemPickupManager {
         const maxAttempts = 10;
         
         // Get camera bounds for off-screen spawning
+        // Use virtual dimensions instead of camera.width/height to get world coordinates
         const cameraX = this.scene.cameras.main.scrollX;
-        const cameraWidth = this.scene.cameras.main.width;
+        const virtualWidth = this.scene.virtualWidth || 1200;
+        const virtualHeight = this.scene.virtualHeight || 720;
+        const cameraWidth = virtualWidth;
+        const cameraHeight = virtualHeight;
         const cameraY = this.scene.cameras.main.scrollY;
-        const cameraHeight = this.scene.cameras.main.height;
         
         for (let i = 0; i < maxAttempts; i++) {
-            // Randomly choose left or right side of screen for horizontal spawning
-            const spawnOnLeft = Math.random() < 0.5;
+            // Heavily favor spawning to the right to encourage forward progression
+            // Use configurable probability for left spawns (default 10%)
+            const spawnOnLeft = Math.random() < config.spawnLeftProbability;
             let x;
             
             if (spawnOnLeft) {
-                // Spawn off-screen to the left
+                // Spawn off-screen to the left (10% of the time)
                 x = cameraX - config.spawnOffscreenDistance;
             } else {
-                // Spawn off-screen to the right
+                // Spawn off-screen to the right (90% of the time)
                 x = cameraX + cameraWidth + config.spawnOffscreenDistance;
             }
             

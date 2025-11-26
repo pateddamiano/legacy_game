@@ -125,7 +125,6 @@ class VirtualJoystick {
         if (distance <= this.baseRadius) {
             this.activePointerId = pointer.id;
             this.updateKnobPosition(worldX, worldY);
-            console.log(`📱 Joystick touch started, pointer ID: ${pointer.id}`);
         }
     }
     
@@ -139,8 +138,6 @@ class VirtualJoystick {
     
     onTouchEnd(pointer) {
         if (this.activePointerId !== pointer.id) return;
-        
-        console.log(`📱 Joystick touch ended, pointer ID: ${pointer.id}`);
         
         // Snap knob back to center
         this.knobX = 0;
@@ -221,6 +218,7 @@ class ActionButton {
         this.isPressed = false;
         
         // Visual elements
+        this.depthLayer = null;
         this.background = null;
         this.glow = null;
         this.labelText = null;
@@ -228,18 +226,21 @@ class ActionButton {
         
         // Active touch pointer ID
         this.activePointerId = null;
+        this.baseScale = 1;
     }
     
     create(container) {
-        console.log(`📱 Creating button: ${this.label} at (${this.x}, ${this.y}), size: ${this.size}`);
-        
         // Create container for button elements
         this.container = this.scene.add.container(this.x, this.y);
         const layerDepth = (this.config && typeof this.config.layerDepth === 'number') ? this.config.layerDepth : 5000;
         this.container.setDepth(layerDepth); // Above game and UI HUD
         this.container.setScrollFactor(0); // Fixed to camera
         
-        console.log(`📱 Button ${this.label} - depth: ${layerDepth}, scene: ${this.scene.scene.key}`);
+        // 3D depth layer (backing circle) - offset to create raised effect
+        const depthOffset = this.config.depthOffset ?? 5;
+        const depthColor = this.config.depthColor ?? 0x2a2a2a;
+        const depthOpacity = this.config.depthOpacity ?? 0.6;
+        this.depthLayer = this.scene.add.circle(depthOffset, depthOffset, this.size / 2, depthColor, depthOpacity);
         
         // Soft glow (like joystick)
         const glowColor = this.config.glowColor ?? 0x6fd3ff;
@@ -267,8 +268,8 @@ class ActionButton {
         });
         this.labelText.setOrigin(0.5);
         
-        // Add to container
-        this.container.add([this.glow, this.background, this.labelText]);
+        // Add to container (depth layer first, then glow, background, and text on top)
+        this.container.add([this.depthLayer, this.glow, this.background, this.labelText]);
         
         // Make interactive
         this.background.setInteractive({ useHandCursor: false });
@@ -297,21 +298,36 @@ class ActionButton {
         
         this.activePointerId = pointer.id;
         this.isPressed = true;
-        console.log(`📱 Button ${this.label} pressed, pointer ID: ${pointer.id}`);
         
-        // Visual feedback: scale down
-        this.container.setScale(this.config.pressScale);
+        // Visual feedback: scale down and push into depth layer
+        const pressScale = (typeof this.config.pressScale === 'number') ? this.config.pressScale : 0.95;
+        if (this.container) {
+            this.container.setScale(this.baseScale * pressScale);
+        }
+        const depthOffset = this.config.depthOffset ?? 5;
+        const pushOffset = depthOffset * 0.6; // Push 60% toward the depth layer
+        
+        // Shift background, glow, and text toward depth layer
+        if (this.background) this.background.setPosition(pushOffset, pushOffset);
+        if (this.glow) this.glow.setPosition(pushOffset, pushOffset);
+        if (this.labelText) this.labelText.setPosition(pushOffset, pushOffset);
     }
     
     onTouchEnd(pointer) {
         if (this.activePointerId !== pointer.id) return;
         
-        console.log(`📱 Button ${this.label} released, pointer ID: ${pointer.id}`);
         this.isPressed = false;
         this.activePointerId = null;
         
-        // Visual feedback: scale back
-        this.container.setScale(1.0);
+        // Visual feedback: scale back to base scale and restore position
+        if (this.container) {
+            this.container.setScale(this.baseScale);
+        }
+        
+        // Reset positions
+        if (this.background) this.background.setPosition(0, 0);
+        if (this.glow) this.glow.setPosition(0, 0);
+        if (this.labelText) this.labelText.setPosition(0, 0);
     }
     
     isButtonPressed() {
@@ -324,6 +340,13 @@ class ActionButton {
         }
     }
     
+    setBaseScale(scale) {
+        this.baseScale = scale;
+        if (this.container) {
+            this.container.setScale(scale);
+        }
+    }
+
     destroy() {
         if (this.container) {
             this.container.destroy();
@@ -468,15 +491,6 @@ class TouchControlsOverlay {
         const buttonCenterY = joystickPosition.y; // Align with joystick Y position
         const spacing = this.config.buttons.spacing;
         
-        console.log('📱 Button positions:', {
-            screenWidth: metrics.screenWidth,
-            screenHeight: metrics.screenHeight,
-            joystickY: joystickPosition.y,
-            buttonCenterX,
-            buttonCenterY,
-            spacing
-        });
-        
         // Scale button size
         const scaledButtonSize = this.config.buttons.size * responsiveScale;
         const finalButtonSize = Math.max(scaledButtonSize, minTouchTarget);
@@ -493,8 +507,8 @@ class TouchControlsOverlay {
             this.config.buttons
         );
         this.buttons.jump.create();
-        if (this.buttons.jump.container) {
-            this.buttons.jump.container.setScale(responsiveScale);
+        if (this.buttons.jump) {
+            this.buttons.jump.setBaseScale(responsiveScale);
         }
         
         // Left: Attack (Punch)
@@ -508,8 +522,8 @@ class TouchControlsOverlay {
             this.config.buttons
         );
         this.buttons.punch.create();
-        if (this.buttons.punch.container) {
-            this.buttons.punch.container.setScale(responsiveScale);
+        if (this.buttons.punch) {
+            this.buttons.punch.setBaseScale(responsiveScale);
         }
         
         // Right: Switch (Character Switch)
@@ -523,8 +537,8 @@ class TouchControlsOverlay {
             this.config.buttons
         );
         this.buttons.characterSwitch.create();
-        if (this.buttons.characterSwitch.container) {
-            this.buttons.characterSwitch.container.setScale(responsiveScale);
+        if (this.buttons.characterSwitch) {
+            this.buttons.characterSwitch.setBaseScale(responsiveScale);
         }
         
         // Bottom: Throw (Record Throw)
@@ -538,8 +552,8 @@ class TouchControlsOverlay {
             this.config.buttons
         );
         this.buttons.recordThrow.create();
-        if (this.buttons.recordThrow.container) {
-            this.buttons.recordThrow.container.setScale(responsiveScale);
+        if (this.buttons.recordThrow) {
+            this.buttons.recordThrow.setBaseScale(responsiveScale);
         }
         
         // Store scale for potential updates on resize
@@ -577,8 +591,8 @@ class TouchControlsOverlay {
         }
         
         Object.values(this.buttons).forEach(button => {
-            if (button && button.container) {
-                button.container.setScale(responsiveScale);
+            if (button) {
+                button.setBaseScale(responsiveScale);
             }
         });
         
@@ -630,17 +644,14 @@ class TouchControlsOverlay {
     
     setVisible(visible) {
         this.visible = visible;
-        console.log(`📱 Setting touch controls visibility to: ${visible}`);
         
         if (this.joystick) {
             this.joystick.setVisible(visible);
-            console.log(`📱 Joystick visibility set to: ${visible}`);
         }
         
         Object.values(this.buttons).forEach((button, index) => {
             if (button) {
                 button.setVisible(visible);
-                console.log(`📱 Button ${button.label} visibility set to: ${visible}`);
             }
         });
     }

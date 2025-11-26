@@ -73,23 +73,44 @@ class UnifiedInputController {
      * @param {number} y - Vertical direction (-1 to 1)
      */
     setMovementFromTouch(x, y) {
+        // Apply sensitivity tweaks before storing so the analog feels snappier.
+        const adjusted = this.applyTouchMovementSensitivity(x, y);
         // Touch input: if active, it takes priority
         if (this.touchActive) {
-            this.state.moveX = x;
-            this.state.moveY = y;
+            this.state.moveX = adjusted.x;
+            this.state.moveY = adjusted.y;
             this.lastMovementSource = 'touch';
         } else {
             // Touch not active, merge with keyboard (take max magnitude, preserve direction)
             const keyboardMag = Math.sqrt(this.state.moveX * this.state.moveX + this.state.moveY * this.state.moveY);
-            const touchMag = Math.sqrt(x * x + y * y);
+            const touchMag = Math.sqrt(adjusted.x * adjusted.x + adjusted.y * adjusted.y);
             
             if (touchMag > keyboardMag) {
-                this.state.moveX = x;
-                this.state.moveY = y;
+                this.state.moveX = adjusted.x;
+                this.state.moveY = adjusted.y;
                 this.lastMovementSource = 'touch';
             }
             // Otherwise keep keyboard input
         }
+    }
+
+    applyTouchMovementSensitivity(x, y) {
+        const inputConfig = (typeof window !== 'undefined' && window.GAME_CONFIG && window.GAME_CONFIG.input) ? window.GAME_CONFIG.input : {};
+        const multiplier = (typeof inputConfig.touchMovementMultiplier === 'number') ? inputConfig.touchMovementMultiplier : 1;
+        const deadZone = (typeof inputConfig.touchDeadZone === 'number') ? inputConfig.touchDeadZone : 0;
+        const clampValue = (value) => {
+            const abs = Math.abs(value);
+            if (abs < deadZone) {
+                return 0;
+            }
+            let adjusted = value * multiplier;
+            const limited = Math.min(1, Math.abs(adjusted));
+            return (adjusted >= 0 ? 1 : -1) * limited;
+        };
+        return {
+            x: clampValue(x),
+            y: clampValue(y)
+        };
     }
     
     /**

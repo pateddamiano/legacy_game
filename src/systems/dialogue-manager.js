@@ -28,6 +28,9 @@ class DialogueManager {
         // Callbacks
         this.onDialogueComplete = null;
         
+        // Touch controls state tracking
+        this.touchControlsWereVisible = false;
+        
         console.log('💬 DialogueManager initialized');
     }
     
@@ -178,6 +181,12 @@ class DialogueManager {
 
         console.log(`💬 Showing dialogue: "${dialogue.text}" (speaker: ${dialogue.speaker || 'narrator'})`);
 
+        // Hide touch controls during dialogue for cleaner presentation
+        if (this.scene.touchControlsOverlay) {
+            this.touchControlsWereVisible = this.scene.touchControlsOverlay.visible;
+            this.scene.touchControlsOverlay.setVisible(false);
+        }
+
         // HARD STOP: Disable input immediately and clear all input states to prevent skipping
         if (this.scene.inputManager) {
             this.scene.inputManager.disabled = true;
@@ -319,6 +328,12 @@ class DialogueManager {
     
     hideDialogue() {
         console.log('💬 Hiding dialogue');
+        
+        // Restore touch controls if they were visible before dialogue
+        if (this.scene.touchControlsOverlay && this.touchControlsWereVisible) {
+            this.scene.touchControlsOverlay.setVisible(true);
+            this.touchControlsWereVisible = false;
+        }
         
         // Note: Cinematic darkening is managed by EventManager, not here
         

@@ -11,7 +11,7 @@
   "parallaxTexture": "parallax_background",
   "audio": { "music": "fadeMusic" },
   "enemies": {
-    "spawnRate": 1200,
+    "spawnRate": 1300,
     "musicVolume": 0.5,
     "max": 5,
     "types": ["green_thug", "black_thug"],
@@ -47,7 +47,7 @@
         { "type": "stopEnemySpawning", "clearEnemies": false },
         { "type": "clearEnemiesOffscreen", "xThreshold": 8600, "direction": "right", "excludeIds": ["enemy_critic"] },
         { "type": "spawnEnemy", "enemyType": "critic", "position": { "x": 8655, "y": 518 }, "id": "enemy_critic", "flipX": true, "protectionLevel": "invulnerable" },
-        { "type": "camera", "pan": { "x": 7845 }, "duration": 2000, "ease": "Power2" },
+        { "type": "camera", "pan": { "x": 7845 }, "panToEntity": "enemy_critic", "screenPosition": 0.6, "duration": 2000, "ease": "Power2" },
         { "type": "wait", "duration": 500 },
         { "type": "clearEnemiesOffscreen", "xThreshold": 8600, "direction": "right", "excludeIds": ["enemy_critic"] },
         { "type": "dialogue", "dialogue": { "speaker": "Critic", "text": "Not bad... but you've got a long way to go if you want to make it in this city." } },

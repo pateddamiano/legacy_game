@@ -560,7 +560,14 @@ class UIManager {
         const scale = this.currentUiScale ?? 1;
         const screenX = this.scoreConfig.x * scale;
         const screenY = this.scoreConfig.y * scale;
-        this.scoreContainer.setScale(scale);
+        
+        // Only update scale if no tween is actively animating it
+        const hasTween = this.uiScene.tweens.getTweensOf(this.scoreContainer).length > 0;
+        if (!hasTween) {
+            this.scoreContainer.setScale(scale);
+        }
+        
+        // Always update position (doesn't conflict with pulse animation)
         this.scoreContainer.setPosition(screenX, screenY);
     }
     
@@ -570,15 +577,22 @@ class UIManager {
         // Update score text (no emoji needed since we have the actual microphone sprite)
         this.scoreText.setText(`${score}`);
         
-        // Create a brief pulse effect when score changes (pulse the entire container)
+        // Create a brief pulse effect when score changes (pulse relative to current UI scale)
         if (score > 0) {
+            const baseScale = this.currentUiScale ?? 1;
+            const pulseScale = baseScale * 1.15; // 15% larger than current scale
+            
             this.uiScene.tweens.add({
                 targets: this.scoreContainer,
-                scaleX: 1.1,
-                scaleY: 1.1,
+                scaleX: pulseScale,
+                scaleY: pulseScale,
                 duration: 150,
                 yoyo: true,
-                ease: 'Power2'
+                ease: 'Power2',
+                onComplete: () => {
+                    // Ensure we return to the correct base scale
+                    this.scoreContainer.setScale(baseScale);
+                }
             });
         }
     }
@@ -984,18 +998,20 @@ Legend:
         // Remove existing overlay if present
         this.hideDeathOverlay();
         
-        // Use virtual coordinates (1200x720)
-        const virtualWidth = 1200;
-        const virtualHeight = 720;
-        const centerX = virtualWidth / 2;
-        const centerY = virtualHeight / 2;
+        // Get actual screen dimensions
+        const screenWidth = this.uiScene?.scale?.width || 1200;
+        const screenHeight = this.uiScene?.scale?.height || 720;
         
-        // Create fully opaque black overlay (will fade in)
+        // Center is the absolute screen center
+        const centerX = screenWidth / 2;
+        const centerY = screenHeight / 2;
+        
+        // Create fully opaque black overlay (will fade in) - covers entire screen
         this.deathOverlay = this.uiScene.add.rectangle(
             centerX,
             centerY,
-            virtualWidth,
-            virtualHeight,
+            screenWidth,
+            screenHeight,
             0x000000,
             1.0
         );
@@ -1003,18 +1019,23 @@ Legend:
         this.deathOverlay.setScrollFactor(0);
         this.deathOverlay.setAlpha(0); // Start invisible for fade
         
+        // Scale font size based on UI scale
+        const baseFontSize = 72;
+        const scaledFontSize = Math.floor(baseFontSize * (this.currentUiScale || 1));
+        const scaledStroke = Math.max(4, Math.floor(8 * (this.currentUiScale || 1)));
+        
         // Create message text (empty initially, will be typed out)
         this.deathOverlayText = this.uiScene.add.text(
             centerX,
             centerY,
             '',
             {
-                fontSize: '72px',
+                fontSize: `${scaledFontSize}px`,
                 fill: '#FF0000',
                 fontFamily: GAME_CONFIG.ui.fontFamily,
                 fontStyle: 'bold',
                 stroke: '#000000',
-                strokeThickness: 8
+                strokeThickness: scaledStroke
             }
         );
         this.deathOverlayText.setOrigin(0.5);
@@ -1026,7 +1047,14 @@ Legend:
         this.gameOverDisplayedText = '';
         this.gameOverCharIndex = 0;
         
-        console.log('💀 Game over overlay created (will fade in and type)');
+        console.log('💀 Game over overlay created (will fade in and type)', {
+            screenWidth,
+            screenHeight,
+            centerX,
+            centerY,
+            fontSize: scaledFontSize,
+            scale: this.currentUiScale
+        });
     }
     
     fadeInGameOverScreen(callback) {
@@ -1084,23 +1112,30 @@ Legend:
         // Remove existing overlay if present
         this.hideDeathOverlay();
         
-        // Use virtual coordinates (1200x720)
-        const virtualWidth = 1200;
-        const virtualHeight = 720;
-        const centerX = virtualWidth / 2;
-        const centerY = virtualHeight / 2;
+        // Get actual screen dimensions
+        const screenWidth = this.uiScene?.scale?.width || 1200;
+        const screenHeight = this.uiScene?.scale?.height || 720;
         
-        // Create semi-transparent dark overlay
+        // Center is the absolute screen center
+        const centerX = screenWidth / 2;
+        const centerY = screenHeight / 2;
+        
+        // Create semi-transparent dark overlay - covers entire screen
         this.deathOverlay = this.uiScene.add.rectangle(
             centerX,
             centerY,
-            virtualWidth,
-            virtualHeight,
+            screenWidth,
+            screenHeight,
             0x000000,
             0.7
         );
         this.deathOverlay.setDepth(3000);
         this.deathOverlay.setScrollFactor(0);
+        
+        // Scale font size based on UI scale
+        const baseFontSize = 72;
+        const scaledFontSize = Math.floor(baseFontSize * (this.currentUiScale || 1));
+        const scaledStroke = Math.max(4, Math.floor(8 * (this.currentUiScale || 1)));
         
         // Create message text
         this.deathOverlayText = this.uiScene.add.text(
@@ -1108,12 +1143,12 @@ Legend:
             centerY,
             message,
             {
-                fontSize: '72px',
+                fontSize: `${scaledFontSize}px`,
                 fill: '#FF0000',
                 fontFamily: GAME_CONFIG.ui.fontFamily,
                 fontStyle: 'bold',
                 stroke: '#000000',
-                strokeThickness: 8
+                strokeThickness: scaledStroke
             }
         );
         this.deathOverlayText.setOrigin(0.5);
@@ -1131,7 +1166,14 @@ Legend:
             ease: 'Sine.easeInOut'
         });
         
-        console.log(`💀 Death overlay shown: ${message}`);
+        console.log(`💀 Death overlay shown: ${message}`, {
+            screenWidth,
+            screenHeight,
+            centerX,
+            centerY,
+            fontSize: scaledFontSize,
+            scale: this.currentUiScale
+        });
     }
     
     hideDeathOverlay() {

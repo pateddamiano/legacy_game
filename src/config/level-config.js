@@ -97,8 +97,8 @@ window.TEST_LEVEL_CONFIG = {
                 // Spawn critic early (during camera pan)
                 { type: 'spawnEnemy', enemyType: 'critic', position: {x: 8655, y: 518}, id: 'enemy_critic' },
                 
-                // Pan camera to final position (x=7845, right=9045)
-                { type: 'camera', pan: {x: 7845}, duration: 2000, ease: 'Power2' },
+                // Pan camera to show critic at 60% from left edge (dynamically accounts for zoom/viewport)
+                { type: 'camera', pan: {x: 7845}, panToEntity: 'enemy_critic', screenPosition: 0.6, duration: 2000, ease: 'Power2' },
                 
                 // Wait for camera to finish panning
                 { type: 'wait', duration: 500 },

@@ -25,10 +25,41 @@ class CameraActions {
             const duration = action.duration || 1000;
             const currentScrollX = camera.scrollX;
             const currentScrollY = camera.scrollY;
-            const targetX = action.pan.x;
+            
+            // Calculate target position accounting for zoom/viewport
+            let targetX = action.pan.x;
             const targetY = action.pan.y !== undefined ? action.pan.y : camera.scrollY;
+            
+            // If panToEntity is specified, calculate position to show that entity at desired screen position
+            if (action.panToEntity) {
+                const entity = this.getEntity(action.panToEntity);
+                if (entity) {
+                    // Use fixed virtual width for consistency - camera always "thinks" in 1200x720
+                    const virtualWidth = this.scene.virtualWidth || 1200;
+                    const screenPosition = action.screenPosition !== undefined ? action.screenPosition : 0.6;
+                    
+                    // Calculate target position in world coordinates using VIRTUAL dimensions
+                    // This makes the calculation zoom-independent
+                    const desiredOffset = virtualWidth * screenPosition;
+                    targetX = entity.x - desiredOffset;
+                    
+                    // Get camera bounds and clamp
+                    const bounds = camera.getBounds();
+                    const minScrollX = bounds.x;
+                    const maxScrollX = bounds.x + bounds.width - virtualWidth;
+                    
+                    // Clamp to bounds
+                    targetX = Math.max(minScrollX, Math.min(maxScrollX, targetX));
+                    
+                    console.log(`🎬 [PAN] Pan to entity: ${action.panToEntity} at world (${entity.x}, ${entity.y})`);
+                    console.log(`🎬 [PAN] Virtual width: ${virtualWidth}, screen position: ${screenPosition}, offset: ${desiredOffset.toFixed(0)}`);
+                    console.log(`🎬 [PAN] Bounds: ${bounds.x} to ${bounds.width}, maxScrollX: ${maxScrollX.toFixed(0)}`);
+                    console.log(`🎬 [PAN] Calculated: ${(entity.x - desiredOffset).toFixed(0)}, clamped to: ${targetX.toFixed(0)}`);
+                }
+            }
+            
             console.log(`🎬 [PAN] Starting camera pan from (${currentScrollX.toFixed(0)}, ${currentScrollY.toFixed(0)}) to (${targetX.toFixed(0)}, ${targetY.toFixed(0)}) over ${duration}ms`);
-            console.log(`🎬 [PAN] Camera bounds: ${JSON.stringify(camera.getBounds())}`);
+            console.log(`🎬 [PAN] Camera bounds: ${JSON.stringify(camera.getBounds())}, zoom: ${camera.zoom}`);
 
             // Stop following before panning
             camera.stopFollow();
@@ -80,13 +111,27 @@ class CameraActions {
             const oldScrollX = camera.scrollX;
             const oldScrollY = camera.scrollY;
             console.log(`🎬 Setting camera bounds: x=${bounds.x}, y=${bounds.y}, width=${bounds.width}, height=${bounds.height}`);
-            console.log(`🎬 Camera position before bounds: (${oldScrollX}, ${oldScrollY})`);
+            console.log(`🎬 Camera position before bounds: (${oldScrollX}, ${oldScrollY}), zoom: ${camera.zoom}`);
             console.log(`🎬 Old camera bounds: ${oldBounds.x}, ${oldBounds.y}, ${oldBounds.width}x${oldBounds.height}`);
+
+            // AUTO-ADJUST bounds for responsive display:
+            // Game logic works in virtual coordinates (1200x720), but zoom scales the viewport
+            // With zoom < 1 (mobile), camera sees MORE world, so maxScrollX would decrease
+            // To keep maxScrollX constant (so level design works), we widen the bounds proportionally
+            // Result: Camera panning "just works" the same on all devices
+            let adjustedWidth = bounds.width;
+            if (bounds.width && camera.zoom !== 1) {
+                const virtualWidth = this.scene.virtualWidth || 1200;
+                const visibleWorldWidth = virtualWidth / camera.zoom;
+                const widthDifference = visibleWorldWidth - virtualWidth;
+                adjustedWidth = bounds.width + widthDifference;
+                console.log(`🎬 Responsive bounds: ${bounds.width} → ${adjustedWidth.toFixed(0)} (zoom: ${camera.zoom.toFixed(2)})`);
+            }
 
             camera.setBounds(
                 bounds.x !== undefined ? bounds.x : camera.getBounds().x,
                 bounds.y !== undefined ? bounds.y : camera.getBounds().y,
-                bounds.width !== undefined ? bounds.width : camera.getBounds().width,
+                adjustedWidth,
                 bounds.height !== undefined ? bounds.height : camera.getBounds().height
             );
 
@@ -98,7 +143,7 @@ class CameraActions {
 
             // Check if camera was clamped
             if (oldScrollX !== newScrollX || oldScrollY !== newScrollY) {
-                console.log(`🎬 Camera was clamped from (${oldScrollX}, ${oldScrollY}) to (${newScrollX}, ${newScrollY})`);
+                console.log(`🎬 ⚠️ Camera was clamped from (${oldScrollX}, ${oldScrollY}) to (${newScrollX}, ${newScrollY})`);
             }
 
             this.advanceAction();

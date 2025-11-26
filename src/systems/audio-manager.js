@@ -248,12 +248,17 @@ class AudioManager {
             return;
         }
 
-        // Determine volume (custom or from config)
-        let volume = customVolume || this.config.soundEffects.volume;
-
-        // Check for specific SFX volume settings
-        if (this.config.soundEffects[sfxKey]) {
+        // Determine volume (custom takes priority, then config-specific, then default)
+        let volume;
+        if (customVolume !== null && customVolume !== undefined) {
+            // Custom volume provided - use it
+            volume = customVolume;
+        } else if (this.config.soundEffects[sfxKey]) {
+            // No custom volume, but config has specific setting for this sound
             volume = this.config.soundEffects[sfxKey].volume;
+        } else {
+            // Use default sound effects volume
+            volume = this.config.soundEffects.volume;
         }
 
         // Play the sound effect
@@ -726,7 +731,7 @@ class AudioManager {
     }
     
     playMicrophonePickup() {
-        this.playSoundEffect('microphonePickup', 0.2);
+        this.playSoundEffect('microphonePickup', 0.1);
     }
     
     // Other game events

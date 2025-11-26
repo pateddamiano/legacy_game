@@ -54,7 +54,10 @@ const TOUCH_CONTROLS_CONFIG = {
         strokeAlpha: 0.9,
         strokeWidth: 3,
         glowColor: 0x6fd3ff,
-        glowOpacity: 0.25
+        glowOpacity: 0.25,
+        depthOffset: 5,
+        depthColor: 0x2a2a2a,
+        depthOpacity: 0.6
     },
     
     // Responsive scaling

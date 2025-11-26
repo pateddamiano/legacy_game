@@ -17,6 +17,7 @@ class GameScene extends Phaser.Scene {
         this.enemies = [];
         this.bosses = [];
         this.eventPlayerBounds = null;
+        this.touchControlsOverlay = null;
         
         // Check for debug mode and direct level loading
         if (window.DIRECT_LEVEL_LOAD && (window.TEST_LEVEL_ID !== undefined)) {
@@ -205,6 +206,13 @@ class GameScene extends Phaser.Scene {
         
         // Initialize TouchControlsOverlay AFTER uiScene is available
         if (window.TouchControlsOverlay && this.unifiedInputController) {
+            // Destroy existing overlay if it exists (cleanup from previous run)
+            if (this.touchControlsOverlay) {
+                console.log('📱 Cleaning up existing touch controls overlay...');
+                this.touchControlsOverlay.destroy();
+                this.touchControlsOverlay = null;
+            }
+            
             this.touchControlsOverlay = new TouchControlsOverlay(
                 this,
                 this.uiScene,
@@ -631,12 +639,7 @@ class GameScene extends Phaser.Scene {
             this.animationManager.update(delta);
         }
 
-        // Update unified input controller (reset "just pressed" flags)
-        if (this.unifiedInputController) {
-            this.unifiedInputController.update();
-        }
-        
-        // Update touch controls overlay
+        // Update touch controls overlay FIRST (sets button states)
         if (this.touchControlsOverlay) {
             this.touchControlsOverlay.update();
         }
@@ -660,6 +663,12 @@ class GameScene extends Phaser.Scene {
                 // Update isJumping reference
                 this.isJumping = this.playerPhysicsManager.getIsJumping();
             }
+        }
+        
+        // Reset unified input controller "just pressed" flags AFTER handling input
+        // This ensures button presses persist for the full frame cycle
+        if (this.unifiedInputController) {
+            this.unifiedInputController.update();
         }
 
         // Handle perspective scaling for player when not jumping
@@ -928,10 +937,14 @@ class GameScene extends Phaser.Scene {
                 }
                 console.log("Both characters healed to full health!");
             },
-            onSwitchCharacter: () => {
+            onSwitchCharacter: (forceSwitch = false) => {
                 if (this.characterManager) {
-                    const result = this.characterManager.switchCharacter(false, this.animationManager, this.isJumping, this.eventCameraLocked || false);
-                    if (result && result.success) {
+                    const result = this.characterManager.switchCharacter(forceSwitch, this.animationManager, this.isJumping, this.eventCameraLocked || false);
+                    
+                    // Handle both object return {success: true/false} and direct false return
+                    const switchSucceeded = result && (result.success === true || result === true);
+                    
+                    if (switchSucceeded && result.newPlayer) {
                         // Update references
                         this.player = result.newPlayer;
                         this.selectedCharacter = result.newCharacter;
@@ -940,7 +953,6 @@ class GameScene extends Phaser.Scene {
                         // Ensure player sprite has characterConfig set (safety check)
                         if (!this.player.characterConfig) {
                             this.player.characterConfig = this.currentCharacterConfig;
-                            console.log('⚠️ Set characterConfig on player sprite after switch');
                         }
                         
                         // Reset animation manager with new character
@@ -958,6 +970,8 @@ class GameScene extends Phaser.Scene {
                         if (this.playerPhysicsManager) {
                             this.playerPhysicsManager.player = this.player;
                             this.playerPhysicsManager.animationManager = this.animationManager;
+                            // CRITICAL: Ensure physics manager is enabled after switch
+                            this.playerPhysicsManager.disabled = false;
                         }
                         
                         // Update combat manager with new player and animation manager
@@ -966,14 +980,20 @@ class GameScene extends Phaser.Scene {
                             this.combatManager.animationManager = this.animationManager;
                         }
                         
+                        // CRITICAL: Ensure input manager is enabled after switch
+                        if (this.inputManager) {
+                            this.inputManager.disabled = false;
+                        }
+                        
                         // Re-setup camera follow ONLY if camera is not locked by event system
                         if (!this.eventCameraLocked) {
                             this.cameras.main.startFollow(this.player, true, 0.1, 0);
-                            console.log(`🎯 CHARACTER SWITCH: Camera following new player at (${Math.round(this.player.x)}, ${Math.round(this.player.y)})`);
                         }
+                        
+                        return true; // Switch successful, skip other input
                     }
                 }
-                return true; // Skip other input processing during character switch
+                return false; // Switch failed or not attempted
             },
             onWeaponUse: () => {
                 // Check if weapon can be used (cooldown, etc.)
@@ -1113,6 +1133,27 @@ class GameScene extends Phaser.Scene {
     // ========================================
     // LEVEL LIFECYCLE METHODS
     // ========================================
+    
+    shutdown() {
+        console.log('🎮 GameScene: Shutdown - Cleaning up all resources...');
+        
+        // Destroy touch controls overlay to prevent duplicate rendering
+        if (this.touchControlsOverlay) {
+            console.log('📱 Destroying touch controls overlay...');
+            this.touchControlsOverlay.destroy();
+            this.touchControlsOverlay = null;
+        }
+        
+        // Cleanup UI manager
+        if (this.uiManager) {
+            this.uiManager.destroy();
+        }
+        
+        // Remove resize listener to prevent memory leaks
+        this.scale.off('resize');
+        
+        console.log('🎮 GameScene: Shutdown complete');
+    }
     
     onLevelCleanup() {
         console.log('🎮 GameScene: Cleaning up level...');

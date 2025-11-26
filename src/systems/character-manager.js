@@ -189,9 +189,15 @@ class CharacterManager {
     switchCharacter(forceSwitch = false, animationManager, isJumping, eventCameraLocked) {
         // Check cooldown unless forced switch
         const currentTime = this.scene.time.now;
-        if (!forceSwitch && currentTime - this.characters[this.selectedCharacter].lastSwitchTime < this.switchCooldown) {
+        const lastAttemptTime = this.characters[this.selectedCharacter].lastSwitchTime || 0;
+        
+        if (!forceSwitch && currentTime - lastAttemptTime < this.switchCooldown) {
             return false;
         }
+        
+        // DEBOUNCE: Update last attempt time immediately to prevent rapid retries
+        // This prevents multiple switch attempts from a single button press
+        this.characters[this.selectedCharacter].lastSwitchTime = currentTime;
 
         // Only allow switching if not in middle of an action (unless forced)
         if (!forceSwitch && animationManager) {
@@ -274,12 +280,14 @@ class CharacterManager {
         }
         
         this.characters[currentChar].isActive = false;
-        this.characters[currentChar].lastSwitchTime = currentTime;
 
         // Update references immediately for synchronous behavior
         this.selectedCharacter = newChar;
         this.currentCharacterConfig = this.characters[newChar].config;
         const newPlayer = this.characters[newChar].sprite;
+        
+        // Set lastSwitchTime for new character too (prevents immediate switch back)
+        this.characters[newChar].lastSwitchTime = currentTime;
 
         // Position the new character but keep it hidden initially
         // Use calculated position with validation
@@ -295,25 +303,30 @@ class CharacterManager {
         newPlayer.setScale(currentScale);
         newPlayer.setFlipX(currentFlipX);
         newPlayer.lastGroundY = finalPositionY; // Set ground position
+        
+        // CRITICAL: Ensure body is active and enabled for GameScene to use
+        newPlayer.setActive(true);
+        
         if (newPlayer.body) {
+            // Enable physics body immediately so playerPhysicsManager can work
+            newPlayer.body.enable = true;
+            
             newPlayer.setVelocityX(0); // Always 0 during transitions
             newPlayer.setVelocityY(0); // Always 0
             // Reset gravity to ensure character is on ground
             if (newPlayer.setGravityY) {
                 newPlayer.setGravityY(0);
             }
-            if (newPlayer.body) {
-                // CRITICAL: Reset body position properly
-                newPlayer.body.x = finalPositionX;
-                newPlayer.body.y = finalPositionY;
-                newPlayer.body.reset(finalPositionX, finalPositionY);
-                newPlayer.body.velocity.x = 0;
-                newPlayer.body.velocity.y = 0;
-                newPlayer.body.acceleration.x = 0;
-                newPlayer.body.acceleration.y = 0;
-            }
+            // CRITICAL: Reset body position properly
+            newPlayer.body.x = finalPositionX;
+            newPlayer.body.y = finalPositionY;
+            newPlayer.body.reset(finalPositionX, finalPositionY);
+            newPlayer.body.velocity.x = 0;
+            newPlayer.body.velocity.y = 0;
+            newPlayer.body.acceleration.x = 0;
+            newPlayer.body.acceleration.y = 0;
         }
-        newPlayer.setVisible(false); // Keep hidden during animation
+        newPlayer.setVisible(false); // Keep hidden during animation (but body is active)
 
         // Clear any damage tint from previous hit
         newPlayer.clearTint();
@@ -331,6 +344,10 @@ class CharacterManager {
                     newPlayer.body.enable = true; // Re-enable physics body
                 }
                 
+                // CRITICAL: Mark new character as active in CharacterManager state
+                this.characters[newChar].isActive = true;
+                this.characters[newChar].lastSwitchTime = currentTime;
+                
                 // Double check old character is hidden (sometimes race conditions occur)
                 const recheckOldSprite = this.characters[currentChar].sprite;
                 if (recheckOldSprite && recheckOldSprite.visible) {
@@ -339,9 +356,16 @@ class CharacterManager {
                         recheckOldSprite.setActive(false);
                         if (recheckOldSprite.body) recheckOldSprite.body.enable = false;
                 }
-
-                this.characters[newChar].isActive = true;
-                this.characters[newChar].lastSwitchTime = currentTime;
+                
+                // CRITICAL: Ensure physics body is fully functional
+                if (newPlayer.body) {
+                    newPlayer.body.enable = true;
+                    newPlayer.setVelocity(0, 0);
+                    newPlayer.body.velocity.x = 0;
+                    newPlayer.body.velocity.y = 0;
+                    newPlayer.body.acceleration.x = 0;
+                    newPlayer.body.acceleration.y = 0;
+                }
                 
                 // Reset animation state to idle (in case old character was in attack/airkick)
                 if (newPlayer.anims) {
