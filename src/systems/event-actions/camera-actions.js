@@ -26,35 +26,52 @@ class CameraActions {
             const currentScrollX = camera.scrollX;
             const currentScrollY = camera.scrollY;
             
-            // Calculate target position accounting for zoom/viewport
+            // Calculate target position
             let targetX = action.pan.x;
             const targetY = action.pan.y !== undefined ? action.pan.y : camera.scrollY;
             
-            // If panToEntity is specified, calculate position to show that entity at desired screen position
+            // If panToEntity is specified, calculate position to show entity at desired screen position
             if (action.panToEntity) {
                 const entity = this.getEntity(action.panToEntity);
                 if (entity) {
-                    // Use fixed virtual width for consistency - camera always "thinks" in 1200x720
                     const virtualWidth = this.scene.virtualWidth || 1200;
-                    const screenPosition = action.screenPosition !== undefined ? action.screenPosition : 0.6;
+                    // The visible world width should always be virtualWidth
+                    // LayoutManager ensures virtualWidth world units always fit in the viewport
+                    // However, on mobile with viewport set, we need to account for the actual camera dimensions
+                    // Check if camera.width/zoom differs significantly from virtualWidth
+                    const cameraWorldWidth = camera.width / camera.zoom;
+                    const visibleWorldWidth = virtualWidth;
                     
-                    // Calculate target position in world coordinates using VIRTUAL dimensions
-                    // This makes the calculation zoom-independent
-                    const desiredOffset = virtualWidth * screenPosition;
+                    // Debug: log if there's a discrepancy
+                    if (Math.abs(cameraWorldWidth - virtualWidth) > 5) {
+                        console.warn(`🎬 [PAN] Camera world width (${cameraWorldWidth.toFixed(0)}) differs from virtualWidth (${virtualWidth})`);
+                    }
+                    let screenPosition = action.screenPosition !== undefined ? action.screenPosition : 0.6;
+                    
+                    // If a hardcoded pan.x is also provided, it was tuned for zoom=1
+                    // Calculate what screen position it intended, then apply that for current zoom
+                    if (action.pan.x !== undefined) {
+                        // At zoom=1, what screen position would the entity appear at with this pan.x?
+                        // Use virtualWidth for this calculation since pan.x was tuned for the virtual coordinate system
+                        const offsetAtZoom1 = entity.x - action.pan.x;
+                        screenPosition = offsetAtZoom1 / virtualWidth;
+                        console.log(`🎬 [PAN] Detected intended screen position from hardcoded pan.x: ${screenPosition.toFixed(3)} (${(screenPosition*100).toFixed(1)}%)`);
+                    }
+                    
+                    // Calculate where camera should scroll for this screen position at current zoom
+                    const desiredOffset = visibleWorldWidth * screenPosition;
                     targetX = entity.x - desiredOffset;
                     
-                    // Get camera bounds and clamp
+                    // Get bounds and clamp
                     const bounds = camera.getBounds();
                     const minScrollX = bounds.x;
-                    const maxScrollX = bounds.x + bounds.width - virtualWidth;
-                    
-                    // Clamp to bounds
+                    const maxScrollX = bounds.x + bounds.width - visibleWorldWidth;
                     targetX = Math.max(minScrollX, Math.min(maxScrollX, targetX));
                     
                     console.log(`🎬 [PAN] Pan to entity: ${action.panToEntity} at world (${entity.x}, ${entity.y})`);
-                    console.log(`🎬 [PAN] Virtual width: ${virtualWidth}, screen position: ${screenPosition}, offset: ${desiredOffset.toFixed(0)}`);
-                    console.log(`🎬 [PAN] Bounds: ${bounds.x} to ${bounds.width}, maxScrollX: ${maxScrollX.toFixed(0)}`);
-                    console.log(`🎬 [PAN] Calculated: ${(entity.x - desiredOffset).toFixed(0)}, clamped to: ${targetX.toFixed(0)}`);
+                    console.log(`🎬 [PAN] Camera: width=${camera.width}, zoom=${camera.zoom.toFixed(2)}, virtualWidth=${virtualWidth}`);
+                    console.log(`🎬 [PAN] Visible world width: ${visibleWorldWidth.toFixed(0)}, screen position: ${(screenPosition*100).toFixed(1)}%`);
+                    console.log(`🎬 [PAN] Offset: ${desiredOffset.toFixed(0)}, calculated target: ${(entity.x - desiredOffset).toFixed(0)}, clamped: ${targetX.toFixed(0)}`);
                 }
             }
             
@@ -122,10 +139,12 @@ class CameraActions {
             let adjustedWidth = bounds.width;
             if (bounds.width && camera.zoom !== 1) {
                 const virtualWidth = this.scene.virtualWidth || 1200;
-                const visibleWorldWidth = virtualWidth / camera.zoom;
+                // Use camera.width (viewport width in screen pixels) divided by zoom to get visible world width
+                // This accounts for viewport settings on mobile devices
+                const visibleWorldWidth = camera.width / camera.zoom;
                 const widthDifference = visibleWorldWidth - virtualWidth;
                 adjustedWidth = bounds.width + widthDifference;
-                console.log(`🎬 Responsive bounds: ${bounds.width} → ${adjustedWidth.toFixed(0)} (zoom: ${camera.zoom.toFixed(2)})`);
+                console.log(`🎬 Responsive bounds: ${bounds.width} → ${adjustedWidth.toFixed(0)} (zoom: ${camera.zoom.toFixed(2)}, visible width: ${visibleWorldWidth.toFixed(0)})`);
             }
 
             camera.setBounds(

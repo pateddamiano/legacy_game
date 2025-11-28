@@ -194,9 +194,15 @@ class VirtualJoystick {
     }
     
     destroy() {
+        console.log('📱 VirtualJoystick.destroy() - cleaning up container');
         if (this.container) {
             this.container.destroy();
+            this.container = null;
         }
+        this.baseCircle = null;
+        this.knobCircle = null;
+        this.outerGlow = null;
+        this.outerRing = null;
     }
 }
 
@@ -348,9 +354,15 @@ class ActionButton {
     }
 
     destroy() {
+        console.log(`📱 ActionButton.destroy() - cleaning up button: ${this.action}`);
         if (this.container) {
             this.container.destroy();
+            this.container = null;
         }
+        this.background = null;
+        this.labelText = null;
+        this.depthLayer = null;
+        this.glow = null;
     }
 }
 
@@ -421,7 +433,7 @@ class TouchControlsOverlay {
             buttons: {
                 size: 70,
                 spacing: 100,
-                marginRight: 60,
+                marginRight: 50,
                 marginBottom: 60,
                 opacity: 0.85,
                 backgroundColor: 0x000000,
@@ -438,9 +450,18 @@ class TouchControlsOverlay {
     }
     
     create() {
+        console.log('📱 ========== TouchControlsOverlay.create() START ==========');
+        
         // Get UI scale from UIScene (for responsive scaling)
         const uiScale = this.uiScene.uiScale || 1.0;
         this.viewportInfo = this.uiScene.viewportInfo || null;
+        
+        console.log('📱 UIScene state:', {
+            uiScale: uiScale,
+            viewportInfo: this.viewportInfo,
+            'uiScene.scale.width': this.uiScene.scale?.width,
+            'uiScene.scale.height': this.uiScene.scale?.height
+        });
         
         // Calculate responsive scale (clamp between min and max)
         const config = window.TOUCH_CONTROLS_CONFIG || this.config;
@@ -448,9 +469,22 @@ class TouchControlsOverlay {
         const maxScale = config.maxScale || 1.2;
         const responsiveScale = Math.max(minScale, Math.min(maxScale, uiScale));
         
+        console.log('📱 Scale calculation:', {
+            uiScale: uiScale,
+            minScale: minScale,
+            maxScale: maxScale,
+            responsiveScale: responsiveScale
+        });
+        
         // Calculate current screen metrics so controls can live outside the gameplay viewport
         const metrics = this.getScreenMetrics();
         this.screenMetrics = metrics;
+        
+        console.log('📱 Screen metrics:', {
+            screenWidth: metrics.screenWidth,
+            screenHeight: metrics.screenHeight,
+            viewport: metrics.viewport
+        });
         
         // Scale joystick sizes
         const scaledBaseRadius = this.config.joystick.baseRadius * responsiveScale;
@@ -569,7 +603,16 @@ class TouchControlsOverlay {
             });
         }
         
-        console.log('📱 Touch controls overlay created with scale:', responsiveScale);
+        console.log('📱 Final control sizes:', {
+            responsiveScale: responsiveScale,
+            joystickBaseRadius: finalBaseRadius,
+            joystickKnobRadius: finalKnobRadius,
+            buttonSize: finalButtonSize,
+            joystickContainerScale: this.joystick.container?.scaleX,
+            joystickPosition: { x: joystickPosition.x, y: joystickPosition.y },
+            buttonCenterPosition: { x: buttonCenterX, y: buttonCenterY }
+        });
+        console.log('📱 ========== TouchControlsOverlay.create() END ==========');
     }
     
     /**
@@ -657,15 +700,24 @@ class TouchControlsOverlay {
     }
     
     destroy() {
+        console.log('📱 ========== TouchControlsOverlay.destroy() START ==========');
+        console.log('📱 Destroying joystick and buttons...');
+        
         if (this.joystick) {
+            console.log('📱 Destroying joystick');
             this.joystick.destroy();
+            this.joystick = null;
         }
         
         Object.values(this.buttons).forEach(button => {
             if (button) {
+                console.log(`📱 Destroying button: ${button.action}`);
                 button.destroy();
             }
         });
+        this.buttons = {};
+        
+        console.log('📱 ========== TouchControlsOverlay.destroy() END ==========');
     }
     
     getScreenMetrics() {

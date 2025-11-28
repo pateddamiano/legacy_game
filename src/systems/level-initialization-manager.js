@@ -29,28 +29,29 @@ class LevelInitializationManager {
         this.selectedLevelId = levelId;
         console.log('🎮 Initializing unified level system...');
         
-        // Try JSON-based level system first
-        if (window.LevelRegistry && window.LevelAssetLoader && window.WorldFactory) {
-            const registry = window.LevelRegistry.getInstance();
-            const levelJson = await registry.ensureLevelLoaded(this.scene, levelId);
-            if (levelJson) {
-                console.log('🎮 JSON level detected:', levelJson.name);
-                await this.loadLevelFromJSON(levelJson);
-                if (onComplete) {
-                    onComplete();
-                }
-                return;
-            }
-            // Fallback to config-based system
-            this.loadLevelFromConfig();
+        // JSON-based level system is required
+        if (!window.LevelRegistry || !window.LevelAssetLoader || !window.WorldFactory) {
+            console.error('🎮 ERROR: LevelRegistry, LevelAssetLoader, or WorldFactory not available!');
+            console.error('🎮 JSON level system is required. Check that all level system files are loaded.');
             if (onComplete) {
                 onComplete();
             }
             return;
         }
         
-        // Use config-based level system
-        this.loadLevelFromConfig();
+        const registry = window.LevelRegistry.getInstance();
+        const levelJson = await registry.ensureLevelLoaded(this.scene, levelId);
+        if (!levelJson) {
+            console.error(`🎮 ERROR: Failed to load level ${levelId} from JSON system!`);
+            console.error('🎮 Check that the level JSON file exists in src/config/levels/');
+            if (onComplete) {
+                onComplete();
+            }
+            return;
+        }
+        
+        console.log('🎮 JSON level detected:', levelJson.name);
+        await this.loadLevelFromJSON(levelJson);
         if (onComplete) {
             onComplete();
         }
@@ -126,40 +127,8 @@ class LevelInitializationManager {
         console.log(`🎯 LEVEL ${levelJson.id} LOADED SUCCESSFULLY`);
     }
     
-    loadLevelFromConfig() {
-        console.log('🎮 Loading level from config (fallback)...');
-        
-        // Check if we have any configs
-        if (!window.LEVEL_CONFIGS || window.LEVEL_CONFIGS.length === 0) {
-            console.error('🎮 No level configs available! JSON system should be handling levels.');
-            console.error('🎮 Check that LevelRegistry, LevelAssetLoader, and WorldFactory are loaded.');
-            return;
-        }
-        
-        // Find level config
-        const levelIndex = window.LEVEL_CONFIGS.findIndex(l => l.id === this.selectedLevelId);
-        console.log(`🎮 📊 Loading level with id=${this.selectedLevelId}, found at index=${levelIndex}`);
-        
-        if (levelIndex < 0) {
-            console.error(`🎮 Level with id ${this.selectedLevelId} not found in fallback configs!`);
-            console.error('🎮 JSON level system should handle all level loading.');
-            return;
-        }
-        
-        const levelConfig = window.LEVEL_CONFIGS[levelIndex];
-        
-        // Load level through LevelManager (handles world, enemies, etc.)
-        if (this.levelManager.loadLevel(levelIndex)) {
-            console.log(`🎮 Level ${levelConfig.name} loaded successfully`);
-            
-            // Register events from config
-            if (this.eventManager && levelConfig.events) {
-                this.eventManager.registerEvents(levelConfig.events);
-            }
-        } else {
-            console.error(`🎮 Failed to load level ${levelConfig.name}`);
-        }
-    }
+    // DEPRECATED: loadLevelFromConfig() removed - JSON system is now required
+    // All levels must be defined in src/config/levels/*.json files
     
     // ========================================
     // PARALLAX BACKGROUND
@@ -304,10 +273,7 @@ class LevelInitializationManager {
     
     setupTestLevel(enemySpawnManager, debugManager, eventManager) {
         console.log('🧪 Setting up test level...');
-        
-        // Load test level world (same as level 1)
-        // Note: This method would need to be implemented or passed as callback
-        // For now, we'll assume it's handled elsewhere
+        console.warn('🧪 DEPRECATED: setupTestLevel() - Test levels should use JSON files in src/config/levels/');
         
         // Disable enemy spawning completely
         if (enemySpawnManager) {
@@ -316,11 +282,9 @@ class LevelInitializationManager {
             enemySpawnManager.setIsTestMode(true);
         }
         
-        // Register events from test level config
-        if (typeof window.TEST_LEVEL_CONFIG !== 'undefined' && window.TEST_LEVEL_CONFIG.events && eventManager) {
-            console.log('🧪 Registering test level events...');
-            eventManager.registerEvents(window.TEST_LEVEL_CONFIG.events);
-        }
+        // NOTE: Events should be loaded from JSON files, not from TEST_LEVEL_CONFIG
+        // Test levels should be defined as JSON files (e.g., test-level.json)
+        // and loaded through the normal JSON level system
         
         // Initialize debug overlay
         if (debugManager) {
@@ -333,7 +297,6 @@ class LevelInitializationManager {
         console.log('  - R: Record current position');
         console.log('  - D: Toggle debug overlay');
         console.log('  - G: Toggle grid overlay');
-        console.log('🧪 Event: Move to x=8081 to trigger the critic event');
     }
 }
 

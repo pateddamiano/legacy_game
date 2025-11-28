@@ -7,7 +7,8 @@ class LevelManager {
     constructor(scene) {
         this.scene = scene;
         this.currentLevel = 0;
-        this.levels = window.LEVEL_CONFIGS;
+        // DEPRECATED: LEVEL_CONFIGS is no longer used - levels are loaded from JSON files
+        this.levels = window.LEVEL_CONFIGS || [];
         this.progressionFlags = new Map();
         this.checkpoints = new Map();
         this.enemiesDefeated = 0;
@@ -17,6 +18,9 @@ class LevelManager {
         this.initializeProgressionFlags();
         
         console.log('🎮 LevelManager initialized!');
+        if (this.levels.length > 0) {
+            console.warn('🎮 WARNING: LEVEL_CONFIGS is deprecated. Levels should be loaded from JSON files.');
+        }
     }
     
     // ========================================
