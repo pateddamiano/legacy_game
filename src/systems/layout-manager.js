@@ -16,13 +16,11 @@ const LayoutManager = {
      */
     calculateGameViewport(windowWidth, windowHeight, targetWidth, targetHeight) {
         // Check for Visual Viewport API (better for mobile with virtual keyboards/bars)
-        let availableWidth = windowWidth;
-        let availableHeight = windowHeight;
-        
-        if (window.visualViewport) {
-            availableWidth = window.visualViewport.width;
-            availableHeight = window.visualViewport.height;
-        }
+        // Prefer the larger of inner* and visualViewport to avoid toolbar-induced shrink
+        // Chrome iOS sometimes reports a very small visualViewport height while toolbars animate.
+        const vv = window.visualViewport;
+        const availableWidth = vv ? Math.max(windowWidth, vv.width) : windowWidth;
+        const availableHeight = vv ? Math.max(windowHeight, vv.height) : windowHeight;
 
         // Calculate how much we need to scale to fit the target dimensions
         const scaleX = availableWidth / targetWidth;
@@ -72,16 +70,44 @@ const LayoutManager = {
         const scaleHeight = scene.scale ? scene.scale.height : targetHeight;
         
         // Always use window dimensions for calculation (more reliable than scale manager)
-        // Prefer visualViewport for mobile, fall back to window.inner* for desktop
-        let calcWidth = window.innerWidth;
-        let calcHeight = window.innerHeight;
-        
-        if (window.visualViewport) {
-            calcWidth = window.visualViewport.width;
-            calcHeight = window.visualViewport.height;
-        }
+        // Use the larger of inner* vs visualViewport to avoid transient shrinking (Chrome iOS bars).
+        const calcWidth = Math.max(window.innerWidth, window.visualViewport?.width || 0);
+        const calcHeight = Math.max(window.innerHeight, window.visualViewport?.height || 0);
         
         const viewport = this.calculateGameViewport(calcWidth, calcHeight, targetWidth, targetHeight);
+
+        // Skip re-apply if nothing changed to avoid resize loops
+        const signature = `${viewport.x},${viewport.y},${viewport.width},${viewport.height},${viewport.scale.toFixed(4)}`;
+        if (scene._lastLayoutSignature === signature) {
+            return viewport;
+        }
+        scene._lastLayoutSignature = signature;
+
+        // Extra diagnostics to compare platforms
+        const vv = window.visualViewport;
+        const canvas = scene.game && scene.game.canvas;
+        console.log('📏 Layout diagnostics:', {
+            window: { innerWidth: window.innerWidth, innerHeight: window.innerHeight },
+            visualViewport: vv ? { width: vv.width, height: vv.height, offsetTop: vv.offsetTop, offsetLeft: vv.offsetLeft, scale: vv.scale } : null,
+            devicePixelRatio: window.devicePixelRatio,
+            calcWidth,
+            calcHeight,
+            scaleManager: scene.scale ? { width: scene.scale.width, height: scene.scale.height } : null,
+            canvas: canvas ? { width: canvas.width, height: canvas.height } : null
+        });
+        
+        // Check if event system has camera locked (should not modify during events)
+        const eventCameraLocked = scene.eventCameraLocked || false;
+        if (eventCameraLocked) {
+            console.warn(`📏 [LAYOUT] ⚠️ LayoutManager.applyToScene called while eventCameraLocked=true!`);
+            console.warn(`📏 [LAYOUT] ⚠️ This may interfere with event camera positioning!`);
+            console.trace('📏 [LAYOUT] Call stack:');
+        }
+        
+        const oldZoom = camera.zoom;
+        const oldScrollX = camera.scrollX;
+        const oldScrollY = camera.scrollY;
+        const oldBounds = camera.getBounds();
         
         // Apply the scale as zoom so that targetWidth x targetHeight fits in the viewport
         camera.setZoom(viewport.scale);
@@ -93,7 +119,29 @@ const LayoutManager = {
         camera.setViewport(viewport.x, viewport.y, viewport.width, viewport.height);
         
         // Center the camera on the middle of the virtual world
-        camera.centerOn(targetWidth / 2, targetHeight / 2);
+        // BUT skip this if camera is locked by event system (during pans, etc.)
+        // to prevent interrupting camera animations on mobile resize events
+        if (!eventCameraLocked) {
+            camera.centerOn(targetWidth / 2, targetHeight / 2);
+        }
+        
+        // Log if significant changes occurred
+        if (eventCameraLocked) {
+            const newScrollX = camera.scrollX;
+            const newScrollY = camera.scrollY;
+            const newZoom = camera.zoom;
+            const newBounds = camera.getBounds();
+            
+            if (Math.abs(oldScrollX - newScrollX) > 0.1 || Math.abs(oldScrollY - newScrollY) > 0.1) {
+                console.warn(`📏 [LAYOUT] ⚠️ Scroll changed during event: (${oldScrollX.toFixed(1)}, ${oldScrollY.toFixed(1)}) → (${newScrollX.toFixed(1)}, ${newScrollY.toFixed(1)})`);
+            }
+            if (Math.abs(oldZoom - newZoom) > 0.001) {
+                console.warn(`📏 [LAYOUT] ⚠️ Zoom changed during event: ${oldZoom.toFixed(3)} → ${newZoom.toFixed(3)}`);
+            }
+            if (oldBounds.width !== newBounds.width) {
+                console.warn(`📏 [LAYOUT] ⚠️ Bounds changed during event: ${oldBounds.width.toFixed(1)} → ${newBounds.width.toFixed(1)}`);
+            }
+        }
         
         console.log(`📏 Layout updated: Viewport ${viewport.width}x${viewport.height} at (${viewport.x}, ${viewport.y}), Zoom: ${viewport.scale.toFixed(2)}`);
         

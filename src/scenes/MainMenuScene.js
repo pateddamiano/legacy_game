@@ -985,6 +985,13 @@ class MainMenuScene extends Phaser.Scene {
             if (window.DeviceManager) {
                 window.DeviceManager.checkOrientation();
             }
+            
+            // Always hide overlay on non-mobile
+            if (!window.DeviceManager || !window.DeviceManager.isMobile) {
+                this.orientationOverlay.setVisible(false);
+                return;
+            }
+            
             const shouldShow = window.DeviceManager.shouldShowRotatePrompt();
             if (shouldShow) {
                 this.wasPortrait = true;
@@ -994,13 +1001,7 @@ class MainMenuScene extends Phaser.Scene {
                 this.orientationOverlay.setVisible(true);
                 // Pause game inputs if possible
             } else {
-                if (this.wasPortrait) {
-                    console.log('📱 Orientation restored to landscape, restarting MainMenuScene for clean layout.');
-                    this.wasPortrait = false;
-                    // Restart the scene to ensure full layout reset
-                    this.scene.restart();
-                    return;
-                }
+                this.wasPortrait = false;
                 this.orientationOverlay.setVisible(false);
                 // Ensure layout re-applies after overlay hides
                 setTimeout(() => LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight), 0);

@@ -43,11 +43,11 @@
       "actions": [
         { "type": "pause", "targets": ["player", "enemies"] },
         { "type": "camera", "stopFollow": true },
-        { "type": "camera", "setBounds": { "x": 0, "y": 0, "width": 9045, "height": 720 } },
         { "type": "stopEnemySpawning", "clearEnemies": false },
         { "type": "clearEnemiesOffscreen", "xThreshold": 8600, "direction": "right", "excludeIds": ["enemy_critic"] },
         { "type": "spawnEnemy", "enemyType": "critic", "position": { "x": 8655, "y": 518 }, "id": "enemy_critic", "flipX": true, "protectionLevel": "invulnerable" },
-        { "type": "camera", "pan": { "x": 7845 }, "panToEntity": "enemy_critic", "screenPosition": 0.6, "duration": 2000, "ease": "Power2" },
+        { "type": "camera", "pan": { "x": 7845 }, "duration": 2000, "ease": "Power2" },
+        { "type": "camera", "setBounds": { "x": 7845, "y": 0, "width": 2400, "height": 720 } },
         { "type": "wait", "duration": 500 },
         { "type": "clearEnemiesOffscreen", "xThreshold": 8600, "direction": "right", "excludeIds": ["enemy_critic"] },
         { "type": "dialogue", "dialogue": { "speaker": "Critic", "text": "You'll never get this album back..." } },

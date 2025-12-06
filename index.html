@@ -141,6 +141,8 @@
     <script src="src/config/game-config.js?v=2.1.0"></script>
     <script src="src/config/level-config.js?v=2.0.0"></script>
     <script src="src/config/touch-controls-config.js?v=1.0.0"></script>
+    <script src="src/config/remote-logging-config.js?v=1.0.0"></script>
+    <script src="src/utils/remote-logger.js?v=1.0.0"></script>
     
             <!-- Core System Files - Load before other scripts -->
             <script src="src/core/GameState.js?v=2.1.0"></script>
@@ -234,6 +236,11 @@
             const gameContainer = document.getElementById('game-container') || document.documentElement;
             
             const isLandscape = () => window.innerWidth >= window.innerHeight;
+            const isLikelyMobile = () => {
+                const ua = navigator.userAgent || '';
+                const touch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
+                return /Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(ua) || touch;
+            };
             
             function updateOrientationState() {
                 if (isLandscape()) {
@@ -264,6 +271,13 @@
                 startBtn.textContent = 'Launching…';
                 startGameWhenReady();
             });
+
+            // Desktop: skip the overlay entirely and start immediately
+            if (!isLikelyMobile()) {
+                startGameWhenReady();
+                overlay.remove();
+                return;
+            }
             
             window.addEventListener('resize', updateOrientationState);
             updateOrientationState();

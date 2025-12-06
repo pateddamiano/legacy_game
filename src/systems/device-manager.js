@@ -62,13 +62,16 @@ const DeviceManager = {
     },
 
     checkOrientation() {
-        const width = window.innerWidth;
-        const height = window.innerHeight;
+        // Prefer visualViewport when available; fallback to inner dimensions
+        const vw = window.visualViewport;
+        const width = vw ? vw.width : window.innerWidth;
+        const height = vw ? vw.height : window.innerHeight;
         
         const wasPortrait = this.isPortrait;
         
-        this.isPortrait = height > width;
-        this.isLandscape = width >= height;
+        // Add a small hysteresis to avoid flip-flop when bars show/hide
+        this.isPortrait = height > width * 1.02;
+        this.isLandscape = !this.isPortrait;
         
         if (wasPortrait !== this.isPortrait) {
             console.log(`📱 Orientation Changed: ${this.isPortrait ? 'Portrait' : 'Landscape'}`);
