@@ -341,6 +341,47 @@ class SpecialActions {
         // Advance to next action
         this.advanceAction();
     }
+
+    // Force the active player character to a specific character (e.g. before a
+    // mirror-match boss duel that requires a particular character to be in control).
+    // No-ops if the requested character is already active.
+    executeSetActiveCharacter(action) {
+        const target = action.character;
+        const characterManager = this.scene.characterManager;
+
+        if (!target || !characterManager) {
+            console.warn('🎬 SetActiveCharacter action missing character or characterManager unavailable');
+            this.advanceAction();
+            return;
+        }
+
+        if (characterManager.selectedCharacter === target) {
+            console.log(`🎬 SetActiveCharacter: already playing as ${target}, no switch needed`);
+            this.advanceAction();
+            return;
+        }
+
+        console.log(`🎬 SetActiveCharacter: forcing switch to ${target}`);
+        const result = characterManager.switchCharacter(
+            true,
+            this.scene.animationManager,
+            this.scene.isJumping,
+            this.scene.eventCameraLocked || false
+        );
+
+        if (result && result.success) {
+            this.scene.player = result.newPlayer;
+            this.scene.selectedCharacter = result.newCharacter;
+            this.scene.currentCharacterConfig = characterManager.currentCharacterConfig;
+            if (!this.scene.player.characterConfig) {
+                this.scene.player.characterConfig = this.scene.currentCharacterConfig;
+            }
+        } else {
+            console.warn(`🎬 SetActiveCharacter: switch to ${target} failed`, result);
+        }
+
+        this.advanceAction();
+    }
 }
 
 // Export for use in event-manager.js

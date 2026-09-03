@@ -1,0 +1,78 @@
+{
+  "original_dimensions": null,
+  "scaled_dimensions": [
+    9053,
+    720
+  ],
+  "segment_width": 1200,
+  "game_height": 720,
+  "scale_factor": null,
+  "num_segments": 8,
+  "note": "Composite level 3 background: alley intro (idx0) + studio hallway (idx1-6) + alley boss arena reusing same alley.png (idx7)",
+  "segments": [
+    {
+      "index": 0,
+      "filename": "alley.png",
+      "width": 1079,
+      "height": 720,
+      "x_offset": 0,
+      "x_position": 0
+    },
+    {
+      "index": 1,
+      "filename": "segment_000.png",
+      "width": 1200,
+      "height": 720,
+      "x_offset": 0,
+      "x_position": 1079
+    },
+    {
+      "index": 2,
+      "filename": "segment_001.png",
+      "width": 1200,
+      "height": 720,
+      "x_offset": 1200,
+      "x_position": 2279
+    },
+    {
+      "index": 3,
+      "filename": "segment_002.png",
+      "width": 1200,
+      "height": 720,
+      "x_offset": 2400,
+      "x_position": 3479
+    },
+    {
+      "index": 4,
+      "filename": "segment_003.png",
+      "width": 1200,
+      "height": 720,
+      "x_offset": 3600,
+      "x_position": 4679
+    },
+    {
+      "index": 5,
+      "filename": "segment_004.png",
+      "width": 1200,
+      "height": 720,
+      "x_offset": 4800,
+      "x_position": 5879
+    },
+    {
+      "index": 6,
+      "filename": "segment_005.png",
+      "width": 895,
+      "height": 720,
+      "x_offset": 6000,
+      "x_position": 7079
+    },
+    {
+      "index": 7,
+      "filename": "alley.png",
+      "width": 1079,
+      "height": 720,
+      "x_offset": 0,
+      "x_position": 7974
+    }
+  ]
+}

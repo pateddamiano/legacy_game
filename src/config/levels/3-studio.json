@@ -1,0 +1,120 @@
+{
+  "id": 3,
+  "name": "The Studio",
+  "background": {
+    "type": "segmented",
+    "dir": "assets/backgrounds/level_3_segments",
+    "metadata": "assets/backgrounds/level_3_segments/metadata.json"
+  },
+  "world": { "top": 470, "bottom": 690 },
+  "spawn": { "x": 100, "y": 490 },
+  "audio": {
+    "music": "crisisMusic",
+    "musicVolume": 0.5
+  },
+  "enemies": {
+    "spawnRate": 1200,
+    "max": 6,
+    "types": ["scumbag_rapper", "scumbag_manager"],
+    "multipliers": { "health": 1.0, "damage": 1.0 }
+  },
+  "extras": [],
+  "events": [
+    {
+      "id": "level_3_alley_intro",
+      "trigger": { "type": "position", "value": 100, "tolerance": 60, "once": true },
+      "actions": [
+        { "type": "pause", "targets": ["player", "enemies"] },
+        { "type": "stopEnemySpawning", "clearEnemies": false },
+        { "type": "dialogue", "dialogue": { "speaker": "Narrator", "text": "The trail leads to a rundown recording studio on the edge of town." } },
+        { "type": "dialogue", "dialogue": { "speaker": "Narrator", "text": "This has to be where The Negatives are hiding out with the drive." } },
+        { "type": "resume", "targets": ["player", "enemies"] }
+      ]
+    },
+    {
+      "id": "level_3_enter_studio",
+      "trigger": { "type": "position", "value": 650, "tolerance": 40, "once": true },
+      "actions": [
+        { "type": "pause", "targets": ["player", "enemies"] },
+        { "type": "camera", "stopFollow": true },
+        { "type": "fade", "direction": "out", "duration": 600, "color": { "r": 0, "g": 0, "b": 0 } },
+        { "type": "startEnemySpawning", "config": { "maxEnemies": 6, "spawnInterval": 1200 } },
+        { "type": "fade", "direction": "in", "duration": 600, "color": { "r": 0, "g": 0, "b": 0 } },
+        { "type": "camera", "follow": "player" },
+        { "type": "resume", "targets": ["player", "enemies"] }
+      ]
+    },
+    {
+      "id": "level_3_negatives_reveal",
+      "trigger": { "type": "position", "value": 4500, "tolerance": 50, "once": true },
+      "actions": [
+        { "type": "pause", "targets": ["player", "enemies"] },
+        { "type": "stopEnemySpawning", "clearEnemies": true },
+        { "type": "spawnEnemy", "enemyType": "negative_tireek", "position": { "x": 4650, "y": 520 }, "id": "enemy_neg_tireek_cameo", "flipX": true, "protectionLevel": "invulnerable" },
+        { "type": "spawnEnemy", "enemyType": "negative_tryston", "position": { "x": 4780, "y": 590 }, "id": "enemy_neg_tryston_cameo", "flipX": true, "protectionLevel": "invulnerable" },
+        { "type": "dialogue", "dialogue": { "speaker": "Tireek", "text": "Whoa! That's... that's a negative version of us!" } },
+        { "type": "dialogue", "dialogue": { "speaker": "Tryston", "text": "Yeah... this can't be good." } },
+        { "type": "dialogue", "dialogue": { "speaker": "Negative Tireek", "text": "Surprised? The label built us to look just like you." } },
+        { "type": "dialogue", "dialogue": { "speaker": "Negative Tryston", "text": "We took your album so you'd have no leverage left." } },
+        { "type": "dialogue", "dialogue": { "speaker": "Negative Tireek", "text": "No album means no choice. You'll sign whatever 360 deal they put in front of you." } },
+        { "type": "dialogue", "dialogue": { "speaker": "Negative Tryston", "text": "Get through the label's people if you want it back." } },
+        { "type": "flip", "target": "enemy_neg_tireek_cameo", "flipX": false },
+        { "type": "flip", "target": "enemy_neg_tryston_cameo", "flipX": false },
+        { "type": "move", "target": "enemy_neg_tireek_cameo", "to": { "x": "+=500", "y": 520 }, "duration": 1000, "ease": "Power2", "destroyOnComplete": true },
+        { "type": "move", "target": "enemy_neg_tryston_cameo", "to": { "x": "+=500", "y": 590 }, "duration": 1000, "ease": "Power2", "destroyOnComplete": true },
+        { "type": "waitForEnemyDestroy", "target": "enemy_neg_tireek_cameo" },
+        { "type": "dialogue", "dialogue": { "speaker": "Narrator", "text": "The label's own execs flood in to cover their escape, 360 contracts already in hand." } },
+        { "type": "dialogue", "dialogue": { "speaker": "Exec", "text": "Sign here, and all of this goes away." } },
+        { "type": "playMusic", "musicKey": "riverMusic" },
+        { "type": "startEnemySpawning", "config": { "maxEnemies": 6, "spawnInterval": 1100, "allowedEnemyTypes": ["exec"] } },
+        { "type": "resume", "targets": ["player", "enemies"] }
+      ]
+    },
+    {
+      "id": "level_3_boss_arena",
+      "trigger": { "type": "position", "value": 7850, "tolerance": 40, "once": true },
+      "actions": [
+        { "type": "pause", "targets": ["player", "enemies"] },
+        { "type": "camera", "stopFollow": true },
+        { "type": "stopEnemySpawning", "clearEnemies": true },
+        { "type": "clearEnemiesOffscreen", "xThreshold": 7850, "direction": "right", "excludeIds": [] },
+        { "type": "fade", "direction": "out", "duration": 600, "color": { "r": 0, "g": 0, "b": 0 } },
+        { "type": "camera", "setBounds": { "x": 7974, "y": 0, "width": 1079, "height": 720 } },
+        { "type": "setPlayerBounds", "bounds": { "minX": 8010, "maxX": 9010, "minY": 470, "maxY": 690 } },
+        { "type": "setActiveCharacter", "character": "tireek" },
+        { "type": "playMusic", "musicKey": "malibuMusic" },
+        { "type": "fade", "direction": "in", "duration": 600, "color": { "r": 0, "g": 0, "b": 0 } },
+        { "type": "camera", "follow": "player" },
+        { "type": "setDialogueStyle", "position": { "x": 640, "y": 600 }, "textSizes": { "speaker": 35, "message": 35 } },
+        { "type": "dialogue", "dialogue": { "speaker": "Narrator", "text": "This is it. The Negatives, face to face." } },
+        { "type": "dialogue", "dialogue": { "speaker": "Negative Tireek", "text": "So, you're the real one. Come to take back your album?" } },
+        { "type": "dialogue", "dialogue": { "speaker": "Negative Tireek", "text": "Let's see which one of us is stronger." } },
+        { "type": "spawnBoss", "bossType": "negative_tireek", "position": { "x": 8700, "y": 560 }, "id": "boss_negative_tireek" },
+        { "type": "showBossHealthBar", "bossId": "boss_negative_tireek" },
+        { "type": "resume", "targets": ["player", "enemies"] },
+        { "type": "waitForBossDefeated", "bossId": "boss_negative_tireek" },
+        { "type": "pause", "targets": ["player", "enemies"] },
+        { "type": "wait", "duration": 500 },
+        { "type": "dialogue", "dialogue": { "speaker": "Negative Tireek", "text": "You've beaten me... but I'm not the one holding the drive." } },
+        { "type": "setActiveCharacter", "character": "tryston" },
+        { "type": "wait", "duration": 300 },
+        { "type": "dialogue", "dialogue": { "speaker": "Negative Tryston", "text": "He was right. I'm the one holding your future, right here." } },
+        { "type": "spawnBoss", "bossType": "negative_tryston", "position": { "x": 8700, "y": 560 }, "id": "boss_negative_tryston" },
+        { "type": "showBossHealthBar", "bossId": "boss_negative_tryston" },
+        { "type": "resume", "targets": ["player", "enemies"] },
+        { "type": "waitForBossDefeated", "bossId": "boss_negative_tryston" },
+        { "type": "pause", "targets": ["player", "enemies"] },
+        { "type": "wait", "duration": 500 },
+        { "type": "dialogue", "dialogue": { "speaker": "Negative Tryston", "text": "Take it, then. It's yours." } },
+        { "type": "dialogue", "dialogue": { "speaker": "Narrator", "text": "A hard drive clatters to the ground. Your album -- the one they stole -- is finally back in your hands." } },
+        { "type": "dialogue", "dialogue": { "speaker": "Tryston", "text": "Everything we've been through... it all comes down to this." } },
+        { "type": "dialogue", "dialogue": { "speaker": "Tireek", "text": "No album, no leverage. No 360 deal is ever gonna own us now." } },
+        { "type": "dialogue", "dialogue": { "speaker": "Narrator", "text": "The Negatives lie defeated, and the album is safe at last." } },
+        { "type": "resume", "targets": ["player", "enemies"] }
+      ]
+    }
+  ],
+  "assets": {
+    "images": []
+  }
+}

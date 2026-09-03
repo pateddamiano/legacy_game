@@ -174,11 +174,129 @@ const CRITIC_CONFIG = new CharacterConfig(
     }
 );
 
+// Define Scumbag Rapper enemy configuration with variations
+const SCUMBAG_RAPPER_CONFIG = new CharacterConfig(
+    'scumbag_rapper',
+    {
+        walk: 'assets/characters/scumbag_rapper/spritesheets/scumbag_rapper_1_idle_4frames.png', // Using idle as walk for now
+        attack: 'assets/characters/scumbag_rapper/spritesheets/scumbag_rapper_1_attack_4frames.png',
+        idle: 'assets/characters/scumbag_rapper/spritesheets/scumbag_rapper_1_idle_4frames.png'
+    },
+    {
+        walk: { frames: 4, frameRate: 10, repeat: -1 },   // Medium speed walk (using idle animation)
+        attack: { frames: 4, frameRate: 16, repeat: 0 },  // Medium speed attack
+        idle: { frames: 4, frameRate: 8, repeat: -1 }     // Medium idle animation
+    },
+    {width: 128, height: 96}, // frameSize
+    1.0, // baseScale
+    {minScale: 3.0, maxScale: 4.0}, // perspectiveScales
+    [
+        // Variation 1: scumbag_rapper2 (red outfit)
+        {
+            name: 'scumbag_rapper2',
+            spriteSheets: {
+                walk: 'assets/characters/scumbag_rapper/spritesheets/scumbag_rapper_2_idle_4frames.png',
+                attack: 'assets/characters/scumbag_rapper/spritesheets/scumbag_rapper_2_attack_4frames.png',
+                idle: 'assets/characters/scumbag_rapper/spritesheets/scumbag_rapper_2_idle_4frames.png'
+            }
+        }
+    ]
+);
+
+// Define Exec enemy configuration with variations
+// Industry execs sent by the label to cover for The Negatives, mid-level 3.
+const EXEC_CONFIG = new CharacterConfig(
+    'exec',
+    {
+        walk: 'assets/characters/execs/spritesheets/exec1_idle_4frames.png', // Using idle as walk for now
+        attack: 'assets/characters/execs/spritesheets/exec1_attack_4frames.png',
+        idle: 'assets/characters/execs/spritesheets/exec1_idle_4frames.png'
+    },
+    {
+        walk: { frames: 4, frameRate: 10, repeat: -1 },   // Medium speed walk (using idle animation)
+        attack: { frames: 4, frameRate: 16, repeat: 0 },  // Medium speed attack
+        idle: { frames: 4, frameRate: 8, repeat: -1 }     // Medium idle animation
+    },
+    {width: 128, height: 96}, // frameSize
+    1.0, // baseScale
+    {minScale: 3.0, maxScale: 4.0}, // perspectiveScales
+    [
+        // Variation 1: exec2
+        {
+            name: 'exec2',
+            spriteSheets: {
+                walk: 'assets/characters/execs/spritesheets/exec2_idle_4frames.png',
+                attack: 'assets/characters/execs/spritesheets/exec2_attack_4frames.png',
+                idle: 'assets/characters/execs/spritesheets/exec2_idle_4frames.png'
+            }
+        }
+    ]
+);
+
+// Define Scumbag Manager enemy configuration
+const SCUMBAG_MANAGER_CONFIG = new CharacterConfig(
+    'scumbag_manager',
+    {
+        walk: 'assets/characters/scumbag_manager/spritesheets/scumbag_manager_idle_4frames.png', // Using idle as walk
+        punch: 'assets/characters/scumbag_manager/spritesheets/scumbag_manager_punch_4frames.png',
+        idle: 'assets/characters/scumbag_manager/spritesheets/scumbag_manager_idle_4frames.png'
+    },
+    {
+        walk: { frames: 4, frameRate: 8, repeat: -1 },    // Slower, heavier walk (using idle animation)
+        punch: { frames: 4, frameRate: 14, repeat: 0 },   // Heavy punch attack
+        idle: { frames: 4, frameRate: 6, repeat: -1 }     // Slow idle animation
+    }
+);
+
+// Define Negative Tireek boss configuration
+// A corrupted mirror of Tireek, faced in single combat at the end of level 3.
+// Reuses the player-style moveset (run/jab/cross/kick/idle) since it's built from
+// the same animation set as the playable character, just with no jump/airkick assets.
+const NEGATIVE_TIREEK_CONFIG = new CharacterConfig(
+    'negative_tireek',
+    {
+        walk: 'assets/characters/negative_tireek/Negative_Tireek_Run.png',
+        jab: 'assets/characters/negative_tireek/Negative_Tireek_Jab.png',
+        cross: 'assets/characters/negative_tireek/Negative_Tireek_Cross.png',
+        kick: 'assets/characters/negative_tireek/Negative_Tireek_Kick.png',
+        idle: 'assets/characters/negative_tireek/Negative_Tireek_Idle.png'
+    },
+    {
+        walk: { frames: 8, frameRate: 12, repeat: -1 },
+        jab: { frames: 4, frameRate: 20, repeat: 0 },
+        cross: { frames: 4, frameRate: 20, repeat: 0 },
+        kick: { frames: 5, frameRate: 16, repeat: 0 },
+        idle: { frames: 5, frameRate: 12, repeat: -1 }
+    },
+    {width: 128, height: 128} // frameSize (negative sprites are exported taller than the base cast)
+);
+
+// Define Negative Tryston boss configuration
+// A corrupted mirror of Tryston, faced in single combat at the end of level 3.
+const NEGATIVE_TRYSTON_CONFIG = new CharacterConfig(
+    'negative_tryston',
+    {
+        walk: 'assets/characters/negative_tryston/negative_Tryston_Run.png',
+        jab: 'assets/characters/negative_tryston/negative_Tryston_Jab.png',
+        cross: 'assets/characters/negative_tryston/negative_Tryston_Cross.png',
+        kick: 'assets/characters/negative_tryston/negative_Tryston_Kick.png',
+        idle: 'assets/characters/negative_tryston/negative_Tryston_Idle.png'
+    },
+    {
+        walk: { frames: 7, frameRate: 12, repeat: -1 }, // source sheet only has 7 run frames
+        jab: { frames: 4, frameRate: 20, repeat: 0 },
+        cross: { frames: 4, frameRate: 20, repeat: 0 },
+        kick: { frames: 5, frameRate: 16, repeat: 0 },
+        idle: { frames: 5, frameRate: 12, repeat: -1 }
+    },
+    {width: 128, height: 128} // frameSize (negative sprites are exported taller than the base cast)
+);
+
 // Array of all available playable characters
 const ALL_CHARACTERS = [TIREEK_CONFIG, TRYSTON_CONFIG];
 
 // Array of all available enemy types
-const ALL_ENEMY_TYPES = [CRACKHEAD_CONFIG, GREEN_THUG_CONFIG, BLACK_THUG_CONFIG, CRITIC_CONFIG];
+const ALL_ENEMY_TYPES = [CRACKHEAD_CONFIG, GREEN_THUG_CONFIG, BLACK_THUG_CONFIG, CRITIC_CONFIG, SCUMBAG_RAPPER_CONFIG, SCUMBAG_MANAGER_CONFIG, EXEC_CONFIG, NEGATIVE_TIREEK_CONFIG, NEGATIVE_TRYSTON_CONFIG];
 
 // ========================================
 // EXTRAS REGISTRY (STATIC, NON-ANIMATED CHARACTERS)
@@ -217,6 +335,11 @@ if (typeof module !== 'undefined' && module.exports) {
         GREEN_THUG_CONFIG,
         BLACK_THUG_CONFIG,
         CRITIC_CONFIG,
+        SCUMBAG_RAPPER_CONFIG,
+        SCUMBAG_MANAGER_CONFIG,
+        EXEC_CONFIG,
+        NEGATIVE_TIREEK_CONFIG,
+        NEGATIVE_TRYSTON_CONFIG,
         ALL_CHARACTERS,
         ALL_ENEMY_TYPES,
         EXTRAS_REGISTRY,
@@ -233,5 +356,10 @@ if (typeof window !== 'undefined') {
     window.GREEN_THUG_CONFIG = GREEN_THUG_CONFIG;
     window.BLACK_THUG_CONFIG = BLACK_THUG_CONFIG;
     window.CRITIC_CONFIG = CRITIC_CONFIG;
+    window.SCUMBAG_RAPPER_CONFIG = SCUMBAG_RAPPER_CONFIG;
+    window.SCUMBAG_MANAGER_CONFIG = SCUMBAG_MANAGER_CONFIG;
+    window.EXEC_CONFIG = EXEC_CONFIG;
+    window.NEGATIVE_TIREEK_CONFIG = NEGATIVE_TIREEK_CONFIG;
+    window.NEGATIVE_TRYSTON_CONFIG = NEGATIVE_TRYSTON_CONFIG;
     window.EXTRAS_REGISTRY = EXTRAS_REGISTRY;
 }

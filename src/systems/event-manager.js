@@ -361,6 +361,9 @@ class EventManager {
             case 'bossDefeatedDialogue':
                 this.bossActions.executeBossDefeatedDialogue(action);
                 break;
+            case 'setActiveCharacter':
+                this.specialActions.executeSetActiveCharacter(action);
+                break;
             default:
                 console.warn(`🎬 Unknown action type: ${action.type}`);
                 this.advanceAction();

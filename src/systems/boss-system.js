@@ -69,6 +69,64 @@ const BOSS_TYPE_CONFIGS = {
         edgeMargin: 150,               // Distance from camera edges
         
         description: "The Critic - formidable opponent who stands on arena edges and throws rating weapons"
+    },
+
+    negative_tireek: {
+        // Corrupted mirror of Tireek - a straight melee duelist, no gimmicks
+        name: 'Negative Tireek',
+        health: 150,
+        speed: 260,
+        attackCooldown: 300,
+        playerDamage: 8,
+        attackTypes: ['jab', 'cross', 'kick'],
+        detectionRange: 2000,
+        behaviors: [], // no jumpOnDamage/throwWeapons/verticalMovement - pure 1v1 melee
+
+        // Jump behavior (disabled via behaviors above, values kept for validation/safety)
+        jumpOnDamageThreshold: 1.1,
+        jumpCooldown: 999999,
+        jumpType: 'flip',
+        jumpDistance: 0,
+
+        // Weapon throwing (disabled via behaviors above)
+        throwWeaponCooldown: 999999,
+        throwWeaponRange: 0,
+        throwWeaponType: 'vinyl',
+
+        // Edge-standing behavior (disabled - fights in the middle of the arena)
+        standOnEdges: false,
+        edgeMargin: 0,
+
+        description: "Negative Tireek - Tireek's corrupted double, fought head-to-head"
+    },
+
+    negative_tryston: {
+        // Corrupted mirror of Tryston - a straight melee duelist, no gimmicks
+        name: 'Negative Tryston',
+        health: 150,
+        speed: 260,
+        attackCooldown: 300,
+        playerDamage: 8,
+        attackTypes: ['jab', 'cross', 'kick'],
+        detectionRange: 2000,
+        behaviors: [], // no jumpOnDamage/throwWeapons/verticalMovement - pure 1v1 melee
+
+        // Jump behavior (disabled via behaviors above, values kept for validation/safety)
+        jumpOnDamageThreshold: 1.1,
+        jumpCooldown: 999999,
+        jumpType: 'flip',
+        jumpDistance: 0,
+
+        // Weapon throwing (disabled via behaviors above)
+        throwWeaponCooldown: 999999,
+        throwWeaponRange: 0,
+        throwWeaponType: 'vinyl',
+
+        // Edge-standing behavior (disabled - fights in the middle of the arena)
+        standOnEdges: false,
+        edgeMargin: 0,
+
+        description: "Negative Tryston - Tryston's corrupted double, fought head-to-head"
     }
 };
 
@@ -408,7 +466,9 @@ class Boss extends Enemy {
         
         // Use boss config attack types
         const attackTypes = this.bossConfig.attackTypes || this.enemyTypeConfig?.attackTypes || ['enemy_punch'];
-        const attackType = attackTypes[0]; // Use first attack type for boss
+        // Randomly vary attacks when a boss has more than one (e.g. jab/cross/kick duelists);
+        // single-attack bosses (like The Critic) always get that one attack, unchanged.
+        const attackType = attackTypes[Math.floor(Math.random() * attackTypes.length)];
         
         // Verify the attack animation exists
         if (!this.characterConfig.animations[attackType]) {

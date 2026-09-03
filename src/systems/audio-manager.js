@@ -688,11 +688,28 @@ class AudioManager {
                 // Boss critic uses black thug attack sound (similar punch attack)
                 soundKey = 'enemyBlackThugAttack';
                 break;
+            case 'scumbag_rapper':
+                // Quick jab-like attack, reuse green thug sound
+                soundKey = 'enemyGreenThugAttack';
+                break;
+            case 'scumbag_manager':
+                // Heavy punch attack, reuse black thug sound
+                soundKey = 'enemyBlackThugAttack';
+                break;
+            case 'exec':
+                // Suit throwing a punch, reuse black thug sound
+                soundKey = 'enemyBlackThugAttack';
+                break;
+            case 'negative_tireek':
+            case 'negative_tryston':
+                // Corrupted mirrors of the player characters - use the player's own punch sounds
+                this.playRandomSoundEffect(['mainPunch', 'mainPunch2'], 0.3);
+                return;
             default:
                 console.warn(`🔊 Unknown enemy type: ${enemyType}, using crackhead sound`);
                 soundKey = 'enemyCrackheadAttack';
         }
-        
+
         this.playSoundEffect(soundKey, 0.25);
     }
     

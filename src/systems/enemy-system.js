@@ -147,6 +147,68 @@ const ENEMY_TYPE_CONFIGS = {
         detectionRange: 2000,        // Long detection range
         baseScale: 0.85,              // Base size multiplier (1.0 = normal size)
         description: "The Critic - regular enemy version (for scripted events)"
+    },
+
+    scumbag_rapper: {
+        // Level 3 "Negatives" enemy - quick, aggressive attacker
+        health: 25,                    // Moderate health
+        speed: 320,                   // Fast, aggressive movement
+        attackCooldown: 220,         // Standard attack speed
+        playerDamage: 6,             // Moderate damage
+        attackTypes: ['attack'],
+        detectionRange: 1300,        // Aggressive detection range
+        baseScale: 0.6,              // Base size multiplier (1.0 = normal size)
+        description: "Scumbag Rapper - fast, aggressive Negatives enforcer"
+    },
+
+    scumbag_manager: {
+        // Level 3 "Negatives" enemy - slower, heavy-hitting bruiser
+        health: 40,                    // Higher health, tankier
+        speed: 180,                   // Slower, lumbering movement
+        attackCooldown: 260,         // Slightly slower attacks
+        playerDamage: 9,             // Heavier damage
+        attackTypes: ['punch'],
+        detectionRange: 1400,        // Long detection range
+        baseScale: 0.65,              // Base size multiplier (1.0 = normal size)
+        description: "Scumbag Manager - slow, heavy-hitting Negatives bruiser"
+    },
+
+    exec: {
+        // Level 3 mid-level enemy - the label's security, swapped in after the Negatives reveal
+        health: 30,                    // Tougher than the scumbag grunts
+        speed: 260,                   // Brisk, no-nonsense pace
+        attackCooldown: 240,         // Fairly quick attacks
+        playerDamage: 8,             // Solid damage
+        attackTypes: ['attack'],
+        detectionRange: 1400,        // Long detection range
+        baseScale: 0.6,              // Base size multiplier (1.0 = normal size)
+        description: "Industry Exec - label enforcer pushing predatory 360 deals, sent to cover for The Negatives"
+    },
+
+    negative_tireek: {
+        // Boss stats here are the fallback for base Enemy stats (speed, damage, etc.);
+        // health/behaviors for the actual boss fight come from BOSS_TYPE_CONFIGS.
+        health: 60,
+        speed: 260,
+        attackCooldown: 300,
+        playerDamage: 8,
+        attackTypes: ['jab', 'cross', 'kick'],
+        detectionRange: 2000,
+        baseScale: 0.75,
+        description: "Negative Tireek - a corrupted mirror of Tireek, faced in single combat"
+    },
+
+    negative_tryston: {
+        // Boss stats here are the fallback for base Enemy stats (speed, damage, etc.);
+        // health/behaviors for the actual boss fight come from BOSS_TYPE_CONFIGS.
+        health: 60,
+        speed: 260,
+        attackCooldown: 300,
+        playerDamage: 8,
+        attackTypes: ['jab', 'cross', 'kick'],
+        detectionRange: 2000,
+        baseScale: 0.75,
+        description: "Negative Tryston - a corrupted mirror of Tryston, faced in single combat"
     }
 };
 
