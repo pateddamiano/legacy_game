@@ -135,14 +135,15 @@
     </div>
     
     <!-- Phaser 3 CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+    <!-- crossorigin so exceptions thrown inside Phaser report a real message + stack instead of "Script error." -->
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js" crossorigin="anonymous"></script>
     
     <!-- Configuration Files - Load first -->
     <script src="src/config/game-config.js?v=2.1.0"></script>
     <script src="src/config/cutscenes.js?v=1.0.0"></script>
     <script src="src/config/touch-controls-config.js?v=1.0.0"></script>
-    <script src="src/config/remote-logging-config.js?v=1.0.0"></script>
-    <script src="src/utils/remote-logger.js?v=1.0.0"></script>
+    <script src="src/config/remote-logging-config.js?v=1.1.0"></script>
+    <script src="src/utils/remote-logger.js?v=1.1.0"></script>
     
             <!-- Core System Files - Load before other scripts -->
             <script src="src/core/GameState.js?v=2.1.0"></script>
@@ -163,7 +164,7 @@
     <script src="src/systems/touch-controls-overlay.js?v=1.0.0"></script>
     <script src="src/systems/input-manager.js?v=6.4.0"></script>
     <script src="src/systems/weapon-system.js?v=6.2.0"></script>
-    <script src="src/systems/enemy-system.js?v=6.9.0"></script>
+    <script src="src/systems/enemy-system.js?v=7.0.0"></script>
     <script src="src/systems/boss-system.js?v=1.0.0"></script>
     <script src="src/systems/extras-manager.js?v=1.0.0"></script>
     <script src="src/systems/event-enemy-protection.js?v=1.0.0"></script>
@@ -188,7 +189,7 @@
     <script src="src/systems/combat-manager.js?v=1.1.0"></script>
     <script src="src/systems/player-physics-manager.js?v=1.0.0"></script>
     <script src="src/systems/enemy-spawn-manager.js?v=1.2.0"></script>
-    <script src="src/systems/animation-setup-manager.js?v=1.0.0"></script>
+    <script src="src/systems/animation-setup-manager.js?v=1.1.0"></script>
     <script src="src/systems/effect-system.js?v=1.0.0"></script>
     <script src="src/systems/debug-manager.js?v=1.0.0"></script>
     <script src="src/systems/level-transition-manager.js?v=2.1.0"></script>
@@ -199,7 +200,7 @@
     <script src="src/systems/lives-manager.js?v=1.0.0"></script>
 
     <!-- JSON-based Level System -->
-    <script src="src/systems/level/LevelRegistry.js?v=1.1.0"></script>
+    <script src="src/systems/level/LevelRegistry.js?v=1.2.0"></script>
     <script src="src/systems/level/LevelAssetLoader.js?v=1.0.0"></script>
     <script src="src/systems/level/WorldFactory.js?v=1.1.0"></script>
     <script src="src/systems/level/LevelLifecycle.js?v=1.1.0"></script>
@@ -216,7 +217,7 @@
     <script src="src/scenes/game-scene.js?v=9.1.0"></script>
 
     <!-- Main Game Entry Point - Load last -->
-    <script src="game.js?v=7.0.0"></script>
+    <script src="game.js?v=7.1.0"></script>
     
     <script>
         (function () {

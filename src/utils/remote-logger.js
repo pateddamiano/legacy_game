@@ -1,12 +1,32 @@
 // ========================================
 // REMOTE LOGGER (client-side)
 // ========================================
-// Sends lightweight POST logs to a tiny HTTP server so you can
-// view mobile logs from your desktop terminal.
+// Sends console.log lines to a tiny HTTP server (scripts/remote-log-server.js)
+// so you can view mobile logs from your desktop terminal.
+//
+// Safety properties (see remote-logging-config.js for the incident behind them):
+//   - at most ONE request in flight, ever; lines are batched into it
+//   - the queue is capped; when full, the oldest lines are dropped
+//   - after a few failed posts the logger goes quiet for 30s instead of retrying
+// So even with the mirror on and the endpoint unreachable, the game never has
+// more than one pending fetch and its own asset requests are never starved.
 (function setupRemoteLogger() {
     const originalLog = console.log.bind(console);
     const initialConfig = (typeof window !== 'undefined' && window.REMOTE_LOG_CONFIG) ? window.REMOTE_LOG_CONFIG : {};
-    let mirrorEnabled = Boolean(initialConfig.mirrorConsole);
+
+    const urlOptIn = (typeof location !== 'undefined') && new URLSearchParams(location.search).get('remotelog') === '1';
+    let mirrorEnabled = Boolean(initialConfig.mirrorConsole) || urlOptIn;
+
+    const MAX_QUEUE = 200;      // lines held while waiting to send
+    const FLUSH_MS = 250;       // batch window
+    const MAX_FAILURES = 5;     // consecutive failed posts before backing off
+    const BACKOFF_MS = 30000;
+
+    let queue = [];
+    let flushTimer = null;
+    let inFlight = false;
+    let failures = 0;
+    let disabledUntil = 0;
 
     function getConfig() {
         return (typeof window !== 'undefined' && window.REMOTE_LOG_CONFIG) ? window.REMOTE_LOG_CONFIG : initialConfig;
@@ -28,28 +48,60 @@
         });
     }
 
-    function remoteLog(...args) {
+    function schedule() {
+        if (!flushTimer) {
+            flushTimer = setTimeout(flush, FLUSH_MS);
+        }
+    }
+
+    function flush() {
+        flushTimer = null;
+        if (inFlight || queue.length === 0) return;
+
         const { serverUrl, timeoutMs = 1200 } = getConfig();
-        if (!serverUrl || typeof fetch !== 'function') return;
+        if (!serverUrl || typeof fetch !== 'function' || Date.now() < disabledUntil) {
+            queue = [];
+            return;
+        }
 
-        const supportsAbort = typeof AbortController !== 'undefined';
-        const controller = supportsAbort ? new AbortController() : null;
-        const timeout = supportsAbort ? setTimeout(() => controller.abort(), timeoutMs) : null;
+        const lines = queue.splice(0, MAX_QUEUE);
+        const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
 
+        inFlight = true;
         fetch(serverUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 ts: Date.now(),
                 ua: (typeof navigator !== 'undefined' && navigator.userAgent) || 'unknown',
-                message: normalizeArgs(args)
+                // One string per batch keeps the existing server's `message` handling working
+                message: [lines.join('\n')]
             }),
             signal: controller ? controller.signal : undefined
+        }).then(() => {
+            failures = 0;
         }).catch(() => {
-            /* Network errors are intentionally swallowed to avoid breaking gameplay */
+            failures++;
+            if (failures >= MAX_FAILURES) {
+                failures = 0;
+                disabledUntil = Date.now() + BACKOFF_MS;
+                queue = [];
+                originalLog(`📡 Remote log endpoint unreachable - pausing remote logging for ${BACKOFF_MS / 1000}s`);
+            }
         }).finally(() => {
             if (timeout) clearTimeout(timeout);
+            inFlight = false;
+            if (queue.length) schedule();
         });
+    }
+
+    function remoteLog(...args) {
+        if (queue.length >= MAX_QUEUE) {
+            queue.shift(); // drop the oldest rather than grow without bound
+        }
+        queue.push(normalizeArgs(args).join(' '));
+        schedule();
     }
 
     // Attach globally
@@ -57,7 +109,7 @@
         window.remoteLog = remoteLog;
     }
 
-    // Mirror console.log when console.remote is set to true
+    // console.remote = true / false toggles mirroring at runtime
     Object.defineProperty(console, 'remote', {
         get() {
             return mirrorEnabled;
@@ -73,5 +125,8 @@
             remoteLog(...args);
         }
     };
-})();
 
+    if (mirrorEnabled) {
+        originalLog(`📡 Remote console mirroring ON -> ${getConfig().serverUrl}`);
+    }
+})();

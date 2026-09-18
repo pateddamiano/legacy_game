@@ -833,7 +833,17 @@ class Enemy {
         // Make sure the lock timer is longer than the windup time so damage can be dealt
         this.lockTimer = Math.max(animationDuration, windupDelay + 100); // Add 100ms buffer
         // Use variation name for animation key
-        this.sprite.anims.play(`${this.variationName}_${attackType}`, true);
+        const attackKey = `${this.variationName}_${attackType}`;
+        if (this.scene.anims.exists(attackKey)) {
+            this.sprite.anims.play(attackKey, true);
+        } else {
+            // Missing/frameless attack animation: still attack, just don't crash the frame loop
+            if (!this._warnedMissingAttack) {
+                this._warnedMissingAttack = true;
+                console.error(`❌ Enemy ${this.variationName} has no usable attack animation '${attackKey}' - see boot log`);
+            }
+            this.sprite.anims.play(`${this.variationName}_idle`, true);
+        }
         
         // Start attack windup - attack won't deal damage immediately
         this.isWindingUp = true;

@@ -28,6 +28,16 @@ class AnimationSetupManager {
 
             console.log(`Creating animation ${spriteKey} with ${config.frames} frames at ${config.frameRate} FPS`);
             
+            // A sheet that is narrower/shorter than one frame (or missing) yields no frames.
+            // Registering that animation would make anims.play() throw inside Phaser the
+            // first time it runs - mid-fight. Refuse it here and say exactly which sheet.
+            if (!frameConfig || frameConfig.length === 0) {
+                const tex = this.scene.textures.exists(spriteKey) ? this.scene.textures.get(spriteKey).source[0] : null;
+                console.error(`❌ Animation ${spriteKey} has NO frames - spritesheet is ${tex ? tex.width + 'x' + tex.height : 'not loaded'}, ` +
+                    `frame size is ${characterConfig.frameSize.width}x${characterConfig.frameSize.height}. Fix the sheet or the config's frameSize.`);
+                return;
+            }
+            
             try {
                 this.scene.anims.create({
                     key: `${charName}_${animName}`,
@@ -56,6 +66,11 @@ class AnimationSetupManager {
                     });
 
                     console.log(`Creating variation animation ${spriteKey} with ${config.frames} frames at ${config.frameRate} FPS`);
+                    
+                    if (!frameConfig || frameConfig.length === 0) {
+                        console.error(`❌ Animation ${spriteKey} has NO frames - check the spritesheet size against frameSize ${characterConfig.frameSize.width}x${characterConfig.frameSize.height}`);
+                        return;
+                    }
                     
                     try {
                         this.scene.anims.create({

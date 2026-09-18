@@ -43,14 +43,24 @@ if (window.DEBUG_MODE) {
     function banner() {
         let el = document.getElementById('game-error-banner');
         if (el) return el;
-        el = document.createElement('pre');
+        el = document.createElement('div');
         el.id = 'game-error-banner';
-        el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;margin:0;padding:10px 14px;' +
-            'background:rgba(120,0,0,0.92);color:#fff;font:13px/1.4 monospace;white-space:pre-wrap;' +
-            'max-height:45vh;overflow:auto;border-bottom:3px solid #f55;cursor:pointer';
-        el.title = 'Click to dismiss';
-        el.addEventListener('click', () => el.remove());
-        document.body.appendChild(el);
+        el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;margin:0;padding:10px 44px 10px 14px;' +
+            'background:rgba(120,0,0,0.94);color:#fff;font:13px/1.4 monospace;white-space:pre-wrap;' +
+            'max-height:45vh;overflow:auto;border-bottom:3px solid #f55;user-select:text;cursor:text';
+        const close = document.createElement('button');
+        close.textContent = '✕';
+        close.title = 'Dismiss';
+        close.style.cssText = 'position:absolute;top:6px;right:8px;background:#f55;color:#fff;border:0;' +
+            'border-radius:4px;font:bold 14px/1 monospace;padding:4px 8px;cursor:pointer';
+        close.addEventListener('click', () => el.remove());
+        const text = document.createElement('pre');
+        text.id = 'game-error-banner-text';
+        text.style.cssText = 'margin:0;font:inherit;white-space:pre-wrap';
+        el.appendChild(close);
+        el.appendChild(text);
+        // Inside the fullscreen target, or it is invisible while the game is fullscreen
+        (document.getElementById('game-container') || document.body).appendChild(el);
         return el;
     }
     window.__showGameError = function (title, err) {
@@ -58,7 +68,15 @@ if (window.DEBUG_MODE) {
         const line = `[${new Date().toLocaleTimeString()}] ${title}\n    ${stack}`;
         seen.push(line);
         console.error('🛑', title, err);
-        try { banner().textContent = 'GAME ERROR (click to dismiss)\n\n' + seen.slice(-4).join('\n\n'); } catch (e) {}
+        try {
+            banner();
+            document.getElementById('game-error-banner-text').textContent =
+                'GAME ERROR - select to copy, ✕ to dismiss\n\n' + seen.slice(-4).join('\n\n');
+        } catch (e) {}
+        // Also hand it to the dev server so it lands in the server log even if nobody copies it
+        try {
+            fetch('/__error', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: line, keepalive: true }).catch(() => {});
+        } catch (e) {}
     };
     
     let loopRestarts = 0;

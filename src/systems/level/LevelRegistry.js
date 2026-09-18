@@ -129,31 +129,45 @@ class LevelRegistry {
                 resolve(data);
                 return;
             }
-            // Add cache-busting query parameter if force reload
-            const path = forceReload ? `${entry.path}?t=${Date.now()}` : entry.path;
-            // As above: a missing 'loaderror' handler here hangs the level load forever
-            const onError = (file) => {
-                if (file.key !== jsonKey) return;
-                cleanup();
-                console.error(`[LevelRegistry] Failed to load level ${levelId} from`, file.src);
-                resolve(null);
-            };
-            const onDone = () => {
-                cleanup();
-                const data = scene.cache.json.get(jsonKey);
-                this.levelCache.set(levelId, data);
-                this.log('Level JSON loaded', levelId, entry.path);
-                resolve(data);
-            };
-            const cleanup = () => {
-                scene.load.off('filecomplete-json-' + jsonKey, onDone);
-                scene.load.off('loaderror', onError);
-            };
+            // A level's JSON is a tiny request, but it is the first real request the game
+            // makes after a level's worth of play, so a transient client-side failure
+            // (network blip, request-cap pressure) must not brick the transition. Retry a
+            // few times before giving up; a missing 'loaderror' handler would hang forever.
+            const MAX_ATTEMPTS = 4;
+            const RETRY_DELAY_MS = 500;
             
-            scene.load.json(jsonKey, path);
-            scene.load.once('filecomplete-json-' + jsonKey, onDone);
-            scene.load.on('loaderror', onError);
-            if (!scene.load.isLoading()) scene.load.start();
+            const attempt = (n) => {
+                // Cache-busting query parameter when force reloading (fresh per attempt)
+                const path = forceReload ? `${entry.path}?t=${Date.now()}` : entry.path;
+                const onError = (file) => {
+                    if (file.key !== jsonKey) return;
+                    cleanup();
+                    if (n < MAX_ATTEMPTS) {
+                        console.warn(`[LevelRegistry] Level ${levelId} JSON failed to load (attempt ${n}/${MAX_ATTEMPTS}) - retrying`, file.src);
+                        setTimeout(() => attempt(n + 1), RETRY_DELAY_MS);
+                    } else {
+                        console.error(`[LevelRegistry] Failed to load level ${levelId} after ${MAX_ATTEMPTS} attempts from`, file.src);
+                        resolve(null);
+                    }
+                };
+                const onDone = () => {
+                    cleanup();
+                    const data = scene.cache.json.get(jsonKey);
+                    this.levelCache.set(levelId, data);
+                    this.log('Level JSON loaded', levelId, entry.path);
+                    resolve(data);
+                };
+                const cleanup = () => {
+                    scene.load.off('filecomplete-json-' + jsonKey, onDone);
+                    scene.load.off('loaderror', onError);
+                };
+                
+                scene.load.json(jsonKey, path);
+                scene.load.once('filecomplete-json-' + jsonKey, onDone);
+                scene.load.on('loaderror', onError);
+                if (!scene.load.isLoading()) scene.load.start();
+            };
+            attempt(1);
         });
     }
 }
