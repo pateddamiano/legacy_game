@@ -316,6 +316,9 @@ class EventManager {
             case 'fade':
                 this.sceneActions.executeFade(action);
                 break;
+            case 'cutscene':
+                this.sceneActions.executeCutscene(action);
+                break;
             case 'loadLevel':
                 this.sceneActions.executeLoadLevel(action);
                 break;

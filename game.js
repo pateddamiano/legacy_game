@@ -67,6 +67,7 @@ if (window.DEBUG_MODE) {
                 AudioBootScene,
                 MainMenuScene,
                 IntroDialogueScene,
+                CutsceneScene,
                 UIScene,
                 TouchControlsScene,
                 GameScene

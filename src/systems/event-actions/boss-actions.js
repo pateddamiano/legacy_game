@@ -79,9 +79,9 @@ class BossActions {
         console.log(`👹 Boss ${mergedConfig.name} spawned and paused (will resume when fight starts)`);
         
         // Add to enemies array
-        if (!this.scene.enemies) {
-            this.scene.enemies = [];
-        }
+        // Resolve through EventUtilities so we push into the array the spawn manager
+        // and combat manager are actually reading (see getEnemiesArray)
+        this.eventManager.utilities.getEnemiesArray();
         const bossIndex = this.scene.enemies.length;
         this.scene.enemies.push(boss);
         

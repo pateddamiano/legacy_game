@@ -73,6 +73,20 @@ class AudioManager {
     // BACKGROUND MUSIC METHODS
     // ========================================
     
+    // A fade in/out tween holds a direct reference to the Sound object. Destroying the
+    // sound without killing the tween leaves the tween writing .volume to a dead target,
+    // which throws inside Phaser's TweenManager on the next frame.
+    killFadeTweens(sound) {
+        if (!sound) return;
+        try {
+            if (this.scene && this.scene.tweens) {
+                this.scene.tweens.killTweensOf(sound);
+            }
+        } catch (e) {
+            // Scene may already be shut down - nothing to kill
+        }
+    }
+    
     playBackgroundMusic(musicKey, fadeIn = true, customVolume = null) {
         // Check if the same music is already playing in the global sound manager - if so, don't restart it
         const existingSound = this.scene.sound.sounds.find(sound => sound.key === musicKey && sound.isPlaying);
@@ -80,6 +94,7 @@ class AudioManager {
             console.log(`🎵 Music '${musicKey}' is already playing globally, continuing...`);
             // Store reference to existing sound
             this.currentBackgroundMusic = existingSound;
+            AudioManager.activeBackgroundMusic = existingSound;
             // Update volume if custom volume provided
             if (customVolume !== null) {
                 existingSound.setVolume(customVolume);
@@ -100,6 +115,22 @@ class AudioManager {
         // Stop current music if playing different music
         if (this.currentBackgroundMusic && this.currentBackgroundMusic.isPlaying) {
             this.stopBackgroundMusic(false); // Don't fade out immediately
+        }
+        
+        // Each scene builds its own AudioManager, so a track started by a previous
+        // scene (e.g. IntroDialogueScene's fadeMusic) is invisible to this instance
+        // and would keep playing underneath. Stop it via the shared reference.
+        const orphanedMusic = AudioManager.activeBackgroundMusic;
+        if (orphanedMusic && orphanedMusic !== this.currentBackgroundMusic && orphanedMusic.isPlaying) {
+            console.log(`🎵 Stopping background music from a previous scene: ${orphanedMusic.key}`);
+            this.killFadeTweens(orphanedMusic);
+            try {
+                orphanedMusic.stop();
+                orphanedMusic.destroy();
+            } catch (e) {
+                // Ignore errors if already destroyed
+            }
+            AudioManager.activeBackgroundMusic = null;
         }
         
         // Check if music is available and enabled
@@ -129,6 +160,7 @@ class AudioManager {
             volume: targetVolume,
             loop: this.config.backgroundMusic.loop
         });
+        AudioManager.activeBackgroundMusic = this.currentBackgroundMusic;
         
         if (fadeIn) {
             // Start at volume 0 and fade in
@@ -156,10 +188,14 @@ class AudioManager {
         // Check if playing (with null check)
         if (!this.currentBackgroundMusic.isPlaying) {
             // Clean up if not playing
+            this.killFadeTweens(this.currentBackgroundMusic);
             try {
                 this.currentBackgroundMusic.destroy();
             } catch (e) {
                 // Ignore errors if already destroyed
+            }
+            if (AudioManager.activeBackgroundMusic === this.currentBackgroundMusic) {
+                AudioManager.activeBackgroundMusic = null;
             }
             this.currentBackgroundMusic = null;
             return;
@@ -168,6 +204,10 @@ class AudioManager {
         // Store reference to avoid null issues during async operations
         const musicToStop = this.currentBackgroundMusic;
         this.currentBackgroundMusic = null; // Clear reference immediately to prevent double-stop
+        if (AudioManager.activeBackgroundMusic === musicToStop) {
+            AudioManager.activeBackgroundMusic = null;
+        }
+        this.killFadeTweens(musicToStop);
         
         if (fadeOut) {
             // Fade out then stop
@@ -899,6 +939,10 @@ class AudioManager {
         if (this.currentBackgroundMusic && this.currentBackgroundMusic.isPlaying) {
             const musicToStop = this.currentBackgroundMusic;
             this.currentBackgroundMusic = null; // Clear reference immediately
+            if (AudioManager.activeBackgroundMusic === musicToStop) {
+                AudioManager.activeBackgroundMusic = null;
+            }
+            this.killFadeTweens(musicToStop);
             
             // Fade out current music
             this.scene.tweens.add({
@@ -911,6 +955,7 @@ class AudioManager {
                         if (musicToStop && musicToStop.isPlaying) {
                             musicToStop.stop();
                         }
+                        this.killFadeTweens(musicToStop);
                         musicToStop.destroy();
                     } catch (e) {
                         // Ignore errors if already destroyed
@@ -937,6 +982,7 @@ class AudioManager {
             volume: 0, // Start at 0 for fade in
             loop: this.config.backgroundMusic.loop
         });
+        AudioManager.activeBackgroundMusic = this.currentBackgroundMusic;
         
         this.currentBackgroundMusic.play();
         
@@ -966,6 +1012,10 @@ class AudioManager {
         }
     }
 }
+
+// Shared across every AudioManager instance. Scenes each build their own manager,
+// so this is the only way one scene can stop background music another scene started.
+AudioManager.activeBackgroundMusic = null;
 
 // Make AudioManager available globally
 window.AudioManager = AudioManager;

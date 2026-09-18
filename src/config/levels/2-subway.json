@@ -86,6 +86,8 @@
         { "type": "setDialogueStyle", "position": { "x": 640, "y": 360 }, "size": { "width": 700, "height": 200 }, "textSizes": { "speaker": 40, "message": 35 }, "wordWrapWidth": 660 },
         { "type": "dialogue", "dialogue": { "speaker": "", "text": "The Critic falls defeated on the platform. The path forward is clear." } },
         { "type": "dialogue", "dialogue": { "speaker": "", "text": "Find and eliminate The Negatives before they find you..." } },
+        { "type": "fade", "direction": "out", "duration": 1000, "color": { "r": 0, "g": 0, "b": 0 } },
+        { "type": "cutscene", "cutsceneId": "level_3_alley" },
         { "type": "loadLevel", "levelId": 3 }
       ]
     }

@@ -76,9 +76,9 @@ class EnemyActions {
         }
         
         // Add to enemies array
-        if (!this.scene.enemies) {
-            this.scene.enemies = [];
-        }
+        // Resolve through EventUtilities so we push into the array the spawn manager
+        // and combat manager are actually reading (see getEnemiesArray)
+        this.eventManager.utilities.getEnemiesArray();
         const enemyIndex = this.scene.enemies.length;
         this.scene.enemies.push(enemy);
         

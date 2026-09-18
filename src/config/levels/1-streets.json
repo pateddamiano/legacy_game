@@ -9,7 +9,7 @@
   "world": { "top": 410, "bottom": 650 },
   "spawn": { "x": 185, "y": 512 },
   "parallaxTexture": "parallax_background",
-  "audio": { "music": "fadeMusic" },
+  "audio": { "music": "fadeMusic", "ambiance": "streetAmbiance", "ambianceVolume": 0.15 },
   "enemies": {
     "spawnRate": 1300,
     "musicVolume": 0.5,

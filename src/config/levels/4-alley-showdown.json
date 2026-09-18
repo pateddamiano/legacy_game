@@ -1,0 +1,63 @@
+{
+  "id": 4,
+  "name": "Alley Showdown",
+  "background": {
+    "type": "segmented",
+    "dir": "assets/backgrounds/level_4_segments",
+    "metadata": "assets/backgrounds/level_4_segments/metadata.json"
+  },
+  "world": { "top": 470, "bottom": 655 },
+  "spawn": { "x": 220, "y": 600 },
+  "audio": {
+    "music": "malibuMusic",
+    "musicVolume": 0.5
+  },
+  "enemies": {
+    "spawnRate": 999999,
+    "max": 0,
+    "types": ["negative_tireek", "negative_tryston"],
+    "multipliers": { "health": 1.0, "damage": 1.0 }
+  },
+  "extras": [],
+  "events": [
+    {
+      "id": "level_4_showdown",
+      "trigger": { "type": "position", "value": 220, "tolerance": 80, "once": true },
+      "actions": [
+        { "type": "pause", "targets": ["player", "enemies"] },
+        { "type": "wait", "duration": 1200 },
+        { "type": "setDialogueStyle", "position": { "x": 640, "y": 600 }, "textSizes": { "speaker": 35, "message": 35 } },
+        { "type": "dialogue", "dialogue": { "speaker": "Narrator", "text": "This is it. The Negatives, face to face." } },
+        { "type": "setActiveCharacter", "character": "tireek" },
+        { "type": "dialogue", "dialogue": { "speaker": "Negative Tireek", "text": "So, you're the real one. Come to take back your album?" } },
+        { "type": "dialogue", "dialogue": { "speaker": "Negative Tireek", "text": "Let's see which one of us is stronger." } },
+        { "type": "spawnBoss", "bossType": "negative_tireek", "position": { "x": 950, "y": 570 }, "id": "boss_negative_tireek" },
+        { "type": "showBossHealthBar", "bossId": "boss_negative_tireek" },
+        { "type": "resume", "targets": ["player", "enemies"] },
+        { "type": "waitForBossDefeated", "bossId": "boss_negative_tireek" },
+        { "type": "pause", "targets": ["player", "enemies"] },
+        { "type": "wait", "duration": 500 },
+        { "type": "dialogue", "dialogue": { "speaker": "Negative Tireek", "text": "You've beaten me... but I'm not the one holding the drive." } },
+        { "type": "setActiveCharacter", "character": "tryston" },
+        { "type": "wait", "duration": 300 },
+        { "type": "dialogue", "dialogue": { "speaker": "Negative Tryston", "text": "He was right. I'm the one holding your future, right here." } },
+        { "type": "spawnBoss", "bossType": "negative_tryston", "position": { "x": 950, "y": 570 }, "id": "boss_negative_tryston" },
+        { "type": "showBossHealthBar", "bossId": "boss_negative_tryston" },
+        { "type": "resume", "targets": ["player", "enemies"] },
+        { "type": "waitForBossDefeated", "bossId": "boss_negative_tryston" },
+        { "type": "pause", "targets": ["player", "enemies"] },
+        { "type": "wait", "duration": 500 },
+        { "type": "dialogue", "dialogue": { "speaker": "Negative Tryston", "text": "Take it, then. It's yours." } },
+        { "type": "setDialogueStyle", "position": { "x": 640, "y": 360 }, "size": { "width": 700, "height": 200 }, "textSizes": { "speaker": 40, "message": 35 }, "wordWrapWidth": 660 },
+        { "type": "dialogue", "dialogue": { "speaker": "Narrator", "text": "A hard drive clatters to the ground. Your album -- the one they stole -- is finally back in your hands." } },
+        { "type": "dialogue", "dialogue": { "speaker": "Tryston", "text": "Everything we've been through... it all comes down to this." } },
+        { "type": "dialogue", "dialogue": { "speaker": "Tireek", "text": "No album, no leverage. No 360 deal is ever gonna own us now." } },
+        { "type": "dialogue", "dialogue": { "speaker": "Narrator", "text": "The Negatives lie defeated, and the album is safe at last." } },
+        { "type": "resume", "targets": ["player", "enemies"] }
+      ]
+    }
+  ],
+  "assets": {
+    "images": []
+  }
+}

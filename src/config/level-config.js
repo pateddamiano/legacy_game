@@ -28,9 +28,12 @@ window.LEVEL_FLAGS = {
     'level_1_complete': false,
     'level_2_complete': false,
     'level_3_complete': false,
+    'level_4_complete': false,
     
     // Boss flags
     'boss_street_gang_leader_defeated': false,
+    'boss_negative_tireek_defeated': false,
+    'boss_negative_tryston_defeated': false,
     
     // Achievement flags
     'first_enemy_killed': false,

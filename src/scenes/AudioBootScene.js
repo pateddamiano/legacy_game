@@ -105,31 +105,43 @@ class AudioBootScene extends Phaser.Scene {
         
         // Set up progress tracking
         this.setupProgressTracking();
-        
+
+        // Direct-load skips createBootUI() -> startAssetLoading(), which is the ONLY place
+        // audio gets queued on the normal boot path. Without this, a session started with
+        // ?debug=true&level=N runs with a completely empty audio cache - no music, no
+        // ambiance, no SFX - for every level it loads.
+        this.loadAllAudioAssets();
+
         // Skip audio activation in direct-load mode
         this.audioActivated = true;
-        
-        // Check if assets are already loaded
-        if (this.load.isLoading()) {
-            // Assets are still loading, wait for completion
-            this.load.once('complete', () => {
-                console.log('🧪 Assets loaded, transitioning directly to level...');
-                this.transitioned = true;
-                this.scene.start('GameScene', {
-                    character: 'tireek',
-                    levelId: window.TEST_LEVEL_ID !== undefined ? window.TEST_LEVEL_ID : 'test'
-                });
-            });
-        } else {
-            // Assets already loaded, go immediately
-            console.log('🧪 Assets already loaded, going to level immediately...');
+
+        // Kick off the audio queue we just added (preload() has already finished by now)
+        if (!this.load.isLoading() && this.load.list.size > 0) {
+            this.load.start();
+        }
+
+        const goToLevel = (reason) => {
+            if (this.transitioned) return;
             this.transitioned = true;
-            this.time.delayedCall(500, () => {
-                this.scene.start('GameScene', {
-                    character: 'tireek',
-                    levelId: window.TEST_LEVEL_ID !== undefined ? window.TEST_LEVEL_ID : 'test'
-                });
+            console.log(`🧪 ${reason} - transitioning directly to level...`);
+            this.scene.start('GameScene', {
+                character: 'tireek',
+                levelId: window.TEST_LEVEL_ID !== undefined ? window.TEST_LEVEL_ID : 'test'
             });
+        };
+
+        // Direct load has no boot UI, so nothing here produces the user gesture that
+        // unlocks WebAudio. Phaser defers decoding while the context is locked, so the
+        // audio queue can stall part-way and 'complete' never fires. The normal path
+        // survives this via its 15s backup timer; mirror that here so a direct load can
+        // never hang on a black screen - any audio still decoding lands in the cache
+        // shortly after, and playBackgroundMusic() already tolerates a missing key.
+        this.time.delayedCall(8000, () => goToLevel('Asset loading timed out'));
+
+        if (this.load.isLoading()) {
+            this.load.once('complete', () => goToLevel('Assets loaded'));
+        } else {
+            this.time.delayedCall(500, () => goToLevel('Assets already loaded'));
         }
     }
     

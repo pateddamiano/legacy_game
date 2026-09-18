@@ -12,6 +12,11 @@ class GameScene extends Phaser.Scene {
     }
 
     init(data) {
+        // create() is async: Phaser does NOT await it, so update() starts running while
+        // create() is still awaiting level initialization and this.player is still null.
+        // Gate update() on this flag so nothing runs against a half-built scene.
+        this.isSceneReady = false;
+        
         // Clear persistent state from previous runs to prevent stale references
         this.player = null;
         this.enemies = [];
@@ -61,9 +66,12 @@ class GameScene extends Phaser.Scene {
         }
         
         // Initialize debug/testing mode
-        this.isTestMode = window.DEBUG_MODE || this.selectedLevelId === 'test' || window.LEVEL_TEST_MODE === true;
+        // NOTE: isTestMode disables enemy spawning outright, so it must NOT be driven by
+        // window.DEBUG_MODE - otherwise jumping to a real level with ?debug=true&level=N
+        // loads a level with no enemies at all. Debug overlays still follow DEBUG_MODE.
+        this.isTestMode = this.selectedLevelId === 'test' || window.LEVEL_TEST_MODE === true;
         this.coordinateRecordingEnabled = this.isTestMode || window.DEBUG_MODE;
-        this.debugOverlayVisible = this.isTestMode;
+        this.debugOverlayVisible = this.isTestMode || window.DEBUG_MODE;
         
         // Store initialization data for CharacterManager (initialized in create())
         this._characterInitData = {
@@ -260,13 +268,24 @@ class GameScene extends Phaser.Scene {
         }
         console.log(`🎯 GameScene: Street bounds configured: ${this.streetTopLimit} - ${this.streetBottomLimit}`);
         
+        // Safety net for the isSceneReady gate: create() is async, so anything that throws
+        // after this point becomes a silent unhandled rejection and the rest of create()
+        // never runs. Without this the scene would stay gated forever and the game would
+        // sit frozen. Prefer a partly-initialised but playable scene over a dead one.
+        this.time.delayedCall(3000, () => {
+            if (!this.isSceneReady && this.player) {
+                console.error('🎯 GameScene.create() did not finish - enabling update loop anyway');
+                this.isSceneReady = true;
+            }
+        });
+
         // Initialize level system FIRST (loads world and sets spawn point)
         // Character creation now happens after level initialization completes
         await this.levelInitializationManager.initializeLevel(
             this.selectedLevelId,
             () => this.onLevelInitializationComplete()
         );
-        
+
         // Set up camera properties
         this.cameras.main.roundPixels = true;
 
@@ -293,11 +312,15 @@ class GameScene extends Phaser.Scene {
 
         // Animation manager will be initialized after character creation
         
-        // Initialize enemy system (using centralized config)
-        // Note: enemySpawnManager is already initialized in initializeManagers()
+        // Initialize enemy system
+        // Note: enemySpawnManager is already initialized in initializeManagers(), and
+        // WorldFactory has since applied this level's "enemies" block. Prefer those values
+        // over the global defaults, or we'd clobber the level's own max/spawnRate here.
+        const levelEnemyConfig = (this.levelInitializationManager.currentLevelJson &&
+                                  this.levelInitializationManager.currentLevelJson.enemies) || {};
         this.enemySpawnManager.initialize({
-            maxEnemies: ENEMY_CONFIG.maxEnemiesOnScreen,
-            spawnInterval: ENEMY_CONFIG.spawnInterval,
+            maxEnemies: levelEnemyConfig.max !== undefined ? levelEnemyConfig.max : ENEMY_CONFIG.maxEnemiesOnScreen,
+            spawnInterval: levelEnemyConfig.spawnRate || ENEMY_CONFIG.spawnInterval,
             isTestMode: this.isTestMode,
             isLoading: this.isLoading
         });
@@ -362,15 +385,9 @@ class GameScene extends Phaser.Scene {
         
         // Note: Level system and Level 1 world already initialized before createBothCharacters()
         
-        // Start background music only for Level 1 here; other levels use LevelManager
-        if (this.selectedLevelId === 1) {
-            console.log('🎵 Starting background music for Level 1...');
-            this.audioManager.playBackgroundMusic('fadeMusic');
-        }
-        
-        // Start street ambiance for level 1
-        console.log('🔊 Starting street ambiance...');
-        this.audioManager.startAmbiance('streetAmbiance', 0.15);
+        // Music and ambiance are driven entirely by the level JSON's "audio" block and
+        // started by LevelInitializationManager.loadLevelFromJSON(). Hardcoding them here
+        // meant every level inherited level 1's track and street ambiance.
         
         // Set up automatic fullscreen on first interaction (if not already requested)
         this.setupAutoFullscreen();
@@ -378,6 +395,9 @@ class GameScene extends Phaser.Scene {
         // Fade in from black
         this.cameras.main.fadeIn(1000, 0, 0, 0);
         console.log('🎬 Fading in to gameplay...');
+        
+        // Everything is wired up - let update() start running
+        this.isSceneReady = true;
     }
     
     setupAutoFullscreen() {
@@ -624,6 +644,11 @@ class GameScene extends Phaser.Scene {
     }
     
     update(time, delta) {
+        // Scene still being built by the async create() - see init()
+        if (!this.isSceneReady || !this.player) {
+            return;
+        }
+        
         // Update character regeneration
         if (this.characterManager) {
             this.characterManager.update(delta);

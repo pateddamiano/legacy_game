@@ -85,6 +85,12 @@ class EnemySpawnManager {
         // Skip if enemies array not initialized yet
         if (!this.enemies) return;
         
+        // No player means the level is still being built or torn down (transitions null
+        // scene.player out in phase 2). Spawning here would crash on this.player.x.
+        // Only check for existence - a sprite can be briefly inactive during death/respawn
+        // and enemies should keep updating through that.
+        if (!this.player) return;
+        
         // Skip enemy spawning if disabled (test mode or maxEnemies is 0)
         if (this.maxEnemies === 0 || this.isTestMode) {
             // Still update existing enemies if any (for event system)
@@ -237,6 +243,11 @@ class EnemySpawnManager {
     spawnEnemy() {
         // Don't spawn enemies if disabled
         if (this.maxEnemies === 0 || this.isTestMode) {
+            return;
+        }
+        
+        // Guard against being called mid level-load/teardown with no player
+        if (!this.player) {
             return;
         }
         

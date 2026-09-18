@@ -639,7 +639,7 @@ class LevelTransitionManager {
                     this.audioManager.playBackgroundMusic(levelJson.audio.music, true, musicVolume);
                 }
                 
-                // Start ambiance if specified
+                // Start ambiance if specified (phase 1 already stopped the old level's)
                 if (levelJson.audio.ambiance) {
                     this.audioManager.startAmbiance(levelJson.audio.ambiance, levelJson.audio.ambianceVolume || 0.15);
                 }

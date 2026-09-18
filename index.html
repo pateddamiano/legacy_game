@@ -139,7 +139,8 @@
     
     <!-- Configuration Files - Load first -->
     <script src="src/config/game-config.js?v=2.1.0"></script>
-    <script src="src/config/level-config.js?v=2.0.0"></script>
+    <script src="src/config/level-config.js?v=2.1.0"></script>
+    <script src="src/config/cutscenes.js?v=1.0.0"></script>
     <script src="src/config/touch-controls-config.js?v=1.0.0"></script>
     <script src="src/config/remote-logging-config.js?v=1.0.0"></script>
     <script src="src/utils/remote-logger.js?v=1.0.0"></script>
@@ -152,7 +153,7 @@
     <!-- Modular Game Scripts - Load in dependency order -->
     <script src="src/characters/characters.js?v=5.7.0"></script>
     <script src="src/systems/animation-manager.js?v=5.7.0"></script>
-    <script src="src/systems/audio-manager.js?v=6.5.0"></script>
+    <script src="src/systems/audio-manager.js?v=6.7.0"></script>
     <script src="src/systems/futuristic-health-bar.js?v=1.0.0"></script>
     <script src="src/systems/ui-manager.js?v=7.1.0"></script>
     <script src="src/systems/environment-manager.js?v=6.3.0"></script>
@@ -162,25 +163,25 @@
     <script src="src/systems/unified-input-controller.js?v=1.0.0"></script>
     <script src="src/systems/touch-controls-overlay.js?v=1.0.0"></script>
     <script src="src/systems/input-manager.js?v=6.4.0"></script>
-    <script src="src/systems/weapon-system.js?v=6.1.0"></script>
+    <script src="src/systems/weapon-system.js?v=6.2.0"></script>
     <script src="src/systems/enemy-system.js?v=6.8.0"></script>
     <script src="src/systems/boss-system.js?v=1.0.0"></script>
     <script src="src/systems/extras-manager.js?v=1.0.0"></script>
     <script src="src/systems/event-enemy-protection.js?v=1.0.0"></script>
     
     <!-- Event Manager Modules - Load in dependency order -->
-    <script src="src/systems/event-utilities.js?v=1.0.0"></script>
+    <script src="src/systems/event-utilities.js?v=1.1.0"></script>
     <script src="src/systems/event-entity-manager.js?v=1.0.0"></script>
     <script src="src/systems/event-cinematic-manager.js?v=1.0.0"></script>
-    <script src="src/systems/event-actions/enemy-actions.js?v=1.0.0"></script>
-    <script src="src/systems/event-actions/boss-actions.js?v=1.0.0"></script>
+    <script src="src/systems/event-actions/enemy-actions.js?v=1.1.0"></script>
+    <script src="src/systems/event-actions/boss-actions.js?v=1.1.0"></script>
     <script src="src/systems/event-actions/camera-actions.js?v=1.0.0"></script>
     <script src="src/systems/event-actions/movement-actions.js?v=1.0.0"></script>
-    <script src="src/systems/event-actions/scene-actions.js?v=1.0.0"></script>
-    <script src="src/systems/event-actions/spawning-actions.js?v=1.0.0"></script>
+    <script src="src/systems/event-actions/scene-actions.js?v=1.1.0"></script>
+    <script src="src/systems/event-actions/spawning-actions.js?v=1.1.0"></script>
     <script src="src/systems/event-actions/extras-actions.js?v=1.0.0"></script>
     <script src="src/systems/event-actions/special-actions.js?v=1.0.0"></script>
-    <script src="src/systems/event-manager.js?v=2.0.0"></script>
+    <script src="src/systems/event-manager.js?v=2.1.0"></script>
     <script src="src/systems/item-pickup-system.js?v=6.7.0"></script>
     <script src="src/systems/level-manager.js?v=2.0.0"></script>
     
@@ -188,12 +189,12 @@
     <script src="src/systems/character-manager.js?v=1.0.0"></script>
     <script src="src/systems/combat-manager.js?v=1.0.0"></script>
     <script src="src/systems/player-physics-manager.js?v=1.0.0"></script>
-    <script src="src/systems/enemy-spawn-manager.js?v=1.0.0"></script>
+    <script src="src/systems/enemy-spawn-manager.js?v=1.1.0"></script>
     <script src="src/systems/animation-setup-manager.js?v=1.0.0"></script>
     <script src="src/systems/effect-system.js?v=1.0.0"></script>
     <script src="src/systems/debug-manager.js?v=1.0.0"></script>
-    <script src="src/systems/level-initialization-manager.js?v=1.0.0"></script>
-    <script src="src/systems/level-transition-manager.js?v=1.0.0"></script>
+    <script src="src/systems/level-initialization-manager.js?v=1.1.0"></script>
+    <script src="src/systems/level-transition-manager.js?v=1.1.0"></script>
     <script src="src/systems/layout-manager.js?v=1.0.0"></script>
     <script src="src/systems/device-manager.js?v=1.0.0"></script>
     <script src="src/systems/fullscreen-manager.js?v=1.0.0"></script>
@@ -201,25 +202,23 @@
     <script src="src/systems/lives-manager.js?v=1.0.0"></script>
 
     <!-- JSON-based Level System -->
-    <script src="src/systems/level/LevelRegistry.js?v=1.0.0"></script>
+    <script src="src/systems/level/LevelRegistry.js?v=1.1.0"></script>
     <script src="src/systems/level/LevelAssetLoader.js?v=1.0.0"></script>
     <script src="src/systems/level/WorldFactory.js?v=1.0.0"></script>
     
     <!-- New Scene Files - Load before game.js -->
-    <script src="src/scenes/AudioBootScene.js?v=3.3.0"></script>
+    <script src="src/scenes/AudioBootScene.js?v=3.4.0"></script>
     <script src="src/scenes/PreloadScene.js?v=1.0.0"></script>
     <script src="src/scenes/MainMenuScene.js?v=4.1.0"></script>
     <script src="src/scenes/IntroDialogueScene.js?v=2.3.0"></script>
+    <script src="src/scenes/CutsceneScene.js?v=1.0.0"></script>
     <script src="src/scenes/CharacterSelectScene.js?v=4.0.0"></script>
     <script src="src/scenes/UIScene.js?v=1.0.0"></script>
     <script src="src/scenes/TouchControlsScene.js?v=1.0.0"></script>
-    <script src="src/scenes/game-scene.js?v=8.7.0"></script>
-
-    <!-- Test Scripts -->
-    <script src="test_auto_switch.js?v=1.0.0"></script>
+    <script src="src/scenes/game-scene.js?v=8.9.0"></script>
 
     <!-- Main Game Entry Point - Load last -->
-    <script src="game.js?v=6.8.0"></script>
+    <script src="game.js?v=6.9.0"></script>
     
     <script>
         (function () {

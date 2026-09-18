@@ -117,13 +117,23 @@ class LevelInitializationManager {
             this.eventManager.registerEvents(levelJson.events);
         }
         
-        // Start music
-        if (this.audioManager && levelJson.audio && levelJson.audio.music) {
-            const musicVolume = levelJson.audio.musicVolume !== undefined ? 
-                levelJson.audio.musicVolume : null; // null = use default
-            this.audioManager.playBackgroundMusic(levelJson.audio.music, true, musicVolume);
+        // Start music and ambiance from the level's audio block.
+        // Mirrors LevelTransitionManager.setupNewLevelAudio() so a level sounds the same
+        // whether it was entered by transition or started directly.
+        if (this.audioManager && levelJson.audio) {
+            if (levelJson.audio.music) {
+                const musicVolume = levelJson.audio.musicVolume !== undefined ?
+                    levelJson.audio.musicVolume : null; // null = use default
+                this.audioManager.playBackgroundMusic(levelJson.audio.music, true, musicVolume);
+            }
+
+            // Always stop the previous level's ambiance; only start one if this level has it
+            this.audioManager.stopAmbiance();
+            if (levelJson.audio.ambiance) {
+                this.audioManager.startAmbiance(levelJson.audio.ambiance, levelJson.audio.ambianceVolume || 0.15);
+            }
         }
-        
+
         console.log(`🎯 LEVEL ${levelJson.id} LOADED SUCCESSFULLY`);
     }
     

@@ -234,25 +234,7 @@ class Projectile {
         }
     }
     
-    handleWeaponUiScaleChanged(newScale, viewportInfo) {
-        this.currentUiScale = newScale ?? this.currentUiScale;
-        this.viewportInfo = viewportInfo || this.viewportInfo;
-        this.positionWeaponUI();
-    }
-
-    positionWeaponUI() {
-        if (!this.weaponUIContainer) return;
-        const scale = this.currentUiScale ?? this.uiScene?.uiScale ?? 1;
-        const posX = (this.weaponUiConfig?.x || 70) * scale;
-        const posY = (this.weaponUiConfig?.y || 60) * scale;
-        this.weaponUIContainer.setScale(scale);
-        this.weaponUIContainer.setPosition(posX, posY);
-    }
-    
     destroy() {
-        if (this.uiScene?.events?.off) {
-            this.uiScene.events.off('uiScaleChanged', this.handleWeaponUiScaleChanged, this);
-        }
         // Stop the throw sound if it's still playing
         if (this.throwSound && this.throwSound.isPlaying) {
             this.throwSound.stop();
@@ -359,6 +341,21 @@ class WeaponManager {
         this.currentWeapon = 'vinyl';
         
         console.log('🎯 Weapons initialized:', Object.keys(this.weapons));
+    }
+    
+    handleWeaponUiScaleChanged(newScale, viewportInfo) {
+        this.currentUiScale = newScale ?? this.currentUiScale;
+        this.viewportInfo = viewportInfo || this.viewportInfo;
+        this.positionWeaponUI();
+    }
+
+    positionWeaponUI() {
+        if (!this.weaponUIContainer) return;
+        const scale = this.currentUiScale ?? this.uiScene?.uiScale ?? 1;
+        const posX = (this.weaponUiConfig?.x || 70) * scale;
+        const posY = (this.weaponUiConfig?.y || 60) * scale;
+        this.weaponUIContainer.setScale(scale);
+        this.weaponUIContainer.setPosition(posX, posY);
     }
     
     createWeaponUI() {
