@@ -184,12 +184,13 @@ class EnemyActions {
         }
     }
     
+    // action._noAdvance: destroy without advancing the event (an async move calls this)
     executeDestroyEnemy(action) {
         const target = action.target;
         
         if (!target) {
             console.warn('🎬 DestroyEnemy action missing target');
-            this.advanceAction();
+            if (!action._noAdvance) this.advanceAction();
             return;
         }
         
@@ -207,7 +208,7 @@ class EnemyActions {
             if (this.scene.eventEnemyProtection) {
                 this.scene.eventEnemyProtection.unregisterEnemy(target);
             }
-            this.advanceAction();
+            if (!action._noAdvance) this.advanceAction();
             return;
         }
         
@@ -306,7 +307,7 @@ class EnemyActions {
         console.log(`🎬 Enemy destroyed: ${target} (removed from array and map)`);
         
         // Advance action synchronously (no delays)
-        this.advanceAction();
+        if (!action._noAdvance) this.advanceAction();
     }
     
     executeWaitForEnemyDestroy(action) {

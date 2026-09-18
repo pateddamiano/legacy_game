@@ -136,16 +136,23 @@ class MovementActions {
                     console.log(`🎬 Destroying ${target} immediately after movement completes`);
                     
                     // Call destroy directly (no delay needed - executeDestroyEnemy handles everything)
-                    // Protection will be unregistered inside executeDestroyEnemy
-                    this.executeDestroyEnemy({ target: target });
+                    // Protection will be unregistered inside executeDestroyEnemy.
+                    // An async move already advanced the event, so don't advance again.
+                    this.executeDestroyEnemy({ target: target, _noAdvance: !!action.async });
                 } else {
                     if (movingEnemy && movingEnemy.playAnimIfExists && movingEnemy.eventPaused) {
                         movingEnemy.playAnimIfExists(`${movingEnemy.variationName}_idle`);
                     }
-                    this.advanceAction();
+                    if (!action.async) this.advanceAction();
                 }
             }
         });
+        
+        // "async": true -> don't wait for the tween; lets several moves run together
+        // (follow it with waitForEnemyDestroy / wait if the event needs to sync up)
+        if (action.async) {
+            this.advanceAction();
+        }
         
         // Store tween reference in case we need to cancel it
         if (!entity.eventTweens) {
