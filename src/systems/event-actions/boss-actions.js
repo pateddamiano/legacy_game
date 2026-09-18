@@ -130,6 +130,9 @@ class BossActions {
             console.log(`👹 Registered boss in protection system: ${action.id} (${protectionLevel})`);
         }
         
+        // Resolve the new body against the world bounds now (see GameScene.settlePhysics)
+        if (this.scene.settlePhysics) this.scene.settlePhysics();
+        
         // Advance to next action
         this.advanceAction();
     }

@@ -6,8 +6,9 @@
     "dir": "assets/backgrounds/level_3_segments",
     "metadata": "assets/backgrounds/level_3_segments/metadata.json"
   },
-  "world": { "top": 470, "bottom": 690 },
-  "spawn": { "x": 100, "y": 580 },
+  "world": { "top": 448, "bottom": 690 },
+  "perspectiveVariance": 0.6,
+  "spawn": { "x": 240, "y": 550 },
   "audio": {
     "music": "crisisMusic",
     "musicVolume": 0.5
@@ -37,8 +38,8 @@
       "actions": [
         { "type": "pause", "targets": ["player", "enemies"] },
         { "type": "stopEnemySpawning", "clearEnemies": true },
-        { "type": "spawnEnemy", "enemyType": "negative_tireek", "position": { "x": 3600, "y": 540 }, "id": "enemy_neg_tireek_cameo", "flipX": true, "protectionLevel": "invulnerable" },
-        { "type": "spawnEnemy", "enemyType": "negative_tryston", "position": { "x": 3730, "y": 620 }, "id": "enemy_neg_tryston_cameo", "flipX": true, "protectionLevel": "invulnerable" },
+        { "type": "spawnEnemy", "enemyType": "negative_tireek", "position": { "x": 3720, "y": 452 }, "id": "enemy_neg_tireek_cameo", "flipX": true, "protectionLevel": "invulnerable" },
+        { "type": "spawnEnemy", "enemyType": "negative_tryston", "position": { "x": 3880, "y": 480 }, "id": "enemy_neg_tryston_cameo", "flipX": true, "protectionLevel": "invulnerable" },
         { "type": "dialogue", "dialogue": { "speaker": "Tireek", "text": "Whoa! That's... that's a negative version of us!" } },
         { "type": "dialogue", "dialogue": { "speaker": "Tryston", "text": "Yeah... this can't be good." } },
         { "type": "dialogue", "dialogue": { "speaker": "Negative Tireek", "text": "Surprised? The label built us to look just like you." } },
@@ -47,8 +48,8 @@
         { "type": "dialogue", "dialogue": { "speaker": "Negative Tryston", "text": "Meet us out back if you want it. Get through the label's people first." } },
         { "type": "flip", "target": "enemy_neg_tireek_cameo", "flipX": false },
         { "type": "flip", "target": "enemy_neg_tryston_cameo", "flipX": false },
-        { "type": "move", "target": "enemy_neg_tireek_cameo", "to": { "x": "+=700", "y": 540 }, "duration": 1000, "ease": "Power2", "destroyOnComplete": true },
-        { "type": "move", "target": "enemy_neg_tryston_cameo", "to": { "x": "+=700", "y": 620 }, "duration": 1000, "ease": "Power2", "destroyOnComplete": true },
+        { "type": "move", "target": "enemy_neg_tireek_cameo", "to": { "x": "+=700", "y": 452 }, "duration": 1000, "ease": "Power2", "destroyOnComplete": true },
+        { "type": "move", "target": "enemy_neg_tryston_cameo", "to": { "x": "+=700", "y": 480 }, "duration": 1000, "ease": "Power2", "destroyOnComplete": true },
         { "type": "waitForEnemyDestroy", "target": "enemy_neg_tireek_cameo" },
         { "type": "dialogue", "dialogue": { "speaker": "Narrator", "text": "The label's own execs flood in to cover their escape, 360 contracts already in hand." } },
         { "type": "dialogue", "dialogue": { "speaker": "Exec", "text": "Sign here, and all of this goes away." } },

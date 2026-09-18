@@ -6,8 +6,9 @@
     "dir": "assets/backgrounds/level_4_segments",
     "metadata": "assets/backgrounds/level_4_segments/metadata.json"
   },
-  "world": { "top": 470, "bottom": 655 },
-  "spawn": { "x": 220, "y": 600 },
+  "world": { "top": 442, "bottom": 655 },
+  "perspectiveVariance": 0.6,
+  "spawn": { "x": 240, "y": 550 },
   "audio": {
     "music": "malibuMusic",
     "musicVolume": 0.5
@@ -31,7 +32,7 @@
         { "type": "setActiveCharacter", "character": "tireek" },
         { "type": "dialogue", "dialogue": { "speaker": "Negative Tireek", "text": "So, you're the real one. Come to take back your album?" } },
         { "type": "dialogue", "dialogue": { "speaker": "Negative Tireek", "text": "Let's see which one of us is stronger." } },
-        { "type": "spawnBoss", "bossType": "negative_tireek", "position": { "x": 950, "y": 570 }, "id": "boss_negative_tireek" },
+        { "type": "spawnBoss", "bossType": "negative_tireek", "position": { "x": 950, "y": 480 }, "id": "boss_negative_tireek" },
         { "type": "showBossHealthBar", "bossId": "boss_negative_tireek" },
         { "type": "resume", "targets": ["player", "enemies"] },
         { "type": "waitForBossDefeated", "bossId": "boss_negative_tireek" },
@@ -41,7 +42,7 @@
         { "type": "setActiveCharacter", "character": "tryston" },
         { "type": "wait", "duration": 300 },
         { "type": "dialogue", "dialogue": { "speaker": "Negative Tryston", "text": "He was right. I'm the one holding your future, right here." } },
-        { "type": "spawnBoss", "bossType": "negative_tryston", "position": { "x": 950, "y": 570 }, "id": "boss_negative_tryston" },
+        { "type": "spawnBoss", "bossType": "negative_tryston", "position": { "x": 950, "y": 480 }, "id": "boss_negative_tryston" },
         { "type": "showBossHealthBar", "bossId": "boss_negative_tryston" },
         { "type": "resume", "targets": ["player", "enemies"] },
         { "type": "waitForBossDefeated", "bossId": "boss_negative_tryston" },

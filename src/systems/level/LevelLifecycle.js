@@ -83,6 +83,7 @@ class LevelLifecycle {
         // 5. Characters at the spawn point, then rebind every system to the active one
         s.characterManager.createCharacters();
         s.bindPlayer(s.characterManager.getActiveCharacter());
+        s.settlePhysics();
 
         // 6. Camera: bounds = world, snap to the spawn, follow
         this._placeCamera();

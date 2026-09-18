@@ -251,7 +251,15 @@ class PlayerPhysicsManager {
         const baseScaleMultiplier = this.player.characterConfig.baseScale || 1.0;
         
         const normalizedY = (this.player.y - this.streetTopLimit) / (this.streetBottomLimit - this.streetTopLimit);
-        const baseScale = baseMinScale + (baseMaxScale - baseMinScale) * normalizedY;
+        let baseScale = baseMinScale + (baseMaxScale - baseMinScale) * normalizedY;
+
+        // Compress the near/far size range toward the midpoint for levels that want a subtler effect
+        const variance = this.getPerspectiveVariance();
+        if (variance !== 1.0) {
+            const midScale = (baseMinScale + baseMaxScale) / 2;
+            baseScale = midScale + (baseScale - midScale) * variance;
+        }
+
         // Apply character-specific base scale multiplier
         const scale = baseScale * baseScaleMultiplier;
         
@@ -260,7 +268,12 @@ class PlayerPhysicsManager {
         // Set depth/z-index - higher Y (lower on screen) should have higher depth (appear in front)
         this.player.setDepth(this.player.y);
     }
-    
+
+    getPerspectiveVariance() {
+        const currentLevel = this.scene.levelLifecycle && this.scene.levelLifecycle.currentLevel;
+        return (currentLevel && currentLevel.perspectiveVariance !== undefined) ? currentLevel.perspectiveVariance : 1.0;
+    }
+
     // ========================================
     // STATE GETTERS/SETTERS
     // ========================================

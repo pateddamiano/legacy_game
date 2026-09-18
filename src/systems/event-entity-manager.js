@@ -118,6 +118,8 @@ class EventEntityManager {
                     });
                 }
                 this.scene.physics.world.isPaused = true;
+                // Resolve any pending world-bounds push now rather than on the next unpause
+                if (this.scene.settlePhysics) this.scene.settlePhysics();
             }
         }
     }

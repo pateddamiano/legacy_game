@@ -318,8 +318,11 @@ class Enemy {
         this.windPushbackVelocity = 0; // Velocity applied by wind pushback
         
         // Movement bounds - read from centralized WORLD_CONFIG
-        this.streetTopLimit = WORLD_CONFIG.streetTopLimit;
-        this.streetBottomLimit = WORLD_CONFIG.streetBottomLimit;
+        // The level's walkable band (LevelLifecycle sets these on the scene before any
+        // enemy exists). Previously this read the global WORLD_CONFIG, so on every level
+        // but the first, enemies were clamped and perspective-scaled against the wrong band.
+        this.streetTopLimit = scene.streetTopLimit !== undefined ? scene.streetTopLimit : WORLD_CONFIG.streetTopLimit;
+        this.streetBottomLimit = scene.streetBottomLimit !== undefined ? scene.streetBottomLimit : WORLD_CONFIG.streetBottomLimit;
         
         // Store reference to player
         this.player = null;
@@ -1025,10 +1028,19 @@ class Enemy {
     updatePerspective() {
         // Same perspective system as player, but with base scale multiplier applied
         const normalizedY = (this.sprite.y - this.streetTopLimit) / (this.streetBottomLimit - this.streetTopLimit);
-        const baseScale = ENEMY_CONFIG.minScale + (ENEMY_CONFIG.maxScale - ENEMY_CONFIG.minScale) * normalizedY;
+        let baseScale = ENEMY_CONFIG.minScale + (ENEMY_CONFIG.maxScale - ENEMY_CONFIG.minScale) * normalizedY;
+
+        // Compress the near/far size range toward the midpoint for levels that want a subtler effect
+        const currentLevel = this.scene.levelLifecycle && this.scene.levelLifecycle.currentLevel;
+        const variance = (currentLevel && currentLevel.perspectiveVariance !== undefined) ? currentLevel.perspectiveVariance : 1.0;
+        if (variance !== 1.0) {
+            const midScale = (ENEMY_CONFIG.minScale + ENEMY_CONFIG.maxScale) / 2;
+            baseScale = midScale + (baseScale - midScale) * variance;
+        }
+
         // Apply enemy-specific base scale multiplier
         const scale = baseScale * this.baseScaleMultiplier;
-        
+
         this.sprite.setScale(scale);
         // Fix depth calculation: higher Y (lower on screen) should have higher depth (appear in front)
         this.sprite.setDepth(this.sprite.y);

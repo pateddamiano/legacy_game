@@ -406,6 +406,34 @@ class GameScene extends Phaser.Scene {
         }
     }
     
+    // Run one physics step even while the world is paused for a cutscene.
+    //
+    // Physics bodies here are the full sprite frame x scale (nobody calls setSize), so a
+    // freshly placed character whose body overlaps the world edge gets pushed inside by
+    // collideWorldBounds - but only when the world actually steps. Cutscenes pause the
+    // world before that first step, and the dialogue manager unpauses it for a few
+    // frames between lines, so characters visibly snapped into place on the second line.
+    // Call this after placing anything (spawn, createCharacters, pause) so it is already
+    // at its resting spot on the first line.
+    settlePhysics() {
+        const world = this.physics && this.physics.world;
+        if (!world) return;
+        // Scale first: a body is sized from the sprite's current scale during preUpdate
+        if (this.playerPhysicsManager && this.player && this.player.active) {
+            this.playerPhysicsManager.updatePerspective();
+        }
+        (this.enemies || []).forEach(enemy => {
+            if (enemy && enemy.sprite && enemy.sprite.active && enemy.updatePerspective) {
+                enemy.updatePerspective();
+            }
+        });
+        const wasPaused = world.isPaused;
+        world.isPaused = false;
+        world.update(this.time.now, world._frameTimeMS || (1000 / 60)); // preUpdate + one step
+        world.postUpdate();                                             // write bodies back to sprites
+        world.isPaused = wasPaused;
+    }
+    
     setupAutoFullscreen() {
         // Request fullscreen on first user interaction (click or touch)
         // Only if not already requested and if auto-request is enabled
