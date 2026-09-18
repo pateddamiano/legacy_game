@@ -29,6 +29,65 @@ if (window.DEBUG_MODE) {
     console.log('🧪 Debug mode: OFF');
 }
 
+// ========================================
+// ERROR VISIBILITY + FRAME LOOP WATCHDOG
+// ========================================
+// Phaser's frame loop requests the next frame AFTER running the current one, so a
+// single uncaught exception inside a frame kills the loop for good and the game
+// freezes on whatever was last drawn - usually a black fade. Two things here:
+//   1. every uncaught error / rejection is shown on screen (plain DOM, so it works
+//      even when Phaser is dead), instead of only in a console nobody has open
+//   2. if the frame loop stops advancing after an error, it is restarted
+(() => {
+    const seen = [];
+    function banner() {
+        let el = document.getElementById('game-error-banner');
+        if (el) return el;
+        el = document.createElement('pre');
+        el.id = 'game-error-banner';
+        el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;margin:0;padding:10px 14px;' +
+            'background:rgba(120,0,0,0.92);color:#fff;font:13px/1.4 monospace;white-space:pre-wrap;' +
+            'max-height:45vh;overflow:auto;border-bottom:3px solid #f55;cursor:pointer';
+        el.title = 'Click to dismiss';
+        el.addEventListener('click', () => el.remove());
+        document.body.appendChild(el);
+        return el;
+    }
+    window.__showGameError = function (title, err) {
+        const stack = err && err.stack ? err.stack.split('\n').slice(0, 5).join('\n    ') : String(err);
+        const line = `[${new Date().toLocaleTimeString()}] ${title}\n    ${stack}`;
+        seen.push(line);
+        console.error('🛑', title, err);
+        try { banner().textContent = 'GAME ERROR (click to dismiss)\n\n' + seen.slice(-4).join('\n\n'); } catch (e) {}
+    };
+    
+    let loopRestarts = 0;
+    function ensureLoopAlive() {
+        const game = window.__legacyGameInstance;
+        if (!game || !game.loop || !game.loop.running) return;
+        const frame = game.loop.frame;
+        setTimeout(() => {
+            if (!game.loop.running || game.loop.frame !== frame) return; // still ticking
+            if (++loopRestarts > 10) return;
+            console.error('💀 Frame loop died after an uncaught exception - restarting it');
+            try {
+                game.loop.raf.stop();
+                game.loop.raf.start(game.loop.step.bind(game.loop), game.loop.forceSetTimeOut, 0);
+            } catch (e) {
+                console.error('Could not restart the frame loop:', e);
+            }
+        }, 300);
+    }
+    window.addEventListener('error', (e) => {
+        window.__showGameError('Uncaught error', e.error || new Error(e.message + ' @ ' + e.filename + ':' + e.lineno));
+        ensureLoopAlive();
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+        window.__showGameError('Unhandled promise rejection', e.reason);
+        ensureLoopAlive();
+    });
+})();
+
 (() => {
     let gameInstance = null;
     
@@ -79,6 +138,7 @@ if (window.DEBUG_MODE) {
         console.log('🎮 Available scenes:', config.scene.map(s => s.name || s.key || 'Unknown'));
         
         gameInstance = new Phaser.Game(config);
+        window.__legacyGameInstance = gameInstance; // for the frame-loop watchdog above
         
         if (window.DeviceManager) {
             window.DeviceManager.initialize(gameInstance);

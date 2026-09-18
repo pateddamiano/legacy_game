@@ -264,11 +264,11 @@ class Enemy {
         let basePlayerDamage = typeConfig.playerDamage || ENEMY_CONFIG.playerDamage;
         let baseSpeed = typeConfig.speed || ENEMY_CONFIG.speed;
         
-        // Apply level multipliers if available (from levelManager)
-        let multipliers = { health: 1.0, damage: 1.0, speed: 1.0 };
-        if (scene.levelManager && typeof scene.levelManager.getCurrentDifficultyMultipliers === 'function') {
-            multipliers = scene.levelManager.getCurrentDifficultyMultipliers();
-        }
+        // Apply the level's "enemies.multipliers" block if it declares one
+        const levelMultipliers = (scene.levelLifecycle && scene.levelLifecycle.currentLevel &&
+                                  scene.levelLifecycle.currentLevel.enemies &&
+                                  scene.levelLifecycle.currentLevel.enemies.multipliers) || {};
+        const multipliers = { health: 1.0, damage: 1.0, speed: 1.0, ...levelMultipliers };
         
         this.health = Math.round(baseHealth * multipliers.health);
         this.maxHealth = this.health;

@@ -782,6 +782,23 @@ class DialogueManager {
         }
     }
     
+    // Put the box back to the geometry createDialogueUI() starts with. Levels restyle
+    // the dialogue for boss arenas via setDialogueStyle and nothing used to undo it,
+    // so the restyle leaked into every later level. LevelLifecycle.teardown() calls this.
+    resetToDefaults() {
+        if (!this.container) return;
+        const virtualWidth = 1200;
+        const virtualHeight = 720;
+        const panelWidth = 520;
+        const panelHeight = 110;
+        this.configureDialogue({
+            position: { x: Math.floor(virtualWidth * 0.72), y: Math.floor(virtualHeight * 0.50) },
+            size: { width: panelWidth, height: panelHeight },
+            textSizes: { speaker: GAME_CONFIG.ui.fontSize.label, message: GAME_CONFIG.ui.fontSize.small },
+            wordWrapWidth: panelWidth - 32
+        });
+    }
+    
     // Comprehensive configuration method
     configureDialogue(config) {
         if (!config) {

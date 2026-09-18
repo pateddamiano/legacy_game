@@ -36,8 +36,8 @@ class SpecialActions {
         if (levelConfig && levelConfig.audio && levelConfig.audio.subwayPassingVolume !== undefined) {
             return levelConfig.audio.subwayPassingVolume;
         }
-        // Fallback: try to get from current level manager
-        const currentConfig = this.scene.levelManager ? this.scene.levelManager.getCurrentLevelConfig() : null;
+        // Fallback: the level currently built by the lifecycle
+        const currentConfig = this.scene.levelLifecycle ? this.scene.levelLifecycle.currentLevel : null;
         if (currentConfig && currentConfig.audio && currentConfig.audio.subwayPassingVolume !== undefined) {
             return currentConfig.audio.subwayPassingVolume;
         }
@@ -75,15 +75,8 @@ class SpecialActions {
 
         console.log(`🎬 Triggering event: ${eventId}`);
 
-        // Find the event in the current level config
-        const levelConfig = this.scene.levelManager ? this.scene.levelManager.getCurrentLevelConfig() : null;
-        if (!levelConfig || !levelConfig.events) {
-            console.warn('🎬 No level config or events found');
-            this.advanceAction();
-            return;
-        }
-
-        const event = levelConfig.events.find(e => e.id === eventId);
+        // Look the event up among the ones registered for this level
+        const event = this.eventManager.events.find(e => e.id === eventId);
         if (!event) {
             console.warn(`🎬 Event ${eventId} not found`);
             this.advanceAction();
@@ -276,7 +269,7 @@ class SpecialActions {
                 // Start subway passing sound if this is the first car
                 if (this.activeSubwayCars.size === 1 && this.scene.audioManager) {
                     // Get volume from level config (centralized)
-                    const levelConfig = this.scene.levelManager ? this.scene.levelManager.getCurrentLevelConfig() : null;
+                    const levelConfig = this.scene.levelLifecycle ? this.scene.levelLifecycle.currentLevel : null;
                     const volume = this.getSubwayPassingVolume(levelConfig);
                     this.scene.audioManager.startSubwayPassing(volume);
                 }
@@ -307,6 +300,15 @@ class SpecialActions {
     }
     
     executeStopSubwayCarCycle(action) {
+        this.stopSubwayCarCycle();
+        
+        // Advance to next action
+        this.advanceAction();
+    }
+    
+    // Also called directly by LevelLifecycle.teardown() so a level that never ran the
+    // stop action (e.g. the player died) cannot leave a spawn timer running
+    stopSubwayCarCycle() {
         console.log('🎬 Stopping subway car spawning cycle');
         
         // Stop the cycle
@@ -337,9 +339,6 @@ class SpecialActions {
         if (this.scene.audioManager) {
             this.scene.audioManager.stopSubwayPassing();
         }
-        
-        // Advance to next action
-        this.advanceAction();
     }
 
     // Force the active player character to a specific character (e.g. before a
@@ -370,12 +369,9 @@ class SpecialActions {
         );
 
         if (result && result.success) {
-            this.scene.player = result.newPlayer;
-            this.scene.selectedCharacter = result.newCharacter;
-            this.scene.currentCharacterConfig = characterManager.currentCharacterConfig;
-            if (!this.scene.player.characterConfig) {
-                this.scene.player.characterConfig = this.scene.currentCharacterConfig;
-            }
+            // Full rebind (animation state, physics, combat, camera) - the previous partial
+            // rebind left scene.animationManager pointing at the old sprite
+            this.scene.bindPlayer(result.newPlayer);
         } else {
             console.warn(`🎬 SetActiveCharacter: switch to ${target} failed`, result);
         }
