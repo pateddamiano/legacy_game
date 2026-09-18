@@ -77,6 +77,7 @@ class MovementActions {
         }
         
         // If this is an enemy, ensure it's paused and set velocity to 0
+        let movingEnemy = null;
         if (target.startsWith('enemy_')) {
             const restOfString = target.substring(6);
             let enemyIndex = null;
@@ -94,6 +95,7 @@ class MovementActions {
             
             if (enemyIndex !== null && this.scene.enemies && this.scene.enemies[enemyIndex]) {
                 const enemy = this.scene.enemies[enemyIndex];
+                movingEnemy = enemy;
                 enemy.eventPaused = true; // Ensure enemy AI is paused
                 if (enemy.sprite && enemy.sprite.body) {
                     enemy.sprite.body.setVelocity(0, 0);
@@ -111,6 +113,10 @@ class MovementActions {
             ease: action.ease || 'Power2', // Default easing
             onStart: () => {
                 console.log(`🎬 Started moving ${target} to (${destX}, ${destY})`);
+                // A paused enemy shows idle; while it is being moved it should walk/run
+                if (movingEnemy && movingEnemy.playAnimIfExists) {
+                    movingEnemy.playAnimIfExists(`${movingEnemy.variationName}_walk`);
+                }
             },
             onUpdate: () => {
                 // Keep velocity at 0 during tween to prevent physics interference
@@ -133,6 +139,9 @@ class MovementActions {
                     // Protection will be unregistered inside executeDestroyEnemy
                     this.executeDestroyEnemy({ target: target });
                 } else {
+                    if (movingEnemy && movingEnemy.playAnimIfExists && movingEnemy.eventPaused) {
+                        movingEnemy.playAnimIfExists(`${movingEnemy.variationName}_idle`);
+                    }
                     this.advanceAction();
                 }
             }

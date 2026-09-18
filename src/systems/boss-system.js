@@ -305,8 +305,8 @@ class Boss extends Enemy {
         // Update perspective scaling (from parent)
         this.updatePerspective();
         
-        // Skip AI updates if paused by event system
-        if (this.eventPaused) return;
+        // Skip AI updates if paused by event system (idle while paused, walk again on resume)
+        if (this.applyEventPauseAnimation()) return;
         
         // Skip AI updates if paused due to player death
         if (this.deathPaused) return;

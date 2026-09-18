@@ -157,7 +157,7 @@ const ENEMY_TYPE_CONFIGS = {
         playerDamage: 6,             // Moderate damage
         attackTypes: ['attack'],
         detectionRange: 1300,        // Aggressive detection range
-        baseScale: 0.6,              // Base size multiplier (1.0 = normal size)
+        baseScale: 0.57,              // Base size multiplier (1.0 = normal size)
         description: "Scumbag Rapper - fast, aggressive Negatives enforcer"
     },
 
@@ -169,7 +169,7 @@ const ENEMY_TYPE_CONFIGS = {
         playerDamage: 9,             // Heavier damage
         attackTypes: ['punch'],
         detectionRange: 1400,        // Long detection range
-        baseScale: 0.65,              // Base size multiplier (1.0 = normal size)
+        baseScale: 0.6175,              // Base size multiplier (1.0 = normal size)
         description: "Scumbag Manager - slow, heavy-hitting Negatives bruiser"
     },
 
@@ -181,7 +181,7 @@ const ENEMY_TYPE_CONFIGS = {
         playerDamage: 8,             // Solid damage
         attackTypes: ['attack'],
         detectionRange: 1400,        // Long detection range
-        baseScale: 0.6,              // Base size multiplier (1.0 = normal size)
+        baseScale: 0.57,              // Base size multiplier (1.0 = normal size)
         description: "Industry Exec - label enforcer pushing predatory 360 deals, sent to cover for The Negatives"
     },
 
@@ -194,7 +194,7 @@ const ENEMY_TYPE_CONFIGS = {
         playerDamage: 8,
         attackTypes: ['jab', 'cross', 'kick'],
         detectionRange: 2000,
-        baseScale: 0.75,
+        baseScale: 0.7125,
         description: "Negative Tireek - a corrupted mirror of Tireek, faced in single combat"
     },
 
@@ -207,7 +207,7 @@ const ENEMY_TYPE_CONFIGS = {
         playerDamage: 8,
         attackTypes: ['jab', 'cross', 'kick'],
         detectionRange: 2000,
-        baseScale: 0.75,
+        baseScale: 0.7125,
         description: "Negative Tryston - a corrupted mirror of Tryston, faced in single combat"
     }
 };
@@ -334,6 +334,37 @@ class Enemy {
         this.player = player;
     }
     
+    playAnimIfExists(key) {
+        if (this.sprite && this.sprite.active && this.scene.anims.exists(key) && this.scene.anims.get(key).frames.length > 0) {
+            this.sprite.anims.play(key, true);
+            return true;
+        }
+        return false;
+    }
+    
+    // Called from update() by Enemy and Boss. Returns true when the AI should be skipped.
+    // The constructor starts every enemy on its walk cycle via setState(WALKING); an
+    // event-controlled enemy (cameo, boss during dialogue) is then paused before its AI
+    // ever runs, so it stood there running in place. Show idle while paused, and put the
+    // walk cycle back on resume - setState() is a no-op when the state is unchanged, so
+    // nothing else would re-apply it.
+    applyEventPauseAnimation() {
+        if (this.eventPaused) {
+            if (!this._idleWhilePaused) {
+                this._idleWhilePaused = true;
+                this.playAnimIfExists(`${this.variationName}_idle`);
+            }
+            return true;
+        }
+        if (this._idleWhilePaused) {
+            this._idleWhilePaused = false;
+            if (this.state === ENEMY_STATES.WALKING || this.state === ENEMY_STATES.SPAWNING) {
+                this.playAnimIfExists(`${this.variationName}_walk`);
+            }
+        }
+        return false;
+    }
+    
     setState(newState) {
         if (this.state === newState) return;
         
@@ -401,7 +432,7 @@ class Enemy {
         this.updatePerspective();
         
         // Skip AI updates if paused by event system (but still update visual properties above)
-        if (this.eventPaused) return;
+        if (this.applyEventPauseAnimation()) return;
         
         // Skip AI updates if paused due to player death
         if (this.deathPaused) return;

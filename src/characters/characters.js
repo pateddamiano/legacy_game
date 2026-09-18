@@ -238,7 +238,7 @@ const SCUMBAG_MANAGER_CONFIG = new CharacterConfig(
     'scumbag_manager',
     {
         walk: 'assets/characters/scumbag_manager/spritesheets/scumbag_manager_idle_4frames.png', // Using idle as walk
-        punch: 'assets/characters/scumbag_manager/spritesheets/scumbag_manager_punch_4frames.png',
+        punch: 'assets/characters/scumbag_manager/spritesheets/scumbag_manager_punch_4frames_128w.png',
         idle: 'assets/characters/scumbag_manager/spritesheets/scumbag_manager_idle_4frames.png'
     },
     {
