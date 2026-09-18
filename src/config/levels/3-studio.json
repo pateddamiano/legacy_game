@@ -37,9 +37,14 @@
       "trigger": { "type": "position", "value": 3450, "tolerance": 50, "once": true },
       "actions": [
         { "type": "pause", "targets": ["player", "enemies"] },
+        { "type": "camera", "stopFollow": true },
         { "type": "stopEnemySpawning", "clearEnemies": true },
-        { "type": "spawnEnemy", "enemyType": "negative_tireek", "position": { "x": 3720, "y": 452 }, "id": "enemy_neg_tireek_cameo", "flipX": true, "protectionLevel": "invulnerable" },
-        { "type": "spawnEnemy", "enemyType": "negative_tryston", "position": { "x": 3880, "y": 480 }, "id": "enemy_neg_tryston_cameo", "flipX": true, "protectionLevel": "invulnerable" },
+        { "type": "spawnEnemy", "enemyType": "negative_tireek", "position": { "x": 4160, "y": 452 }, "id": "enemy_neg_tireek_cameo", "flipX": true, "protectionLevel": "invulnerable" },
+        { "type": "spawnEnemy", "enemyType": "negative_tryston", "position": { "x": 4320, "y": 480 }, "id": "enemy_neg_tryston_cameo", "flipX": true, "protectionLevel": "invulnerable" },
+        { "type": "showEmote", "target": "player", "text": "!", "duration": 2600 },
+        { "type": "wait", "duration": 400 },
+        { "type": "camera", "pan": { "x": 3250 }, "duration": 1800, "ease": "Power2" },
+        { "type": "wait", "duration": 400 },
         { "type": "dialogue", "dialogue": { "speaker": "Tireek", "text": "Whoa! That's... that's a negative version of us!" } },
         { "type": "dialogue", "dialogue": { "speaker": "Tryston", "text": "Yeah... this can't be good." } },
         { "type": "dialogue", "dialogue": { "speaker": "Negative Tireek", "text": "Surprised? The label built us to look just like you." } },
@@ -55,6 +60,7 @@
         { "type": "dialogue", "dialogue": { "speaker": "Exec", "text": "Sign here, and all of this goes away." } },
         { "type": "playMusic", "musicKey": "riverMusic" },
         { "type": "startEnemySpawning", "config": { "maxEnemies": 6, "spawnInterval": 1100, "allowedEnemyTypes": ["exec"] } },
+        { "type": "camera", "follow": "player" },
         { "type": "resume", "targets": ["player", "enemies"] }
       ]
     },

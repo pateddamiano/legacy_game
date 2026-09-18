@@ -148,6 +148,10 @@ class LevelLifecycle {
             s.eventEnemiesClearedCheck.destroy();
             delete s.eventEnemiesClearedCheck;
         }
+        if (s._eventEmote) {
+            s._eventEmote.destroy();
+            s._eventEmote = null;
+        }
         s.eventWaitingForZone = null;
         s.eventWaitingForEnemiesCleared = null;
         s.eventWaitingForEnemyDestroy = null;

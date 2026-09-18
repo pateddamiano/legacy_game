@@ -126,6 +126,9 @@ class EventManager {
     
     clearEvents() {
         console.log('🎬 Clearing all events');
+        if (this.specialActions && this.specialActions.clearEmote) {
+            this.specialActions.clearEmote(true);
+        }
         this.events = [];
         this.triggeredEvents.clear();
         this.activeEvent = null;
@@ -366,6 +369,9 @@ class EventManager {
                 break;
             case 'setActiveCharacter':
                 this.specialActions.executeSetActiveCharacter(action);
+                break;
+            case 'showEmote':
+                this.specialActions.executeShowEmote(action);
                 break;
             default:
                 console.warn(`🎬 Unknown action type: ${action.type}`);

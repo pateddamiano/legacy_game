@@ -344,6 +344,63 @@ class SpecialActions {
     // Force the active player character to a specific character (e.g. before a
     // mirror-match boss duel that requires a particular character to be in control).
     // No-ops if the requested character is already active.
+    // { "type": "showEmote", "target": "player", "text": "!", "duration": 2500 }
+    // Pops a piece of text above a character's head (default: red "!" over the player),
+    // bobs it, and fades it after `duration`. Non-blocking - the event continues at once.
+    // Optional: color, fontSize, offsetY (default: just above the visible head).
+    executeShowEmote(action) {
+        const target = (!action.target || action.target === 'player') ? this.scene.player : this.getEntity(action.target);
+        if (!target) {
+            console.warn('🎬 ShowEmote: target not found', action.target);
+            this.advanceAction();
+            return;
+        }
+        this.clearEmote(true);
+        
+        const text = action.text !== undefined ? action.text : '!';
+        const duration = action.duration || 2000;
+        // The sprite frame has a lot of transparent margin; the visible head sits well
+        // below the frame top, so anchor a bit above the sprite's vertical third.
+        const offsetY = action.offsetY !== undefined ? action.offsetY : -Math.round(target.displayHeight * 0.32);
+        
+        const emote = this.scene.add.text(target.x, target.y + offsetY, text, {
+            fontFamily: GAME_CONFIG.ui.fontFamily,
+            fontSize: `${action.fontSize || 72}px`,
+            color: action.color || '#ff2a2a',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 6
+        }).setOrigin(0.5, 1).setDepth(9999).setScale(0);
+        this.scene._eventEmote = emote;
+        
+        // Pop in, then bob until it is cleared
+        this.scene.tweens.add({
+            targets: emote, scale: 1, duration: 260, ease: 'Back.easeOut',
+            onComplete: () => {
+                if (emote.active) {
+                    this.scene.tweens.add({ targets: emote, y: emote.y - 8, duration: 380, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+                }
+            }
+        });
+        this.scene.time.delayedCall(duration, () => {
+            if (this.scene._eventEmote === emote) this.clearEmote(false);
+        });
+        
+        this.advanceAction();
+    }
+    
+    clearEmote(immediate) {
+        const emote = this.scene._eventEmote;
+        if (!emote) return;
+        this.scene._eventEmote = null;
+        this.scene.tweens.killTweensOf(emote);
+        if (immediate || !emote.active) {
+            emote.destroy();
+            return;
+        }
+        this.scene.tweens.add({ targets: emote, alpha: 0, scale: 0.6, duration: 160, onComplete: () => emote.destroy() });
+    }
+    
     executeSetActiveCharacter(action) {
         const target = action.character;
         const characterManager = this.scene.characterManager;
