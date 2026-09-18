@@ -28,6 +28,12 @@ class EffectSystem {
             frameHeight: 96
         });
         
+        // Blue fire trail for the Negatives' thrown record (8 frames stacked vertically)
+        this.scene.load.spritesheet('bluefire', 'assets/effects/bluefire_8frame.png', {
+            frameWidth: 128,
+            frameHeight: 128
+        });
+        
         // Add load completion callback for tornado
         this.scene.load.on('filecomplete-spritesheet-tornado', (key, type, data) => {
             console.log('✅ Tornado spritesheet loaded successfully:', { key, type });
@@ -36,6 +42,17 @@ class EffectSystem {
     
     createEffectAnimations() {
         console.log('🌪️ Creating effect animations...');
+        
+        // Blue fire (looping) - used by projectiles whose weapon config has effect: 'bluefire'
+        if (this.scene.textures.exists('bluefire') && !this.scene.anims.exists('bluefire_effect')) {
+            const fireTexture = this.scene.textures.get('bluefire');
+            this.scene.anims.create({
+                key: 'bluefire_effect',
+                frames: this.scene.anims.generateFrameNumbers('bluefire', { start: 0, end: fireTexture.frameTotal - 2 }),
+                frameRate: 16,
+                repeat: -1
+            });
+        }
         
         // Check if spritesheet exists first
         if (!this.scene.textures.exists('tornado')) {

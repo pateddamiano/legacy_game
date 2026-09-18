@@ -80,22 +80,24 @@ const BOSS_TYPE_CONFIGS = {
         playerDamage: 8,
         attackTypes: ['jab', 'cross', 'kick'],
         detectionRange: 2000,
-        behaviors: [], // no jumpOnDamage/throwWeapons/verticalMovement - pure 1v1 melee
+        behaviors: ['jumpOnDamage', 'throwWeapons', 'verticalMovement'], // same rhythm as the Critic
 
-        // Jump behavior (disabled via behaviors above, values kept for validation/safety)
-        jumpOnDamageThreshold: 1.1,
-        jumpCooldown: 999999,
+        // Jump behavior
+        jumpOnDamageThreshold: 0.08,   // hop to the other edge after losing 8% health
+        jumpCooldown: 2500,
         jumpType: 'flip',
-        jumpDistance: 0,
+        jumpDistance: 500,
 
-        // Weapon throwing (disabled via behaviors above)
-        throwWeaponCooldown: 999999,
-        throwWeaponRange: 0,
-        throwWeaponType: 'vinyl',
+        // Weapon throwing: the record, slow, wrapped in blue fire
+        throwWeaponCooldown: 1500,
+        throwWeaponRange: 1000,
+        throwWeaponType: 'vinyl_boss',
+        throwAnimation: 'cross',       // played while throwing (they have no dedicated throw anim)
 
-        // Edge-standing behavior (disabled - fights in the middle of the arena)
-        standOnEdges: false,
-        edgeMargin: 0,
+        // Edge-standing: keep clear of the world edge (their bodies are ~450px wide)
+        standOnEdges: true,
+        edgeMargin: 240,
+        notGoodOnHit: false,           // the 'NOT GOOD' stinger is the Critic's
 
         description: "Negative Tireek - Tireek's corrupted double, fought head-to-head"
     },
@@ -109,22 +111,24 @@ const BOSS_TYPE_CONFIGS = {
         playerDamage: 8,
         attackTypes: ['jab', 'cross', 'kick'],
         detectionRange: 2000,
-        behaviors: [], // no jumpOnDamage/throwWeapons/verticalMovement - pure 1v1 melee
+        behaviors: ['jumpOnDamage', 'throwWeapons', 'verticalMovement'], // same rhythm as the Critic
 
-        // Jump behavior (disabled via behaviors above, values kept for validation/safety)
-        jumpOnDamageThreshold: 1.1,
-        jumpCooldown: 999999,
+        // Jump behavior
+        jumpOnDamageThreshold: 0.08,   // hop to the other edge after losing 8% health
+        jumpCooldown: 2500,
         jumpType: 'flip',
-        jumpDistance: 0,
+        jumpDistance: 500,
 
-        // Weapon throwing (disabled via behaviors above)
-        throwWeaponCooldown: 999999,
-        throwWeaponRange: 0,
-        throwWeaponType: 'vinyl',
+        // Weapon throwing: the record, slow, wrapped in blue fire
+        throwWeaponCooldown: 1500,
+        throwWeaponRange: 1000,
+        throwWeaponType: 'vinyl_boss',
+        throwAnimation: 'cross',       // played while throwing (they have no dedicated throw anim)
 
-        // Edge-standing behavior (disabled - fights in the middle of the arena)
-        standOnEdges: false,
-        edgeMargin: 0,
+        // Edge-standing: keep clear of the world edge (their bodies are ~450px wide)
+        standOnEdges: true,
+        edgeMargin: 240,
+        notGoodOnHit: false,           // the 'NOT GOOD' stinger is the Critic's
 
         description: "Negative Tryston - Tryston's corrupted double, fought head-to-head"
     }
@@ -705,8 +709,8 @@ class Boss extends Enemy {
             }
             
             // Show "not good" animation and lock player movement (always happens on hit)
-            this.lockPlayerMovement();
-            this.showNotGoodAnimation();
+            if (this.bossConfig.notGoodOnHit !== false) this.lockPlayerMovement();   // the Critic's stinger
+            if (this.bossConfig.notGoodOnHit !== false) this.showNotGoodAnimation();
             
             // Wait for attack animation to finish, then proceed with jump
             const attackAnimDuration = 300; // Approximate duration
@@ -1140,8 +1144,15 @@ class Boss extends Enemy {
         const throwY = this.sprite.y;
 
         // Randomly select a rating weapon (0-4 stars)
+        // Pick the weapon: 'rating' means a random 0-4 star; anything else is a WEAPON_CONFIG key
         const ratingLevel = Math.floor(Math.random() * 5); // 0-4
-        const weaponType = `rating_${ratingLevel}`;
+        const weaponType = (!this.throwWeaponType || this.throwWeaponType === 'rating')
+            ? `rating_${ratingLevel}`
+            : this.throwWeaponType;
+        // Sell the throw with an attack animation if the config names one
+        if (this.bossConfig.throwAnimation && this.playAnimIfExists) {
+            this.playAnimIfExists(`${this.variationName}_${this.bossConfig.throwAnimation}`);
+        }
 
         // Use WeaponManager to create projectile
         if (this.scene.weaponManager.createBossProjectile) {
@@ -1168,6 +1179,8 @@ class Boss extends Enemy {
         
         if (this.scene.weaponManager && this.scene.weaponManager.projectiles) {
             const projectile = new Projectile(this.scene, x, y, weaponConfig, direction);
+            projectile.isBossProjectile = true; // hits the player, never the boss
+            projectile.owner = this;
             this.scene.weaponManager.projectiles.push(projectile);
         }
     }
