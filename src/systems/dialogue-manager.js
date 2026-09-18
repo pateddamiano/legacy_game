@@ -246,6 +246,14 @@ class DialogueManager {
         // Set speaker name
         this.speakerText.setText(dialogue.speaker ? dialogue.speaker.toUpperCase() : 'NARRATOR');
         
+        // Accent colour for the box outline + speaker name: a per-line "color" wins, then
+        // the speaker table below (e.g. the Negatives in red), otherwise the default gold.
+        const accent = dialogue.color || DialogueManager.accentForSpeaker(dialogue.speaker) || DialogueManager.DEFAULT_ACCENT;
+        this.speakerText.setColor(accent);
+        if (this.dialogueBox) {
+            this.dialogueBox.setStrokeStyle(3, Phaser.Display.Color.HexStringToColor(accent).color);
+        }
+        
         // Start typewriter effect
         this.fullText = dialogue.text;
         this.displayedText = '';
@@ -888,6 +896,18 @@ class DialogueManager {
         console.log('💬 DialogueManager destroyed');
     }
 }
+
+// Box outline + speaker name colour. Add a row here to recolour a speaker everywhere;
+// a dialogue line can also set "color": "#rrggbb" directly to override for that line.
+DialogueManager.DEFAULT_ACCENT = '#FFD700';
+DialogueManager.SPEAKER_ACCENTS = [
+    { match: /^negative\b/i, color: '#ff2a2a' }   // Negative Tireek / Negative Tryston
+];
+DialogueManager.accentForSpeaker = function (speaker) {
+    if (!speaker) return null;
+    const row = DialogueManager.SPEAKER_ACCENTS.find(r => r.match.test(speaker));
+    return row ? row.color : null;
+};
 
 // Export for use in other files
 if (typeof module !== 'undefined' && module.exports) {
