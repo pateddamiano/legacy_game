@@ -901,11 +901,13 @@ class DialogueManager {
 // a dialogue line can also set "color": "#rrggbb" directly to override for that line.
 DialogueManager.DEFAULT_ACCENT = '#FFD700';
 DialogueManager.SPEAKER_ACCENTS = [
-    { match: /^negative\b/i, color: '#ff2a2a' }   // Negative Tireek / Negative Tryston
+    { match: /^negative\b/i, color: '#ff2a2a' },  // Negative Tireek / Negative Tryston
+    { match: /^narrator$/i,   color: '#c4c4c4' }   // Narrator (also lines with no speaker)
 ];
 DialogueManager.accentForSpeaker = function (speaker) {
-    if (!speaker) return null;
-    const row = DialogueManager.SPEAKER_ACCENTS.find(r => r.match.test(speaker));
+    // A line with no speaker is shown as NARRATOR, so style it the same way
+    const name = speaker || 'Narrator';
+    const row = DialogueManager.SPEAKER_ACCENTS.find(r => r.match.test(name));
     return row ? row.color : null;
 };
 
