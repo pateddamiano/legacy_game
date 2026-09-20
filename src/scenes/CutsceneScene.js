@@ -28,6 +28,7 @@ class CutsceneScene extends Phaser.Scene {
         this.currentLineIndex = 0;
         this.isTyping = false;
         this.isFinishing = false;
+        this.showcaseReady = false;
 
         console.log(`🎬 CutsceneScene: Init with cutscene '${this.cutsceneId}'`);
         if (!this.config) {
@@ -42,6 +43,11 @@ class CutsceneScene extends Phaser.Scene {
         if (bg && bg.key && bg.path && !this.textures.exists(bg.key)) {
             console.log(`🎬 CutsceneScene: Loading background ${bg.key} from ${bg.path}`);
             this.load.image(bg.key, bg.path);
+        }
+
+        const showcaseImage = this.config.showcase && this.config.showcase.image;
+        if (showcaseImage && !this.textures.exists(showcaseImage.key)) {
+            this.load.image(showcaseImage.key, showcaseImage.path);
         }
 
         // Portraits are optional, and shared with IntroDialogueScene
@@ -91,7 +97,7 @@ class CutsceneScene extends Phaser.Scene {
                 this.virtualHeight / image.height
             );
             image.setScale(coverScale);
-        } else {
+        } else if (bg) {
             console.warn(`🎬 CutsceneScene: Background texture missing for '${this.cutsceneId}'`);
         }
 
@@ -99,8 +105,17 @@ class CutsceneScene extends Phaser.Scene {
             this.createCharacterPortraits();
         }
 
-        this.createCinematicBars();
-        this.createDialogueUI();
+        if (this.config.characters) {
+            this.createCutsceneCharacters();
+        }
+
+        this.showcase = this.config.showcase || null;
+        if (this.showcase) {
+            this.createShowcase();
+        } else {
+            this.createCinematicBars();
+            this.createDialogueUI();
+        }
 
         this.lines = this.config.lines || [];
 
@@ -115,6 +130,12 @@ class CutsceneScene extends Phaser.Scene {
         }
 
         this.setupInput();
+
+        if (this.showcase) {
+            // End card: no dialogue, no skip prompt. Fade in and let it sit.
+            this.cameras.main.fadeIn(1500, 0, 0, 0);
+            return;
+        }
 
         // Skip prompt
         const promptText = (window.DeviceManager && window.DeviceManager.shouldShowTouchControls())
@@ -165,6 +186,147 @@ class CutsceneScene extends Phaser.Scene {
         tryston.setDepth(1);
     }
 
+    // In-world character models (the real idle sprites, not dialogue portraits).
+    // Textures are already loaded by PreloadScene; 'player' entries use the character's
+    // idle sheet, 'extra' entries use a static image from EXTRAS_REGISTRY.
+    createCutsceneCharacters() {
+        this.config.characters.forEach(def => {
+            let textureKey;
+            let isPlayer = def.type === 'player';
+
+            if (isPlayer) {
+                textureKey = `${def.name}_idle`;
+            } else {
+                const extra = window.EXTRAS_REGISTRY && window.EXTRAS_REGISTRY[def.name];
+                textureKey = extra ? extra.key : null;
+            }
+
+            if (!textureKey || !this.textures.exists(textureKey)) {
+                console.warn(`🎬 CutsceneScene: Texture missing for character '${def.name}', skipping`);
+                return;
+            }
+
+            this.textures.get(textureKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
+
+            const sprite = this.add.sprite(def.x, def.feetY, textureKey, 0);
+            sprite.setOrigin(0.5, def.originY !== undefined ? def.originY : 1);
+            sprite.setScale(def.scale || 1);
+            sprite.setFlipX(!!def.flipX);
+            sprite.setDepth(1);
+
+            if (isPlayer) {
+                const animKey = this.anims.exists(`${def.name}_idle`) ? `${def.name}_idle` : `${def.name}_idle_cutscene`;
+                if (!this.anims.exists(animKey)) {
+                    this.anims.create({
+                        key: animKey,
+                        frames: this.anims.generateFrameNumbers(textureKey, { start: 0, end: -1 }),
+                        frameRate: 12,
+                        repeat: -1
+                    });
+                }
+                sprite.anims.play(animKey);
+            }
+        });
+    }
+
+    // End card: a hovering image over a radial glow (yellow centre fading to dark),
+    // with a title and subtitle, then a prompt to return to the main menu.
+    createShowcase() {
+        const s = this.showcase;
+        const centerX = this.virtualWidth / 2;
+        const imageY = s.y !== undefined ? s.y : 290;
+
+        // Radial glow: opaque yellow in the middle, fully transparent at the edge
+        const glowSize = s.glowSize || 760;
+        if (this.textures.exists('cutsceneShowcaseGlow')) {
+            this.textures.remove('cutsceneShowcaseGlow');
+        }
+        const glowTexture = this.textures.createCanvas('cutsceneShowcaseGlow', glowSize, glowSize);
+        const ctx = glowTexture.getContext();
+        const half = glowSize / 2;
+        const gradient = ctx.createRadialGradient(half, half, 0, half, half, half);
+        gradient.addColorStop(0, 'rgba(255, 224, 80, 0.95)');
+        gradient.addColorStop(0.35, 'rgba(255, 190, 30, 0.55)');
+        gradient.addColorStop(0.7, 'rgba(180, 120, 10, 0.18)');
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, glowSize, glowSize);
+        glowTexture.refresh();
+
+        const glow = this.add.image(centerX, imageY, 'cutsceneShowcaseGlow').setDepth(1);
+        this.tweens.add({
+            targets: glow,
+            alpha: { from: 0.8, to: 1 },
+            duration: 2200,
+            ease: 'Sine.easeInOut',
+            yoyo: true,
+            repeat: -1
+        });
+
+        // The hovering image itself
+        const image = this.add.image(centerX, imageY, s.image.key).setDepth(2);
+        image.setScale((s.height || 400) / image.height);
+        const bob = s.bobDistance !== undefined ? s.bobDistance : 12;
+        this.tweens.add({
+            targets: image,
+            y: imageY - bob,
+            duration: s.bobDuration || 1800,
+            ease: 'Sine.easeInOut',
+            yoyo: true,
+            repeat: -1
+        });
+
+        // Title + subtitle fade in after the picture has settled
+        const title = this.add.text(centerX, 560, s.title || '', {
+            fontFamily: GAME_CONFIG.ui.fontFamily,
+            fontSize: '72px',
+            color: '#FFD700',
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(3).setAlpha(0);
+
+        const subtitle = this.add.text(centerX, 625, s.subtitle || '', {
+            fontFamily: GAME_CONFIG.ui.fontFamily,
+            fontSize: '36px',
+            color: '#FFFFFF'
+        }).setOrigin(0.5).setDepth(3).setAlpha(0);
+
+        this.tweens.add({ targets: [title, subtitle], alpha: 1, delay: 1800, duration: 1500 });
+
+        // After a few seconds, offer the way back to the menu
+        const promptText = (window.DeviceManager && window.DeviceManager.shouldShowTouchControls())
+            ? 'Tap to return to the main menu'
+            : 'Press SPACE to return to the main menu';
+        const prompt = this.add.text(centerX, this.virtualHeight - 40, promptText, {
+            fontFamily: GAME_CONFIG.ui.fontFamily,
+            fontSize: GAME_CONFIG.ui.fontSize.label,
+            color: '#888888'
+        }).setOrigin(0.5).setDepth(3).setAlpha(0);
+
+        this.time.delayedCall(5000, () => {
+            this.showcaseReady = true;
+            this.tweens.add({ targets: prompt, alpha: 1, duration: 800 });
+        });
+    }
+
+    returnToMainMenu() {
+        if (this.isFinishing) return;
+        this.isFinishing = true;
+
+        if (this.audioManager) {
+            this.audioManager.stopBackgroundMusic(false);
+        }
+
+        this.cameras.main.fadeOut(800, 0, 0, 0);
+        this.cameras.main.once('camerafadeoutcomplete', () => {
+            if (window.sceneManager && window.sceneManager.exitToMainMenu) {
+                window.sceneManager.exitToMainMenu();
+            } else {
+                console.error('🎬 CutsceneScene: sceneManager unavailable, cannot return to main menu');
+                this.isFinishing = false;
+            }
+        });
+    }
+
     createCinematicBars() {
         const barHeight = 100;
 
@@ -181,8 +343,11 @@ class CutsceneScene extends Phaser.Scene {
         const centerX = this.virtualWidth / 2;
         const centerY = this.virtualHeight / 2;
 
+        this.defaultBoxColor = 0xFFD700;
+        this.defaultSpeakerColor = '#FFD700';
+
         this.dialogueBox = this.add.rectangle(centerX, centerY + 230, 700, 200, 0x000000, 0.9);
-        this.dialogueBox.setStrokeStyle(3, 0xFFD700);
+        this.dialogueBox.setStrokeStyle(3, this.defaultBoxColor);
         this.dialogueBox.setDepth(10);
 
         this.speakerText = this.add.text(centerX - 330, centerY + 140, '', {
@@ -211,6 +376,11 @@ class CutsceneScene extends Phaser.Scene {
         const line = this.lines[this.currentLineIndex];
         this.speakerText.setText(line.speaker || '');
         this.messageText.setText('');
+
+        // Per-line dialogue box/speaker color override (e.g. a different character's box color)
+        this.dialogueBox.setStrokeStyle(3, line.boxColor !== undefined ? line.boxColor : this.defaultBoxColor);
+        this.speakerText.setColor(line.speakerColor !== undefined ? line.speakerColor : this.defaultSpeakerColor);
+
         this.isTyping = true;
         this.typeText(line.text || '');
 
@@ -256,6 +426,11 @@ class CutsceneScene extends Phaser.Scene {
 
     handleAdvance() {
         if (this.isFinishing) return;
+
+        if (this.showcase) {
+            if (this.showcaseReady) this.returnToMainMenu();
+            return;
+        }
 
         if (this.isTyping) {
             // Skip the typing animation and show the full line

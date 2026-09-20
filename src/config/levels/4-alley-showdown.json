@@ -46,15 +46,14 @@
         { "type": "showBossHealthBar", "bossId": "boss_negative_tryston" },
         { "type": "resume", "targets": ["player", "enemies"] },
         { "type": "waitForBossDefeated", "bossId": "boss_negative_tryston" },
+        { "type": "playMusic", "musicKey": "satellitesMusic" },
         { "type": "pause", "targets": ["player", "enemies"] },
         { "type": "wait", "duration": 500 },
-        { "type": "dialogue", "dialogue": { "speaker": "Negative Tryston", "text": "Take it, then. It's yours." } },
         { "type": "setDialogueStyle", "position": { "x": 640, "y": 360 }, "size": { "width": 700, "height": 200 }, "textSizes": { "speaker": 40, "message": 35 }, "wordWrapWidth": 660 },
-        { "type": "dialogue", "dialogue": { "speaker": "Narrator", "text": "A hard drive clatters to the ground. Your album -- the one they stole -- is finally back in your hands." } },
-        { "type": "dialogue", "dialogue": { "speaker": "Tryston", "text": "Everything we've been through... it all comes down to this." } },
-        { "type": "dialogue", "dialogue": { "speaker": "Tireek", "text": "No album, no leverage. No 360 deal is ever gonna own us now." } },
-        { "type": "dialogue", "dialogue": { "speaker": "Narrator", "text": "The Negatives lie defeated, and the album is safe at last." } },
-        { "type": "resume", "targets": ["player", "enemies"] }
+        { "type": "dialogue", "dialogue": { "speaker": "Narrator", "text": "With the final hit, the hard drive clatters to the ground. Your album is back in your hands." } },
+        { "type": "dialogue", "dialogue": { "speaker": "Narrator", "text": "The Negatives lie defeated. The future of ++ is secured." } },
+        { "type": "fade", "direction": "out", "duration": 1000, "color": { "r": 0, "g": 0, "b": 0 } },
+        { "type": "cutscene", "cutsceneId": "ending_golden_record" }
       ]
     }
   ],

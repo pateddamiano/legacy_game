@@ -902,7 +902,8 @@ class DialogueManager {
 DialogueManager.DEFAULT_ACCENT = '#FFD700';
 DialogueManager.SPEAKER_ACCENTS = [
     { match: /^negative\b/i, color: '#ff2a2a' },  // Negative Tireek / Negative Tryston
-    { match: /^narrator$/i,   color: '#c4c4c4' }   // Narrator (also lines with no speaker)
+    { match: /^narrator$/i,   color: '#c4c4c4' },  // Narrator (also lines with no speaker)
+    { match: /^(the )?critic$/i, color: '#FFF44F' } // The Critic: lemon yellow, distinct from the default gold
 ];
 DialogueManager.accentForSpeaker = function (speaker) {
     // A line with no speaker is shown as NARRATOR, so style it the same way

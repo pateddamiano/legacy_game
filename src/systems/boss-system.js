@@ -555,8 +555,8 @@ class Boss extends Enemy {
             this.scene.uiManager.updateBossHealthBar(this.health, this.maxHealth);
         }
         
-        // Check for jump-on-damage behavior
-        if (this.behaviors.jumpOnDamage && this.state !== BOSS_STATES.JUMPING && this.state !== BOSS_STATES.DYING) {
+        // Check for jump-on-damage behavior (never on the killing blow)
+        if (this.behaviors.jumpOnDamage && this.health > 0 && this.state !== BOSS_STATES.JUMPING && this.state !== BOSS_STATES.DYING) {
             const healthPercent = this.health / this.maxHealth;
             const healthLostThisHit = this.lastHealthPercent - healthPercent;
             
@@ -881,6 +881,12 @@ class Boss extends Enemy {
         // Prevent double calls
         if (this.state === BOSS_STATES.JUMPING) {
             console.log(`👹 [BOSS_JUMP] Already jumping, skipping proceedWithJump`);
+            return;
+        }
+
+        // A jump queued by an earlier hit must not fire once the boss is dead or dying
+        if (this.health <= 0 || this.state === BOSS_STATES.DYING || this.state === BOSS_STATES.DEAD) {
+            console.log(`👹 [BOSS_JUMP] Boss is defeated, skipping proceedWithJump`);
             return;
         }
 
