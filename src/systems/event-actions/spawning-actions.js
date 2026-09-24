@@ -70,14 +70,7 @@ class SpawningActions {
         
         // Only clear enemies if explicitly requested
         if (action.clearEnemies) {
-            if (this.scene.enemies && this.scene.enemies.length > 0) {
-                this.scene.enemies.forEach(enemy => {
-                    if (enemy.sprite) {
-                        enemy.sprite.destroy();
-                    }
-                });
-                this.scene.enemies = [];
-            }
+            this.eventManager.utilities.clearEnemiesInPlace();
         }
         
         this.advanceAction();
@@ -87,7 +80,8 @@ class SpawningActions {
         console.log('🎬 Waiting for all enemies to be cleared...');
         
         // Check if enemies are already cleared
-        if (!this.scene.enemies || this.scene.enemies.length === 0) {
+        const enemies = this.eventManager.utilities.getEnemiesArray();
+        if (enemies.length === 0) {
             console.log('🎬 No enemies present, advancing immediately');
             this.advanceAction();
             return;
@@ -97,17 +91,12 @@ class SpawningActions {
         const checkInterval = this.scene.time.addEvent({
             delay: 100, // Check every 100ms
             callback: () => {
-                // Filter out dead/destroyed enemies
-                const activeEnemies = this.scene.enemies.filter(enemy => {
+                // Drop dead/destroyed enemies IN PLACE (see EventUtilities.getEnemiesArray)
+                const activeEnemies = this.eventManager.utilities.filterEnemiesInPlace(enemy => {
                     if (!enemy || !enemy.sprite) return false;
                     if (typeof ENEMY_STATES !== 'undefined' && enemy.state === ENEMY_STATES.DEAD) return false;
                     return enemy.sprite.active;
                 });
-                
-                // Update enemies array to remove dead ones
-                if (activeEnemies.length !== this.scene.enemies.length) {
-                    this.scene.enemies = activeEnemies;
-                }
                 
                 // If no active enemies remain, advance
                 if (activeEnemies.length === 0) {

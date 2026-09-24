@@ -11,6 +11,7 @@ class EventManager {
         this.scene = scene;
         this.events = [];
         this.triggeredEvents = new Set(); // Track which events have been triggered
+        this.eventStartPositions = new Map(); // eventId -> { x, y } where the player was when it first fired
         this.activeEvent = null; // Currently executing event
         this.actionQueue = []; // Queue of actions for current event
         this.currentActionIndex = 0;
@@ -73,6 +74,7 @@ class EventManager {
         
         // Reset triggered events set
         this.triggeredEvents.clear();
+        this.eventStartPositions.clear();
         this._gameOverRestartLogShown = false; // Reset log flag
         
         console.log('🎬 Events registered:', this.events.map(e => e.id || 'unnamed'));
@@ -126,6 +128,10 @@ class EventManager {
     
     clearEvents() {
         console.log('🎬 Clearing all events');
+        this.bossHealthCarry = null; // new level / teardown: no carried boss health
+        if (this.specialActions && this.specialActions.clearEmote) {
+            this.specialActions.clearEmote(true);
+        }
         this.events = [];
         this.triggeredEvents.clear();
         this.activeEvent = null;
@@ -225,6 +231,7 @@ class EventManager {
         this.activeEvent = event;
         this.actionQueue = [...event.actions]; // Copy actions array
         this.currentActionIndex = 0;
+        this.recordEventStart(event);
 
         console.log(`🎬 Started event: ${event.id || 'unnamed'}`);
 
@@ -247,6 +254,22 @@ class EventManager {
         this.executeNextAction();
     }
     
+    // Remember where the player stood the FIRST time an event fired (a restart re-enters
+    // triggerEvent, and must not overwrite it). Try Again puts the player back here: the
+    // spot that triggers the event, e.g. the start of a boss arena. The automatic
+    // 0/25/50/75/100%-of-the-world checkpoints don't fit - in the single-screen level 4 the
+    // 75% checkpoint is x=900, right on top of the boss.
+    recordEventStart(event) {
+        const player = this.scene.player;
+        if (!event || !event.id || !player || this.eventStartPositions.has(event.id)) return;
+        this.eventStartPositions.set(event.id, { x: player.x, y: player.y });
+        console.log(`📍 Event ${event.id} started with the player at (${Math.round(player.x)}, ${Math.round(player.y)})`);
+    }
+
+    getEventStartPosition(eventId) {
+        return this.eventStartPositions.get(eventId) || null;
+    }
+
     executeNextAction() {
         if (!this.activeEvent) return;
         
@@ -316,6 +339,9 @@ class EventManager {
             case 'fade':
                 this.sceneActions.executeFade(action);
                 break;
+            case 'cutscene':
+                this.sceneActions.executeCutscene(action);
+                break;
             case 'loadLevel':
                 this.sceneActions.executeLoadLevel(action);
                 break;
@@ -360,6 +386,18 @@ class EventManager {
                 break;
             case 'bossDefeatedDialogue':
                 this.bossActions.executeBossDefeatedDialogue(action);
+                break;
+            case 'setActiveCharacter':
+                this.specialActions.executeSetActiveCharacter(action);
+                break;
+            case 'showEmote':
+                this.specialActions.executeShowEmote(action);
+                break;
+            case 'healPlayers':
+                this.specialActions.executeHealPlayers(action);
+                break;
+            case 'playerAura':
+                this.specialActions.executePlayerAura(action);
                 break;
             default:
                 console.warn(`🎬 Unknown action type: ${action.type}`);

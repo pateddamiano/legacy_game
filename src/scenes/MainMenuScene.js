@@ -77,6 +77,12 @@ class MainMenuScene extends Phaser.Scene {
             return;
         }
         
+        // Legal / accessibility "i" button: menu only (it would cover the touch buttons in game)
+        if (window.LegalInfo) {
+            window.LegalInfo.show();
+            this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => window.LegalInfo.hide());
+        }
+        
         // Initialize core systems if not already done
         this.initializeCoreServices();
         
@@ -199,6 +205,8 @@ class MainMenuScene extends Phaser.Scene {
         return {
             play: () => {
                 try {
+                    const sfx = window.GameSettings ? window.GameSettings.sfx() : 1;
+                    if (sfx <= 0) return; // muted in Settings
                     const oscillator = context.createOscillator();
                     const gainNode = context.createGain();
                     
@@ -209,7 +217,7 @@ class MainMenuScene extends Phaser.Scene {
                     oscillator.type = 'square'; // 8-bit style
                     
                     gainNode.gain.setValueAtTime(0, context.currentTime);
-                    gainNode.gain.linearRampToValueAtTime(0.1, context.currentTime + 0.01);
+                    gainNode.gain.linearRampToValueAtTime(0.1 * sfx, context.currentTime + 0.01);
                     gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.1);
                     
                     oscillator.start(context.currentTime);
@@ -229,6 +237,8 @@ class MainMenuScene extends Phaser.Scene {
         return {
             play: () => {
                 try {
+                    const sfx = window.GameSettings ? window.GameSettings.sfx() : 1;
+                    if (sfx <= 0) return; // muted in Settings
                     const oscillator = context.createOscillator();
                     const gainNode = context.createGain();
                     
@@ -240,7 +250,7 @@ class MainMenuScene extends Phaser.Scene {
                     oscillator.type = 'square';
                     
                     gainNode.gain.setValueAtTime(0, context.currentTime);
-                    gainNode.gain.linearRampToValueAtTime(0.15, context.currentTime + 0.01);
+                    gainNode.gain.linearRampToValueAtTime(0.15 * sfx, context.currentTime + 0.01);
                     gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.15);
                     
                     oscillator.start(context.currentTime);
@@ -260,6 +270,8 @@ class MainMenuScene extends Phaser.Scene {
         return {
             play: () => {
                 try {
+                    const sfx = window.GameSettings ? window.GameSettings.sfx() : 1;
+                    if (sfx <= 0) return; // muted in Settings
                     const oscillator = context.createOscillator();
                     const gainNode = context.createGain();
                     
@@ -271,7 +283,7 @@ class MainMenuScene extends Phaser.Scene {
                     oscillator.type = 'triangle';
                     
                     gainNode.gain.setValueAtTime(0, context.currentTime);
-                    gainNode.gain.linearRampToValueAtTime(0.08, context.currentTime + 0.02);
+                    gainNode.gain.linearRampToValueAtTime(0.08 * sfx, context.currentTime + 0.02);
                     gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.2);
                     
                     oscillator.start(context.currentTime);
@@ -757,28 +769,35 @@ class MainMenuScene extends Phaser.Scene {
     createCreditsOverlay() {
         // Darken screen
         const overlay = this.add.rectangle(
-            this.cameras.main.centerX,
-            this.cameras.main.centerY,
-            this.cameras.main.width,
-            this.cameras.main.height,
+            this.virtualWidth / 2,
+            this.virtualHeight / 2,
+            this.virtualWidth * 2,   // oversized: always covers everything the camera shows
+            this.virtualHeight * 2,
             0x000000,
             0.8
         );
+        // Above every menu button (so the tap that closes it can't also press one beneath)
+        overlay.setDepth(5000);
         overlay.setInteractive();
-        
+
         // Credits text
-        const creditsText = this.add.text(this.cameras.main.centerX, this.cameras.main.centerY, 
+        const creditsText = this.add.text(this.virtualWidth / 2, this.virtualHeight / 2,
             'LEGACY: SOUNDTRACK FOR SURVIVAL\n\n' +
-            'A 2D Beat \'em Up Street Fighter\n\n' +
+            'A game by ++ (@foreverplusplus)\n\n' +
             'Development: Patrick Damiano (@pat__damiano)\n' +
-            'Music: ++ (@foreverplusplus)\n' +
+            'Music: ++ (@foreverplusplus)\n\n' +
+            'With special guest appearances by\n' +
+            'Rozotadi (@rozotadi)\n' +
+            'Misfit (@notyur_ordinary)\n' +
+            'Brianna Emily (@briannaemily__)\n\n' +
             'Click anywhere to close', {
-            fontSize: GAME_CONFIG.ui.fontSize.body,
+            fontSize: GAME_CONFIG.ui.fontSize.label, // 32px: the longer list needs the room
             fill: '#ffffff',
             fontFamily: GAME_CONFIG.ui.fontFamily,
             align: 'center',
-            lineSpacing: 10
-        }).setOrigin(0.5);
+            lineSpacing: 8,
+            wordWrap: { width: this.virtualWidth - 120 }
+        }).setOrigin(0.5).setDepth(5001);
         
         // Close on click
         overlay.on('pointerdown', () => {
@@ -789,160 +808,105 @@ class MainMenuScene extends Phaser.Scene {
     }
     
     createSettingsOverlay() {
-        // Darken screen
-        const overlay = this.add.rectangle(
-            this.cameras.main.centerX,
-            this.cameras.main.centerY,
-            this.cameras.main.width,
-            this.cameras.main.height,
-            0x000000,
-            0.8
-        ).setInteractive();
+        const cx = this.virtualWidth / 2;
+        const cy = this.virtualHeight / 2;
+        const DEPTH = 5000; // above every menu button
+        const fontFamily = GAME_CONFIG.ui.fontFamily;
+        const created = [];
+        const add = (obj, depthOffset = 1) => { obj.setDepth(DEPTH + depthOffset); created.push(obj); return obj; };
+        const closeSettings = () => created.forEach(obj => obj.destroy());
         
-        // Settings panel background
-        const panelBg = this.add.rectangle(
-            this.cameras.main.centerX,
-            this.cameras.main.centerY,
-            400,
-            300,
-            0x2C1810,
-            0.95
-        );
-        panelBg.setStrokeStyle(4, 0xFFD700);
+        // Darken screen (oversized: always covers everything the camera shows)
+        const overlay = add(this.add.rectangle(cx, cy, this.virtualWidth * 2, this.virtualHeight * 2, 0x000000, 0.8), 0)
+            .setInteractive();
         
-        // Settings title
-        const titleText = this.add.text(
-            this.cameras.main.centerX,
-            this.cameras.main.centerY - 120,
-            'SETTINGS',
-            {
-                fontSize: GAME_CONFIG.ui.fontSize.subtitle,
+        // Settings panel. Interactive so a tap on empty panel space is swallowed here
+        // instead of falling through to the overlay and closing the whole menu.
+        add(this.add.rectangle(cx, cy, 900, 640, 0x2C1810, 0.95))
+            .setStrokeStyle(4, 0xFFD700)
+            .setInteractive();
+        
+        add(this.add.text(cx, cy - 265, 'SETTINGS', {
+            fontSize: GAME_CONFIG.ui.fontSize.subtitle,
+            fill: '#FFD700',
+            fontFamily,
+            fontWeight: 'bold',
+            stroke: '#B8860B',
+            strokeThickness: 3
+        }).setOrigin(0.5));
+        
+        // A real button: the rectangle is the click zone (much bigger than the glyph), the
+        // label is just drawn on top of it
+        const makeButton = (x, y, width, height, label, fontSize, onPress) => {
+            const bg = add(this.add.rectangle(x, y, width, height, 0x2C1810, 0.9))
+                .setStrokeStyle(3, 0xFFD700)
+                .setInteractive({ useHandCursor: true });
+            const text = add(this.add.text(x, y, label, {
+                fontSize,
                 fill: '#FFD700',
-                fontFamily: GAME_CONFIG.ui.fontFamily,
-                fontWeight: 'bold',
-                stroke: '#B8860B',
-                strokeThickness: 3
-            }
-        ).setOrigin(0.5);
-        
-        // Music volume control - much better spacing
-        const musicVolumeText = this.add.text(
-            this.cameras.main.centerX - 160,
-            this.cameras.main.centerY - 60,
-            'Music Volume:',
-            {
-                fontSize: GAME_CONFIG.ui.fontSize.small,
-                fill: '#FFD700',
-                fontFamily: GAME_CONFIG.ui.fontFamily,
+                fontFamily,
                 fontWeight: 'bold'
-            }
-        ).setOrigin(0, 0.5);
+            }).setOrigin(0.5), 2);
+            bg.on('pointerover', () => {
+                if (this.menuSounds && this.menuSounds.hover) this.menuSounds.hover.play();
+                bg.setFillStyle(0x4A2818, 0.95).setStrokeStyle(4, 0xFF6B35);
+                text.setStyle({ fill: '#FF6B35' });
+            });
+            bg.on('pointerout', () => {
+                bg.setFillStyle(0x2C1810, 0.9).setStrokeStyle(3, 0xFFD700);
+                text.setStyle({ fill: '#FFD700' });
+            });
+            bg.on('pointerdown', () => {
+                onPress();
+                if (this.menuSounds && this.menuSounds.click) this.menuSounds.click.play();
+            });
+            return { bg, text };
+        };
         
-        // Current music volume (get from global music if it exists)
-        const currentVolume = window.menuMusic ? Math.round(window.menuMusic.volume * 100) : 100;
+        const labelStyle = { fontSize: GAME_CONFIG.ui.fontSize.body, fill: '#FFD700', fontFamily, fontWeight: 'bold' };
+        const valueStyle = { fontSize: GAME_CONFIG.ui.fontSize.heading, fill: '#FF6B35', fontFamily, fontWeight: 'bold' };
+        const labelX = cx - 400;   // row labels, left-aligned
+        const valueX = cx + 230;   // value between the two arrow buttons
         
-        // Volume decrease button
-        const volumeDownBtn = this.add.text(
-            this.cameras.main.centerX + 2,
-            this.cameras.main.centerY - 60,
-            '◀',
-            {
-                fontSize: GAME_CONFIG.ui.fontSize.body,
-                fill: '#FFD700',
-                fontFamily: GAME_CONFIG.ui.fontFamily
-            }
-        ).setOrigin(0.5)
-         .setInteractive({ useHandCursor: true })
-         .on('pointerdown', () => {
-             this.menuSounds.click.play();
-             if (window.menuMusic) {
-                 const newVolume = Math.max(0, window.menuMusic.volume - 0.1);
-                 window.menuMusic.setVolume(newVolume);
-                 volumeText.setText(`${Math.round(newVolume * 100)}%`);
-             }
-         });
+        // One "◀ 70% ▶" row. get/set work in 0-1.
+        const volumeRow = (y, label, get, set) => {
+            add(this.add.text(labelX, y, label, labelStyle).setOrigin(0, 0.5));
+            const valueText = add(this.add.text(valueX, y, `${Math.round(get() * 100)}%`, valueStyle).setOrigin(0.5));
+            const step = (delta) => {
+                // Round to one decimal so repeated +/-0.1 steps don't drift (0.30000000000000004)
+                const v = Math.round(Phaser.Math.Clamp(get() + delta, 0, 1) * 10) / 10;
+                set(v);
+                valueText.setText(`${Math.round(v * 100)}%`);
+            };
+            makeButton(valueX - 130, y, 110, 90, '◀', GAME_CONFIG.ui.fontSize.title, () => step(-0.1));
+            makeButton(valueX + 130, y, 110, 90, '▶', GAME_CONFIG.ui.fontSize.title, () => step(0.1));
+        };
         
-        // Volume percentage text - centered
-        const volumeText = this.add.text(
-            this.cameras.main.centerX + 80, 
-            this.cameras.main.centerY - 60,
-            `${currentVolume}%`,
-            {
-                fontSize: GAME_CONFIG.ui.fontSize.small,
-                fill: '#FF6B35',
-                fontFamily: GAME_CONFIG.ui.fontFamily,
-                fontWeight: 'bold'
-            }
-        ).setOrigin(0.5);
+        // Music: the menu track that is playing now (window.menuMusic)
+        volumeRow(cy - 150, 'MUSIC',
+            () => (window.menuMusic ? window.menuMusic.volume : 1),
+            (v) => { if (window.menuMusic) window.menuMusic.setVolume(v); });
         
-        // Volume increase button
-        const volumeUpBtn = this.add.text(
-            this.cameras.main.centerX + 160,
-            this.cameras.main.centerY - 60,
-            '▶',
-            {
-                fontSize: GAME_CONFIG.ui.fontSize.body,
-                fill: '#FFD700',
-                fontFamily: GAME_CONFIG.ui.fontFamily
-            }
-        ).setOrigin(0.5)
-         .setInteractive({ useHandCursor: true })
-         .on('pointerdown', () => {
-             this.menuSounds.click.play();
-             if (window.menuMusic) {
-                 const newVolume = Math.min(1, window.menuMusic.volume + 0.1);
-                 window.menuMusic.setVolume(newVolume);
-                 volumeText.setText(`${Math.round(newVolume * 100)}%`);
-             }
-         });
+        // Sound effects: saved in GameSettings, applied to every effect in the game.
+        // The click beep after each press previews the new level.
+        volumeRow(cy - 40, 'SOUND FX',
+            () => GameSettings.get('sfxVolume'),
+            (v) => GameSettings.set('sfxVolume', v));
         
-        // Close button
-        const closeBtn = this.add.text(
-            this.cameras.main.centerX,
-            this.cameras.main.centerY + 80,
-            'CLOSE',
-            {
-                fontSize: GAME_CONFIG.ui.fontSize.body,
-                fill: '#FFD700',
-                fontFamily: GAME_CONFIG.ui.fontFamily,
-                fontWeight: 'bold',
-                stroke: '#B8860B',
-                strokeThickness: 2
-            }
-        ).setOrigin(0.5)
-         .setInteractive({ useHandCursor: true })
-         .on('pointerover', () => {
-             this.menuSounds.hover.play();
-             closeBtn.setStyle({ fill: '#FF6B35', stroke: '#CC4125' });
-         })
-         .on('pointerout', () => {
-             closeBtn.setStyle({ fill: '#FFD700', stroke: '#B8860B' });
-         })
-         .on('pointerdown', () => {
-             this.menuSounds.click.play();
-             // Destroy all settings UI elements
-             overlay.destroy();
-             panelBg.destroy();
-             titleText.destroy();
-             musicVolumeText.destroy();
-             volumeText.destroy();
-             volumeDownBtn.destroy();
-             volumeUpBtn.destroy();
-             closeBtn.destroy();
-         });
+        // Reduce flashing & shake (photosensitivity / motion sensitivity)
+        add(this.add.text(labelX, cy + 70, 'REDUCE FLASHING\n& SCREEN SHAKE', { ...labelStyle, lineSpacing: -6 }).setOrigin(0, 0.5));
+        const toggleLabel = () => (GameSettings.reduceEffects() ? 'ON' : 'OFF');
+        const toggle = makeButton(valueX, cy + 70, 370, 90, toggleLabel(), GAME_CONFIG.ui.fontSize.button, () => {
+            GameSettings.set('reduceEffects', !GameSettings.reduceEffects());
+            toggle.text.setText(toggleLabel());
+        });
         
-        // Close on overlay click
+        makeButton(cx, cy + 225, 280, 90, 'CLOSE', GAME_CONFIG.ui.fontSize.button, closeSettings);
+        
+        // Tapping outside the panel also closes it
         overlay.on('pointerdown', () => {
-            this.menuSounds.back.play();
-            // Destroy all settings UI elements
-            overlay.destroy();
-            panelBg.destroy();
-            titleText.destroy();
-            musicVolumeText.destroy();
-            volumeText.destroy();
-            volumeDownBtn.destroy();
-            volumeUpBtn.destroy();
-            closeBtn.destroy();
+            if (this.menuSounds && this.menuSounds.back) this.menuSounds.back.play();
+            closeSettings();
         });
     }
     

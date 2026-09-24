@@ -15,7 +15,7 @@ const WEAPON_CONFIG = {
         damage: 25,
         speed: 800, // Increased from 600 for faster throwing
         range: 800, // Max distance before disappearing
-        cooldown: 5000, // 5 seconds in milliseconds
+        cooldown: 4000, // 4 seconds between throws (was 5)
         size: { width: 64, height: 64 },
         hitbox: { width: 64, height: 64 }, // Increased hitbox for easier hits
         animations: {
@@ -23,6 +23,28 @@ const WEAPON_CONFIG = {
         },
         verticalTolerance: 120, // Increased from 60 - much more forgiving vertical distance
         collisionThreshold: 50   // Increased collision threshold for easier hits
+    },
+    // Boss-thrown record (the Negatives). Same art as the player's vinyl, but slow like
+    // the Critic's rating stars, flagged as a boss projectile so it hits the player and
+    // never the boss, and wrapped in the blue fire effect.
+    vinyl_boss: {
+        name: 'Negative Record',
+        spriteKey: 'vinylWeapon',
+        spinningKey: 'vinylWeaponSpinning',
+        spinningAnim: 'vinyl_record_spinning', // reuse the player's spin animation
+        bossProjectile: true,
+        effect: 'bluefire',
+        damage: 6,
+        speed: 450,
+        range: 900,
+        cooldown: 1500,
+        size: { width: 64, height: 64 },
+        hitbox: { width: 64, height: 64 },
+        animations: {
+            spinning: { frames: 4, frameRate: 20, repeat: -1 }
+        },
+        verticalTolerance: 40,   // same dodge windows as the Critic's ratings
+        collisionThreshold: 40
     },
     // Boss rating weapons - different star ratings
     rating_0: {
@@ -146,6 +168,8 @@ class Projectile {
         this.sprite.setScale(1.5); // Make it visible
         // Depth will be set dynamically based on player position
         this.isRatingWeapon = isRatingWeapon;
+        // Boss projectiles hit the player, not enemies (set here, and by the boss on throw)
+        this.isBossProjectile = !!weaponConfig.bossProjectile || isRatingWeapon;
         
         // Set up physics with improved hitbox
         this.sprite.body.setSize(weaponConfig.hitbox.width, weaponConfig.hitbox.height);
@@ -160,7 +184,7 @@ class Projectile {
         // Play spinning animation or add rotation for static weapons
         if (weaponConfig.animations && weaponConfig.animations.spinning) {
             // For animated weapons like vinyl records
-            this.sprite.anims.play(`${weaponConfig.name.toLowerCase().replace(' ', '_')}_spinning`, true);
+            this.sprite.anims.play(weaponConfig.spinningAnim || `${weaponConfig.name.toLowerCase().replace(' ', '_')}_spinning`, true);
         } else if (weaponConfig.name.includes('Rating')) {
             // For rating weapons, add rotation tween
             this.scene.tweens.add({
@@ -173,9 +197,22 @@ class Projectile {
         }
 
         // Play throw sound and keep it playing until hit/disappear
+        // Optional trailing effect (the Negatives' blue fire). The flame art points up with
+        // its base at the bottom of the frame, so rotate it 90deg counter-clockwise when the
+        // record travels right (clockwise when it travels left) and it trails behind.
+        this.effectSprite = null;
+        if (weaponConfig.effect && scene.anims.exists(`${weaponConfig.effect}_effect`)) {
+            this.effectSprite = scene.add.sprite(x, y, weaponConfig.effect);
+            this.effectSprite.setOrigin(0.5, 0.62);
+            this.effectSprite.setScale(1.1);
+            this.effectSprite.setAngle(-90 * this.direction);
+            this.effectSprite.setDepth(this.sprite.depth - 1);
+            this.effectSprite.anims.play(`${weaponConfig.effect}_effect`, true);
+        }
+        
         if (this.scene.sound && this.scene.cache.audio.has('weaponRecordThrow')) {
             this.throwSound = this.scene.sound.add('weaponRecordThrow', {
-                volume: 0.3,
+                volume: (window.GameSettings ? window.GameSettings.sfx(0.3) : 0.3),
                 loop: false
             });
             this.throwSound.play();
@@ -196,7 +233,7 @@ class Projectile {
         }
         
         // Update depth dynamically for rating weapons based on player position
-        if (this.isRatingWeapon && this.scene.player) {
+        if (this.isBossProjectile && this.scene.player) {
             const playerSprite = this.scene.player.sprite || this.scene.player;
             if (playerSprite && playerSprite.active) {
                 // If player is in front (lower Y = closer to camera), weapon goes behind
@@ -218,6 +255,13 @@ class Projectile {
         }
         
         // Check if projectile has traveled too far
+        // Keep the trailing effect glued to the record
+        if (this.effectSprite && this.effectSprite.active) {
+            this.effectSprite.x = this.sprite.x - this.direction * 6;
+            this.effectSprite.y = this.sprite.y;
+            this.effectSprite.setDepth(this.sprite.depth - 1);
+        }
+        
         const distanceTraveled = Math.abs(this.sprite.x - this.startX);
         if (distanceTraveled > this.range) {
             this.destroy();
@@ -234,25 +278,11 @@ class Projectile {
         }
     }
     
-    handleWeaponUiScaleChanged(newScale, viewportInfo) {
-        this.currentUiScale = newScale ?? this.currentUiScale;
-        this.viewportInfo = viewportInfo || this.viewportInfo;
-        this.positionWeaponUI();
-    }
-
-    positionWeaponUI() {
-        if (!this.weaponUIContainer) return;
-        const scale = this.currentUiScale ?? this.uiScene?.uiScale ?? 1;
-        const posX = (this.weaponUiConfig?.x || 70) * scale;
-        const posY = (this.weaponUiConfig?.y || 60) * scale;
-        this.weaponUIContainer.setScale(scale);
-        this.weaponUIContainer.setPosition(posX, posY);
-    }
-    
     destroy() {
-        if (this.uiScene?.events?.off) {
-            this.uiScene.events.off('uiScaleChanged', this.handleWeaponUiScaleChanged, this);
+        if (this.effectSprite && this.effectSprite.active) {
+            this.effectSprite.destroy();
         }
+        this.effectSprite = null;
         // Stop the throw sound if it's still playing
         if (this.throwSound && this.throwSound.isPlaying) {
             this.throwSound.stop();
@@ -359,6 +389,21 @@ class WeaponManager {
         this.currentWeapon = 'vinyl';
         
         console.log('🎯 Weapons initialized:', Object.keys(this.weapons));
+    }
+    
+    handleWeaponUiScaleChanged(newScale, viewportInfo) {
+        this.currentUiScale = newScale ?? this.currentUiScale;
+        this.viewportInfo = viewportInfo || this.viewportInfo;
+        this.positionWeaponUI();
+    }
+
+    positionWeaponUI() {
+        if (!this.weaponUIContainer) return;
+        const scale = this.currentUiScale ?? this.uiScene?.uiScale ?? 1;
+        const posX = (this.weaponUiConfig?.x || 70) * scale;
+        const posY = (this.weaponUiConfig?.y || 60) * scale;
+        this.weaponUIContainer.setScale(scale);
+        this.weaponUIContainer.setPosition(posX, posY);
     }
     
     createWeaponUI() {
@@ -615,7 +660,7 @@ class WeaponManager {
             
             // Check if this is a boss projectile (rating weapon)
             const weaponConfig = projectile.weaponConfig;
-            const isBossProjectile = weaponConfig && (
+            const isBossProjectile = projectile.isBossProjectile || !!weaponConfig && (
                 (weaponConfig.spriteKey && weaponConfig.spriteKey.startsWith('ratingWeapon')) ||
                 (weaponConfig.name && weaponConfig.name.includes('Rating'))
             );
@@ -667,20 +712,23 @@ class WeaponManager {
                         // Pass projectile position for knockback effect (knockback away from projectile)
                         const knockbackSource = projectile.sprite || null;
                         enemy.takeDamage(damage, knockbackSource);
+                        if (this.scene.effectSystem) this.scene.effectSystem.onEnemyHit(enemy); // hit-stop / boss shake
                         
                         // Enhanced red flash effect for weapon hits
                         enemy.sprite.setTint(0xff0000); // Bright red tint
                         enemy.sprite.setAlpha(0.8); // Slightly transparent for flash effect
                         
-                        // Flash effect with multiple pulses
-                        this.scene.time.delayedCall(100, () => {
+                        // Flash effect with multiple pulses (skipped with reduced flashing on:
+                        // the enemy just stays red until the 300ms clear below)
+                        const strobe = !(window.GameSettings && window.GameSettings.reduceEffects());
+                        if (strobe) this.scene.time.delayedCall(100, () => {
                             if (enemy.sprite && enemy.sprite.active) {
                                 enemy.sprite.setTint(0xffffff); // White flash
                                 enemy.sprite.setAlpha(1.0);
                             }
                         });
                         
-                        this.scene.time.delayedCall(200, () => {
+                        if (strobe) this.scene.time.delayedCall(200, () => {
                             if (enemy.sprite && enemy.sprite.active) {
                                 enemy.sprite.setTint(0xff0000); // Red flash again
                                 enemy.sprite.setAlpha(0.8);
@@ -720,7 +768,7 @@ class WeaponManager {
             const isRatingWeapon = (weaponConfig.spriteKey && weaponConfig.spriteKey.startsWith('ratingWeapon')) ||
                                    (weaponConfig.name && weaponConfig.name.includes('Rating'));
             
-            if (!isRatingWeapon) return;
+            if (!(projectile.isBossProjectile || isRatingWeapon)) return;
             
             // Check vertical distance
             const verticalDistance = Math.abs(projectile.sprite.y - playerSprite.y);

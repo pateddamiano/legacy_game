@@ -92,6 +92,19 @@ class IntroDialogueScene extends Phaser.Scene {
         // Create dialogue UI
         this.createDialogueUI();
 
+        // Audio must exist BEFORE the first line starts typing - it used to be set up
+        // after showNextLine(), so the first line's typing sound never played
+        // Get the audio manager from the game scene (it's shared across scenes)
+        console.log('🎵 Starting fade music for dialogue scene...');
+        const gameScene = this.scene.get('GameScene');
+        if (gameScene && gameScene.audioManager) {
+            this.audioManager = gameScene.audioManager;
+        } else {
+            // If GameScene isn't available, create a temporary audio manager
+            this.audioManager = new AudioManager(this);
+        }
+        this.audioManager.playBackgroundMusic('fadeMusic');
+
         // Show first line
         this.showNextLine();
 
@@ -138,19 +151,6 @@ class IntroDialogueScene extends Phaser.Scene {
                 color: '#888888'
             }
         ).setOrigin(0.5).setDepth(11);
-
-        // Start background music - 'fade' music
-        console.log('🎵 Starting fade music for dialogue scene...');
-        // Get the audio manager from the game scene (it's shared across scenes)
-        const gameScene = this.scene.get('GameScene');
-        if (gameScene && gameScene.audioManager) {
-            this.audioManager = gameScene.audioManager;
-            this.audioManager.playBackgroundMusic('fadeMusic');
-        } else {
-            // If GameScene isn't available, create a temporary audio manager
-            this.audioManager = new AudioManager(this);
-            this.audioManager.playBackgroundMusic('fadeMusic');
-        }
 
         // Fade in from black
         this.cameras.main.fadeIn(1000, 0, 0, 0);

@@ -9,6 +9,70 @@ class EventUtilities {
         this.scene = eventManager.scene;
     }
     
+    // GameScene, CombatManager and EnemySpawnManager all share ONE enemies array by
+    // reference. Replacing scene.enemies with a fresh array (instead of emptying it in
+    // place) silently detaches the spawner and combat from anything spawned afterwards -
+    // bosses stop updating and stop taking damage. Always go through these two helpers.
+    getEnemiesArray() {
+        if (this.scene.enemySpawnManager && this.scene.enemySpawnManager.enemies) {
+            // Keep the scene pointing at the shared array
+            if (this.scene.enemies !== this.scene.enemySpawnManager.enemies) {
+                this.scene.enemies = this.scene.enemySpawnManager.enemies;
+            }
+            return this.scene.enemies;
+        }
+        if (!this.scene.enemies) {
+            this.scene.enemies = [];
+        }
+        return this.scene.enemies;
+    }
+    
+    // Keep only the enemies matching `predicate`, without destroying anything.
+    // Used to drop already-dead entries while other systems hold the same array.
+    filterEnemiesInPlace(predicate) {
+        const enemies = this.getEnemiesArray();
+        const kept = enemies.filter(predicate);
+        if (kept.length !== enemies.length) {
+            enemies.length = 0;
+            kept.forEach(enemy => enemies.push(enemy));
+        }
+        return enemies;
+    }
+    
+    clearEnemiesInPlace(shouldKeep = null) {
+        const enemies = this.getEnemiesArray();
+        const kept = [];
+        let destroyed = 0;
+        
+        enemies.forEach(enemy => {
+            if (!enemy) return;
+            if (shouldKeep && shouldKeep(enemy)) {
+                kept.push(enemy);
+                return;
+            }
+            if (enemy.sprite) {
+                if (typeof enemy.destroy === 'function') {
+                    enemy.destroy();
+                } else {
+                    enemy.sprite.destroy();
+                }
+            }
+            destroyed++;
+        });
+        
+        // Empty and refill IN PLACE so every holder of this array stays in sync
+        enemies.length = 0;
+        kept.forEach(enemy => enemies.push(enemy));
+
+        // Every index in eventEnemyMap is stale once the array is emptied
+        if (kept.length === 0 && this.scene.eventEnemyMap) {
+            this.scene.eventEnemyMap.clear();
+        }
+
+        console.log(`🎬 Cleared ${destroyed} enemies in place (${kept.length} kept)`);
+        return destroyed;
+    }
+    
     getEntity(target) {
         if (target === 'player') {
             return this.scene.player;
@@ -88,7 +152,8 @@ class EventUtilities {
      * Returns { enemy, enemyIndex } or null
      */
     getEnemyById(enemyId) {
-        if (!enemyId || !enemyId.startsWith('enemy_')) {
+        // Bosses are registered under their spawnBoss id (e.g. boss_critic)
+        if (!enemyId || !(enemyId.startsWith('enemy_') || enemyId.startsWith('boss_'))) {
             return null;
         }
         

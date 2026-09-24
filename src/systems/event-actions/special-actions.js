@@ -36,8 +36,8 @@ class SpecialActions {
         if (levelConfig && levelConfig.audio && levelConfig.audio.subwayPassingVolume !== undefined) {
             return levelConfig.audio.subwayPassingVolume;
         }
-        // Fallback: try to get from current level manager
-        const currentConfig = this.scene.levelManager ? this.scene.levelManager.getCurrentLevelConfig() : null;
+        // Fallback: the level currently built by the lifecycle
+        const currentConfig = this.scene.levelLifecycle ? this.scene.levelLifecycle.currentLevel : null;
         if (currentConfig && currentConfig.audio && currentConfig.audio.subwayPassingVolume !== undefined) {
             return currentConfig.audio.subwayPassingVolume;
         }
@@ -75,15 +75,8 @@ class SpecialActions {
 
         console.log(`🎬 Triggering event: ${eventId}`);
 
-        // Find the event in the current level config
-        const levelConfig = this.scene.levelManager ? this.scene.levelManager.getCurrentLevelConfig() : null;
-        if (!levelConfig || !levelConfig.events) {
-            console.warn('🎬 No level config or events found');
-            this.advanceAction();
-            return;
-        }
-
-        const event = levelConfig.events.find(e => e.id === eventId);
+        // Look the event up among the ones registered for this level
+        const event = this.eventManager.events.find(e => e.id === eventId);
         if (!event) {
             console.warn(`🎬 Event ${eventId} not found`);
             this.advanceAction();
@@ -96,6 +89,7 @@ class SpecialActions {
         this.eventManager.activeEvent = event;
         this.eventManager.actionQueue = [...event.actions]; // Copy actions array
         this.eventManager.currentActionIndex = 0;
+        this.eventManager.recordEventStart(event);
 
         // Execute first action
         this.eventManager.executeNextAction();
@@ -276,7 +270,7 @@ class SpecialActions {
                 // Start subway passing sound if this is the first car
                 if (this.activeSubwayCars.size === 1 && this.scene.audioManager) {
                     // Get volume from level config (centralized)
-                    const levelConfig = this.scene.levelManager ? this.scene.levelManager.getCurrentLevelConfig() : null;
+                    const levelConfig = this.scene.levelLifecycle ? this.scene.levelLifecycle.currentLevel : null;
                     const volume = this.getSubwayPassingVolume(levelConfig);
                     this.scene.audioManager.startSubwayPassing(volume);
                 }
@@ -307,6 +301,15 @@ class SpecialActions {
     }
     
     executeStopSubwayCarCycle(action) {
+        this.stopSubwayCarCycle();
+        
+        // Advance to next action
+        this.advanceAction();
+    }
+    
+    // Also called directly by LevelLifecycle.teardown() so a level that never ran the
+    // stop action (e.g. the player died) cannot leave a spawn timer running
+    stopSubwayCarCycle() {
         console.log('🎬 Stopping subway car spawning cycle');
         
         // Stop the cycle
@@ -337,8 +340,133 @@ class SpecialActions {
         if (this.scene.audioManager) {
             this.scene.audioManager.stopSubwayPassing();
         }
+    }
+
+    // Force the active player character to a specific character (e.g. before a
+    // mirror-match boss duel that requires a particular character to be in control).
+    // No-ops if the requested character is already active.
+    // { "type": "showEmote", "target": "player", "text": "!", "duration": 2500 }
+    // Pops a piece of text above a character's head (default: red "!" over the player),
+    // bobs it, and fades it after `duration`. Non-blocking - the event continues at once.
+    // Optional: color, fontSize, offsetY (default: just above the visible head).
+    // Looping fire behind the player, e.g. { "type": "playerAura", "effect": "bluefire", "hue": 190 }
+    // (hue rotates the sprite's colours in degrees - 190 turns the blue fire yellow).
+    // { "type": "playerAura", "enabled": false } removes it.
+    executePlayerAura(action) {
+        if (this.scene.effectSystem) {
+            if (action.enabled === false) {
+                this.scene.effectSystem.clearPlayerAura();
+            } else {
+                this.scene.effectSystem.setPlayerAura(action);
+            }
+        } else {
+            console.warn('🎬 PlayerAura: effectSystem unavailable');
+        }
+        this.advanceAction();
+    }
+
+    // Refill both characters' health, e.g. { "type": "healPlayers" } before a boss fight
+    executeHealPlayers(action) {
+        const cm = this.scene.characterManager;
+        if (cm && typeof cm.healAll === 'function') {
+            cm.healAll();
+            // Quick green flash so the player notices
+            const player = this.scene.player;
+            if (player && player.active) {
+                player.setTint(0x66ff88);
+                this.scene.time.delayedCall(350, () => { if (player.active) player.clearTint(); });
+            }
+        } else {
+            console.warn('🎬 HealPlayers: characterManager unavailable');
+        }
+        this.advanceAction();
+    }
+
+    executeShowEmote(action) {
+        const target = (!action.target || action.target === 'player') ? this.scene.player : this.getEntity(action.target);
+        if (!target) {
+            console.warn('🎬 ShowEmote: target not found', action.target);
+            this.advanceAction();
+            return;
+        }
+        this.clearEmote(true);
         
-        // Advance to next action
+        const text = action.text !== undefined ? action.text : '!';
+        const duration = action.duration || 2000;
+        // The sprite frame has a lot of transparent margin; the visible head sits well
+        // below the frame top, so anchor a bit above the sprite's vertical third.
+        const offsetY = action.offsetY !== undefined ? action.offsetY : -Math.round(target.displayHeight * 0.32);
+        
+        const emote = this.scene.add.text(target.x, target.y + offsetY, text, {
+            fontFamily: GAME_CONFIG.ui.fontFamily,
+            fontSize: `${action.fontSize || 72}px`,
+            color: action.color || '#ff2a2a',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 6
+        }).setOrigin(0.5, 1).setDepth(9999).setScale(0);
+        this.scene._eventEmote = emote;
+        
+        // Pop in, then bob until it is cleared
+        this.scene.tweens.add({
+            targets: emote, scale: 1, duration: 260, ease: 'Back.easeOut',
+            onComplete: () => {
+                if (emote.active) {
+                    this.scene.tweens.add({ targets: emote, y: emote.y - 8, duration: 380, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+                }
+            }
+        });
+        this.scene.time.delayedCall(duration, () => {
+            if (this.scene._eventEmote === emote) this.clearEmote(false);
+        });
+        
+        this.advanceAction();
+    }
+    
+    clearEmote(immediate) {
+        const emote = this.scene._eventEmote;
+        if (!emote) return;
+        this.scene._eventEmote = null;
+        this.scene.tweens.killTweensOf(emote);
+        if (immediate || !emote.active) {
+            emote.destroy();
+            return;
+        }
+        this.scene.tweens.add({ targets: emote, alpha: 0, scale: 0.6, duration: 160, onComplete: () => emote.destroy() });
+    }
+    
+    executeSetActiveCharacter(action) {
+        const target = action.character;
+        const characterManager = this.scene.characterManager;
+
+        if (!target || !characterManager) {
+            console.warn('🎬 SetActiveCharacter action missing character or characterManager unavailable');
+            this.advanceAction();
+            return;
+        }
+
+        if (characterManager.selectedCharacter === target) {
+            console.log(`🎬 SetActiveCharacter: already playing as ${target}, no switch needed`);
+            this.advanceAction();
+            return;
+        }
+
+        console.log(`🎬 SetActiveCharacter: forcing switch to ${target}`);
+        const result = characterManager.switchCharacter(
+            true,
+            this.scene.animationManager,
+            this.scene.isJumping,
+            this.scene.eventCameraLocked || false
+        );
+
+        if (result && result.success) {
+            // Full rebind (animation state, physics, combat, camera) - the previous partial
+            // rebind left scene.animationManager pointing at the old sprite
+            this.scene.bindPlayer(result.newPlayer);
+        } else {
+            console.warn(`🎬 SetActiveCharacter: switch to ${target} failed`, result);
+        }
+
         this.advanceAction();
     }
 }

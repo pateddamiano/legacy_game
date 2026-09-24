@@ -1,7 +1,7 @@
 // ========================================
 // EVENT ACTIONS: SCENE OPERATIONS
 // ========================================
-// Handles scene-related event actions (dialogue, wait, fade, loadLevel, waitForZone)
+// Handles scene-related event actions (dialogue, wait, fade, cutscene, loadLevel, waitForZone)
 
 class SceneActions {
     constructor(eventManager) {
@@ -138,6 +138,67 @@ class SceneActions {
         }
         
         // Note: advanceAction won't be called since transition is in progress
+    }
+    
+    executeCutscene(action) {
+        const cutsceneId = action.cutsceneId;
+        if (!cutsceneId) {
+            console.warn('🎬 Cutscene action missing cutsceneId');
+            this.advanceAction();
+            return;
+        }
+
+        const sceneManager = this.scene.scene;
+        if (!sceneManager.get('CutsceneScene')) {
+            console.error('🎬 CutsceneScene is not registered - skipping cutscene', cutsceneId);
+            this.advanceAction();
+            return;
+        }
+
+        console.log(`🎬 Playing cutscene: ${cutsceneId}`);
+
+        // Freeze gameplay underneath. Pausing (rather than stopping) GameScene keeps
+        // lives, score, health and the in-flight event queue completely intact, and
+        // stops paused scenes from stealing input from the cutscene.
+        const overlaidScenes = ['UIScene', 'TouchControlsScene'];
+        overlaidScenes.forEach(key => {
+            if (sceneManager.isActive(key)) {
+                sceneManager.setVisible(false, key);
+                sceneManager.pause(key);
+            }
+        });
+
+        // Stop world audio that should not bleed over a still frame
+        if (this.scene.audioManager) {
+            this.scene.audioManager.stopAmbiance();
+            this.scene.audioManager.stopPlayerRunning();
+        }
+
+        const resumeGameplay = () => {
+            overlaidScenes.forEach(key => {
+                if (sceneManager.isPaused(key)) {
+                    sceneManager.resume(key);
+                }
+                sceneManager.setVisible(true, key);
+            });
+            sceneManager.resume('GameScene');
+            sceneManager.bringToTop('UIScene');
+            sceneManager.bringToTop('TouchControlsScene');
+
+            console.log(`🎬 Cutscene ${cutsceneId} finished, resuming gameplay`);
+
+            // Continue the event queue on the next tick, once GameScene is running again
+            this.scene.time.delayedCall(10, () => this.advanceAction());
+        };
+
+        sceneManager.launch('CutsceneScene', {
+            cutsceneId: cutsceneId,
+            onComplete: resumeGameplay
+        });
+        sceneManager.bringToTop('CutsceneScene');
+        sceneManager.pause('GameScene');
+
+        // Don't advance - resumeGameplay() does it when the cutscene ends
     }
     
     executeWaitForZone(action) {

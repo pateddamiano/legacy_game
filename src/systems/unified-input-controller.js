@@ -34,6 +34,13 @@ class UnifiedInputController {
         // Track if touch is active (for priority)
         this.touchActive = false;
         
+        // Held state per source. Keyboard and touch used to share one "Held" flag, and
+        // the keyboard pass runs every frame - on a phone it wrote "not held" right after
+        // the touch pass wrote "held", so a held touch button counted as a NEW press on
+        // every frame (holding SWITCH re-switched every 0.5s, holding ATTACK queued an
+        // attack every frame).
+        this.sourceHeld = { keyboard: {}, touch: {} };
+        
         console.log('🎮 UnifiedInputController initialized');
     }
     
@@ -134,13 +141,18 @@ class UnifiedInputController {
      * @param {boolean} pressed - Whether the key is currently pressed
      */
     setActionFromKeyboard(action, pressed) {
-        // For keyboard: set "just pressed" on first press, then set held
-        if (pressed && !this.state[`${action}Held`]) {
-            // First press - set just pressed flag
+        this.setActionFromSource('keyboard', action, pressed);
+    }
+    
+    // "Just pressed" fires on this source's own rising edge; Held is held on either source
+    setActionFromSource(source, action, pressed) {
+        const held = this.sourceHeld[source];
+        if (pressed && !held[action]) {
             this.state[action] = true;
+            this.lastActionSource[action] = source;
         }
-        this.state[`${action}Held`] = pressed;
-        this.lastActionSource[action] = 'keyboard';
+        held[action] = !!pressed;
+        this.state[`${action}Held`] = !!(this.sourceHeld.keyboard[action] || this.sourceHeld.touch[action]);
     }
     
     /**
@@ -149,13 +161,7 @@ class UnifiedInputController {
      * @param {boolean} pressed - Whether the button is currently pressed
      */
     setActionFromTouch(action, pressed) {
-        // Touch takes priority if active
-        if (pressed && !this.state[`${action}Held`]) {
-            // First press - set just pressed flag
-            this.state[action] = true;
-        }
-        this.state[`${action}Held`] = pressed;
-        this.lastActionSource[action] = 'touch';
+        this.setActionFromSource('touch', action, pressed);
     }
     
     /**
@@ -228,6 +234,7 @@ class UnifiedInputController {
         this.lastMovementSource = null;
         this.lastActionSource = {};
         this.touchActive = false;
+        this.sourceHeld = { keyboard: {}, touch: {} };
     }
     
     /**

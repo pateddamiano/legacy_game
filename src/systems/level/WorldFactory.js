@@ -9,10 +9,10 @@ class WorldFactory {
     }
 
     static async create(scene, levelJson) {
-        if (!levelJson) return;
+        if (!levelJson) return null;
         const worldId = `level_${levelJson.id}`;
         const wm = scene.worldManager;
-        if (!wm) { console.error('WorldManager missing'); return; }
+        if (!wm) { console.error('WorldManager missing'); return null; }
 
         if (levelJson.background && levelJson.background.type === 'segmented') {
             await this.createSegmented(scene, wm, worldId, levelJson);
@@ -25,43 +25,9 @@ class WorldFactory {
             wm.createWorld(worldId);
         }
 
-        // Apply world vertical bounds
-        if (levelJson.world) {
-            const top = levelJson.world.top ?? 410;
-            const bottom = levelJson.world.bottom ?? 650;
-            
-            // Update input manager
-            if (scene.inputManager) {
-                scene.inputManager.setStreetBounds(top, bottom);
-            }
-            
-            // Update environment manager directly (source of truth)
-            if (scene.environmentManager) {
-                scene.environmentManager.streetTopLimit = top;
-                scene.environmentManager.streetBottomLimit = bottom;
-                console.log(`🌍 [WorldFactory] Updated EnvironmentManager bounds: ${top} - ${bottom}`);
-            }
-            
-            this.log('Applied street bounds', top, bottom);
-        }
-        
-        // Apply enemy spawn configuration (including allowed enemy types)
-        if (levelJson.enemies && scene.enemySpawnManager) {
-            const enemyConfig = levelJson.enemies;
-            
-            // Update enemy spawner configuration
-            scene.enemySpawnManager.initialize({
-                maxEnemies: enemyConfig.max || ENEMY_CONFIG.maxEnemiesOnScreen,
-                spawnInterval: enemyConfig.spawnRate || ENEMY_CONFIG.spawnInterval,
-                isTestMode: scene.isTestMode || false,
-                isLoading: false,
-                allowedEnemyTypes: enemyConfig.types || [] // Pass allowed enemy types from level config
-            });
-            
-            console.log(`🌍 [WorldFactory] Updated EnemySpawnManager: max=${enemyConfig.max || ENEMY_CONFIG.maxEnemiesOnScreen}, spawnRate=${enemyConfig.spawnRate || ENEMY_CONFIG.spawnInterval}, types=${(enemyConfig.types || []).join(', ') || 'all'}`);
-        }
-
-        // Music (actual playback done by caller)
+        // Street bounds, enemy spawner and music are applied by LevelLifecycle.build()
+        // in one place - this factory only builds the world itself.
+        return worldId;
     }
 
     static async createSegmented(scene, wm, worldId, levelJson) {

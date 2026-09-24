@@ -147,6 +147,68 @@ const ENEMY_TYPE_CONFIGS = {
         detectionRange: 2000,        // Long detection range
         baseScale: 0.85,              // Base size multiplier (1.0 = normal size)
         description: "The Critic - regular enemy version (for scripted events)"
+    },
+
+    scumbag_rapper: {
+        // Level 3 "Negatives" enemy - quick, aggressive attacker
+        health: 25,                    // Moderate health
+        speed: 320,                   // Fast, aggressive movement
+        attackCooldown: 220,         // Standard attack speed
+        playerDamage: 6,             // Moderate damage
+        attackTypes: ['attack'],
+        detectionRange: 1300,        // Aggressive detection range
+        baseScale: 0.57,              // Base size multiplier (1.0 = normal size)
+        description: "Scumbag Rapper - fast, aggressive Negatives enforcer"
+    },
+
+    scumbag_manager: {
+        // Level 3 "Negatives" enemy - slower, heavy-hitting bruiser
+        health: 40,                    // Higher health, tankier
+        speed: 180,                   // Slower, lumbering movement
+        attackCooldown: 260,         // Slightly slower attacks
+        playerDamage: 9,             // Heavier damage
+        attackTypes: ['punch'],
+        detectionRange: 1400,        // Long detection range
+        baseScale: 0.6175,              // Base size multiplier (1.0 = normal size)
+        description: "Scumbag Manager - slow, heavy-hitting Negatives bruiser"
+    },
+
+    exec: {
+        // Level 3 mid-level enemy - the label's security, swapped in after the Negatives reveal
+        health: 30,                    // Tougher than the scumbag grunts
+        speed: 260,                   // Brisk, no-nonsense pace
+        attackCooldown: 240,         // Fairly quick attacks
+        playerDamage: 8,             // Solid damage
+        attackTypes: ['attack'],
+        detectionRange: 1400,        // Long detection range
+        baseScale: 0.57,              // Base size multiplier (1.0 = normal size)
+        description: "Industry Exec - label enforcer pushing predatory 360 deals, sent to cover for The Negatives"
+    },
+
+    negative_tireek: {
+        // Boss stats here are the fallback for base Enemy stats (speed, damage, etc.);
+        // health/behaviors for the actual boss fight come from BOSS_TYPE_CONFIGS.
+        health: 60,
+        speed: 260,
+        attackCooldown: 300,
+        playerDamage: 8,
+        attackTypes: ['jab', 'cross', 'kick'],
+        detectionRange: 2000,
+        baseScale: 0.7125,
+        description: "Negative Tireek - a corrupted mirror of Tireek, faced in single combat"
+    },
+
+    negative_tryston: {
+        // Boss stats here are the fallback for base Enemy stats (speed, damage, etc.);
+        // health/behaviors for the actual boss fight come from BOSS_TYPE_CONFIGS.
+        health: 60,
+        speed: 260,
+        attackCooldown: 300,
+        playerDamage: 8,
+        attackTypes: ['jab', 'cross', 'kick'],
+        detectionRange: 2000,
+        baseScale: 0.7125,
+        description: "Negative Tryston - a corrupted mirror of Tryston, faced in single combat"
     }
 };
 
@@ -202,11 +264,11 @@ class Enemy {
         let basePlayerDamage = typeConfig.playerDamage || ENEMY_CONFIG.playerDamage;
         let baseSpeed = typeConfig.speed || ENEMY_CONFIG.speed;
         
-        // Apply level multipliers if available (from levelManager)
-        let multipliers = { health: 1.0, damage: 1.0, speed: 1.0 };
-        if (scene.levelManager && typeof scene.levelManager.getCurrentDifficultyMultipliers === 'function') {
-            multipliers = scene.levelManager.getCurrentDifficultyMultipliers();
-        }
+        // Apply the level's "enemies.multipliers" block if it declares one
+        const levelMultipliers = (scene.levelLifecycle && scene.levelLifecycle.currentLevel &&
+                                  scene.levelLifecycle.currentLevel.enemies &&
+                                  scene.levelLifecycle.currentLevel.enemies.multipliers) || {};
+        const multipliers = { health: 1.0, damage: 1.0, speed: 1.0, ...levelMultipliers };
         
         this.health = Math.round(baseHealth * multipliers.health);
         this.maxHealth = this.health;
@@ -256,8 +318,11 @@ class Enemy {
         this.windPushbackVelocity = 0; // Velocity applied by wind pushback
         
         // Movement bounds - read from centralized WORLD_CONFIG
-        this.streetTopLimit = WORLD_CONFIG.streetTopLimit;
-        this.streetBottomLimit = WORLD_CONFIG.streetBottomLimit;
+        // The level's walkable band (LevelLifecycle sets these on the scene before any
+        // enemy exists). Previously this read the global WORLD_CONFIG, so on every level
+        // but the first, enemies were clamped and perspective-scaled against the wrong band.
+        this.streetTopLimit = scene.streetTopLimit !== undefined ? scene.streetTopLimit : WORLD_CONFIG.streetTopLimit;
+        this.streetBottomLimit = scene.streetBottomLimit !== undefined ? scene.streetBottomLimit : WORLD_CONFIG.streetBottomLimit;
         
         // Store reference to player
         this.player = null;
@@ -270,6 +335,37 @@ class Enemy {
     
     setPlayer(player) {
         this.player = player;
+    }
+    
+    playAnimIfExists(key) {
+        if (this.sprite && this.sprite.active && this.scene.anims.exists(key) && this.scene.anims.get(key).frames.length > 0) {
+            this.sprite.anims.play(key, true);
+            return true;
+        }
+        return false;
+    }
+    
+    // Called from update() by Enemy and Boss. Returns true when the AI should be skipped.
+    // The constructor starts every enemy on its walk cycle via setState(WALKING); an
+    // event-controlled enemy (cameo, boss during dialogue) is then paused before its AI
+    // ever runs, so it stood there running in place. Show idle while paused, and put the
+    // walk cycle back on resume - setState() is a no-op when the state is unchanged, so
+    // nothing else would re-apply it.
+    applyEventPauseAnimation() {
+        if (this.eventPaused) {
+            if (!this._idleWhilePaused) {
+                this._idleWhilePaused = true;
+                this.playAnimIfExists(`${this.variationName}_idle`);
+            }
+            return true;
+        }
+        if (this._idleWhilePaused) {
+            this._idleWhilePaused = false;
+            if (this.state === ENEMY_STATES.WALKING || this.state === ENEMY_STATES.SPAWNING) {
+                this.playAnimIfExists(`${this.variationName}_walk`);
+            }
+        }
+        return false;
     }
     
     setState(newState) {
@@ -339,7 +435,7 @@ class Enemy {
         this.updatePerspective();
         
         // Skip AI updates if paused by event system (but still update visual properties above)
-        if (this.eventPaused) return;
+        if (this.applyEventPauseAnimation()) return;
         
         // Skip AI updates if paused due to player death
         if (this.deathPaused) return;
@@ -771,7 +867,17 @@ class Enemy {
         // Make sure the lock timer is longer than the windup time so damage can be dealt
         this.lockTimer = Math.max(animationDuration, windupDelay + 100); // Add 100ms buffer
         // Use variation name for animation key
-        this.sprite.anims.play(`${this.variationName}_${attackType}`, true);
+        const attackKey = `${this.variationName}_${attackType}`;
+        if (this.scene.anims.exists(attackKey)) {
+            this.sprite.anims.play(attackKey, true);
+        } else {
+            // Missing/frameless attack animation: still attack, just don't crash the frame loop
+            if (!this._warnedMissingAttack) {
+                this._warnedMissingAttack = true;
+                console.error(`❌ Enemy ${this.variationName} has no usable attack animation '${attackKey}' - see boot log`);
+            }
+            this.sprite.anims.play(`${this.variationName}_idle`, true);
+        }
         
         // Start attack windup - attack won't deal damage immediately
         this.isWindingUp = true;
@@ -866,7 +972,10 @@ class Enemy {
             }
             
             this.setState(ENEMY_STATES.DEAD);
-            
+
+            // Death juice: shove back from the hit and squash-and-stretch (after setState, which zeroes velocity)
+            if (this.scene.effectSystem) this.scene.effectSystem.onEnemyDeath(this, knockbackSource);
+
             // Play enemy death sound effect
             if (this.scene.audioManager) {
                 this.scene.audioManager.playEnemyDeath();
@@ -922,10 +1031,19 @@ class Enemy {
     updatePerspective() {
         // Same perspective system as player, but with base scale multiplier applied
         const normalizedY = (this.sprite.y - this.streetTopLimit) / (this.streetBottomLimit - this.streetTopLimit);
-        const baseScale = ENEMY_CONFIG.minScale + (ENEMY_CONFIG.maxScale - ENEMY_CONFIG.minScale) * normalizedY;
+        let baseScale = ENEMY_CONFIG.minScale + (ENEMY_CONFIG.maxScale - ENEMY_CONFIG.minScale) * normalizedY;
+
+        // Compress the near/far size range toward the midpoint for levels that want a subtler effect
+        const currentLevel = this.scene.levelLifecycle && this.scene.levelLifecycle.currentLevel;
+        const variance = (currentLevel && currentLevel.perspectiveVariance !== undefined) ? currentLevel.perspectiveVariance : 1.0;
+        if (variance !== 1.0) {
+            const midScale = (ENEMY_CONFIG.minScale + ENEMY_CONFIG.maxScale) / 2;
+            baseScale = midScale + (baseScale - midScale) * variance;
+        }
+
         // Apply enemy-specific base scale multiplier
         const scale = baseScale * this.baseScaleMultiplier;
-        
+
         this.sprite.setScale(scale);
         // Fix depth calculation: higher Y (lower on screen) should have higher depth (appear in front)
         this.sprite.setDepth(this.sprite.y);

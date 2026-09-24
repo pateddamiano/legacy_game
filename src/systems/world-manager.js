@@ -351,6 +351,30 @@ class WorldManager {
     }
 
     /**
+     * Destroy a world's background segments and forget it.
+     * Called by LevelLifecycle.teardown() - without this every level's segments
+     * stayed in the scene underneath the next level's.
+     * @param {string} worldId - World identifier
+     */
+    destroyWorld(worldId) {
+        const world = this.worlds.get(worldId);
+        if (!world) return;
+        world.segments.forEach(segmentSprite => segmentSprite.destroy());
+        world.segments.clear();
+        this.activeLayers.forEach((layerGroup, key) => {
+            if (key.startsWith(`${worldId}_`)) {
+                layerGroup.destroy(true);
+                this.activeLayers.delete(key);
+            }
+        });
+        this.worlds.delete(worldId);
+        if (this.currentWorld === worldId) {
+            this.currentWorld = null;
+        }
+        console.log(`🌍 Destroyed world: ${worldId}`);
+    }
+
+    /**
      * Switch to a different world
      * @param {string} worldId - World identifier
      */

@@ -105,6 +105,7 @@ class ExtrasActions {
         if (!extra) {
             console.warn('🎬 Failed to spawn extra');
         }
+        if (this.scene.settlePhysics) this.scene.settlePhysics();
         this.advanceAction();
     }
 

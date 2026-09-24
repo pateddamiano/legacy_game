@@ -66,17 +66,8 @@ class EnvironmentManager {
      * Apply level-specific boundary adjustments from level JSON
      */
     applyLevelSpecificBounds() {
-        // Try to get level JSON from LevelInitializationManager
-        let levelJson = null;
-        if (this.scene.levelInitializationManager && this.scene.levelInitializationManager.currentLevelJson) {
-            levelJson = this.scene.levelInitializationManager.currentLevelJson;
-        } else if (this.scene.levelManager) {
-            // Fallback: try to get from level manager
-            const currentConfig = this.scene.levelManager.getCurrentLevelConfig();
-            if (currentConfig && currentConfig.world) {
-                levelJson = currentConfig;
-            }
-        }
+        // The level currently built by the lifecycle (null before the first build)
+        const levelJson = (this.scene.levelLifecycle && this.scene.levelLifecycle.currentLevel) || null;
         
         // Apply bounds from level JSON if available
         if (levelJson && levelJson.world) {

@@ -1,0 +1,22 @@
+{
+  "original_dimensions": null,
+  "scaled_dimensions": [
+    1200,
+    720
+  ],
+  "segment_width": 1200,
+  "game_height": 720,
+  "scale_factor": null,
+  "num_segments": 1,
+  "note": "Level 4 (Alley Showdown): single-screen arena, alley art scaled to one full 1200x720 viewport.",
+  "segments": [
+    {
+      "index": 0,
+      "filename": "segment_000.png",
+      "width": 1200,
+      "height": 720,
+      "x_offset": 0,
+      "x_position": 0
+    }
+  ]
+}

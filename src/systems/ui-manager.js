@@ -1016,6 +1016,15 @@ Legend:
     // DEATH OVERLAY METHODS
     // ========================================
     
+    // The UI camera sits at zoom 1 inside the letterboxed game viewport (LayoutManager), so UI
+    // coordinates run 0..camera.width x 0..camera.height. scene.scale.width/height is the whole
+    // canvas INCLUDING the black bars, so centring on it put "TRY AGAIN" / "GAME OVER" right of
+    // centre on any window wider than the game's aspect ratio (most obviously on phones).
+    getUiViewportSize() {
+        const cam = this.uiScene?.cameras?.main;
+        return { width: cam?.width || 1200, height: cam?.height || 720 };
+    }
+    
     showTryAgainOverlay() {
         this.showDeathOverlay('TRY AGAIN');
     }
@@ -1024,9 +1033,8 @@ Legend:
         // Remove existing overlay if present
         this.hideDeathOverlay();
         
-        // Get actual screen dimensions
-        const screenWidth = this.uiScene?.scale?.width || 1200;
-        const screenHeight = this.uiScene?.scale?.height || 720;
+        // Size of the area the UI camera actually renders (see getUiViewportSize)
+        const { width: screenWidth, height: screenHeight } = this.getUiViewportSize();
         
         // Center is the absolute screen center
         const centerX = screenWidth / 2;
@@ -1138,9 +1146,8 @@ Legend:
         // Remove existing overlay if present
         this.hideDeathOverlay();
         
-        // Get actual screen dimensions
-        const screenWidth = this.uiScene?.scale?.width || 1200;
-        const screenHeight = this.uiScene?.scale?.height || 720;
+        // Size of the area the UI camera actually renders (see getUiViewportSize)
+        const { width: screenWidth, height: screenHeight } = this.getUiViewportSize();
         
         // Center is the absolute screen center
         const centerX = screenWidth / 2;

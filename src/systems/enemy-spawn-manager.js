@@ -28,7 +28,6 @@ class EnemySpawnManager {
         this.eventCameraLocked = false;
         this.playerCurrentHealth = 100;
         this.playerMaxHealth = 100;
-        this.levelManager = null;
         
         console.log('👾 EnemySpawnManager initialized');
     }
@@ -38,7 +37,8 @@ class EnemySpawnManager {
     // ========================================
     
     initialize(config) {
-        this.maxEnemies = config.maxEnemies || ENEMY_CONFIG.maxEnemiesOnScreen;
+        // 0 is a real value (boss arenas: no random spawns) - only fall back when unset
+        this.maxEnemies = config.maxEnemies !== undefined ? config.maxEnemies : ENEMY_CONFIG.maxEnemiesOnScreen;
         const configuredInterval = config.spawnInterval || ENEMY_CONFIG.spawnInterval;
         this.baseSpawnInterval = configuredInterval; // Store base interval from config
         this.enemySpawnInterval = configuredInterval;
@@ -67,14 +67,13 @@ class EnemySpawnManager {
         }
     }
     
-    setReferences(player, streetTopLimit, streetBottomLimit, eventCameraLocked, playerCurrentHealth, playerMaxHealth, levelManager) {
+    setReferences(player, streetTopLimit, streetBottomLimit, eventCameraLocked, playerCurrentHealth, playerMaxHealth) {
         this.player = player;
         this.streetTopLimit = streetTopLimit;
         this.streetBottomLimit = streetBottomLimit;
         this.eventCameraLocked = eventCameraLocked;
         this.playerCurrentHealth = playerCurrentHealth;
         this.playerMaxHealth = playerMaxHealth;
-        this.levelManager = levelManager;
     }
     
     // ========================================
@@ -84,6 +83,12 @@ class EnemySpawnManager {
     update(time, delta) {
         // Skip if enemies array not initialized yet
         if (!this.enemies) return;
+        
+        // No player means the level is still being built or torn down (transitions null
+        // scene.player out in phase 2). Spawning here would crash on this.player.x.
+        // Only check for existence - a sprite can be briefly inactive during death/respawn
+        // and enemies should keep updating through that.
+        if (!this.player) return;
         
         // Skip enemy spawning if disabled (test mode or maxEnemies is 0)
         if (this.maxEnemies === 0 || this.isTestMode) {
@@ -237,6 +242,11 @@ class EnemySpawnManager {
     spawnEnemy() {
         // Don't spawn enemies if disabled
         if (this.maxEnemies === 0 || this.isTestMode) {
+            return;
+        }
+        
+        // Guard against being called mid level-load/teardown with no player
+        if (!this.player) {
             return;
         }
         

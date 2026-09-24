@@ -97,45 +97,29 @@ class CameraActions {
             const currentScrollX = camera.scrollX;
             const currentScrollY = camera.scrollY;
             
-            // Calculate target position - simple X,Y coordinates
-            // Zoom doesn't affect FOV - camera always sees virtualWidth (1200) world units
-            // Pan targets work the same on all devices
-            let targetX = action.pan.x !== undefined ? action.pan.x : camera.scrollX;
-            let targetY = action.pan.y !== undefined ? action.pan.y : camera.scrollY;
-            
-            console.log(`🎬 [PAN] Panning to X=${targetX}, Y=${targetY}`);
-            
-            // Get current bounds and calculate max scroll positions
-            // Zoom doesn't affect FOV - camera always sees virtualWidth (1200) world units
-            const currentBounds = camera.getBounds();
-            const virtualWidth = this.scene.virtualWidth || 1200;
-            const virtualHeight = this.scene.virtualHeight || 720;
-            const maxX = currentBounds.x + currentBounds.width - virtualWidth;
-            const maxY = currentBounds.y + currentBounds.height - virtualHeight;
-            
-            console.log(`🎬 [PAN] 📊 CALCULATION DETAILS:`);
-            console.log(`🎬 [PAN]   - virtualWidth: ${virtualWidth}, virtualHeight: ${virtualHeight} (zoom doesn't affect FOV)`);
-            console.log(`🎬 [PAN]   - camera.zoom: ${camera.zoom.toFixed(3)} (rendering scale only), camera.width: ${camera.width}px, camera.height: ${camera.height}px`);
-            console.log(`🎬 [PAN]   - currentBounds: x=${currentBounds.x}, width=${currentBounds.width.toFixed(1)}, height=${currentBounds.height}`);
-            console.log(`🎬 [PAN]   - maxX calculation: ${currentBounds.x} + ${currentBounds.width.toFixed(1)} - ${virtualWidth} = ${maxX.toFixed(1)}`);
-            console.log(`🎬 [PAN]   - targetX: ${targetX}, maxX: ${maxX.toFixed(1)}, canReach: ${targetX <= maxX}`);
-            
-            // Clamp targets to bounds - prevents camera from scrolling outside world
-            // If target is beyond bounds, it will be clamped to the max allowed position
-            
-            const clampedTargetX = Phaser.Math.Clamp(targetX, currentBounds.x, maxX);
-            const clampedTargetY = Phaser.Math.Clamp(targetY, currentBounds.y, maxY);
-            
+            // Pan targets in the level JSON are the visible left/top edge of the view. With
+            // the camera zoomed to fit the window (LayoutManager), scrollX is NOT that edge:
+            // Phaser centres the view on scrollX + width/2 and it spans displayWidth, so the
+            // visible left edge is scrollX + (width - displayWidth)/2. Convert here, and let
+            // Phaser's own clampX/clampY apply the bounds (they carry the same offset).
+            // Using virtualWidth for the clamp instead landed the pan short of the world
+            // edge and the following setBounds then snapped the camera over, leaving a
+            // black strip on the right.
+            const offsetX = (camera.width - camera.displayWidth) / 2;
+            const offsetY = (camera.height - camera.displayHeight) / 2;
+            const targetX = action.pan.x !== undefined ? action.pan.x - offsetX : camera.scrollX;
+            const targetY = action.pan.y !== undefined ? action.pan.y - offsetY : camera.scrollY;
+
+            console.log(`🎬 [PAN] Panning to visible edge X=${action.pan.x}, Y=${action.pan.y} (scroll target ${targetX.toFixed(1)}, ${targetY.toFixed(1)}; zoom ${camera.zoom.toFixed(3)}, edge offset ${offsetX.toFixed(1)})`);
+
+            const clampedTargetX = camera.useBounds ? camera.clampX(targetX) : targetX;
+            const clampedTargetY = camera.useBounds ? camera.clampY(targetY) : targetY;
+
             if (Math.abs(clampedTargetX - targetX) > 0.1) {
-                console.warn(`🎬 [PAN] ⚠️ Target X clamped: ${targetX} -> ${clampedTargetX} (diff=${(targetX - clampedTargetX).toFixed(1)})`);
-                console.warn(`🎬 [PAN] ⚠️ Camera cannot scroll beyond bounds. Adjust setBounds width or pan target.`);
-                console.warn(`🎬 [PAN] ⚠️ To fix: increase setBounds width by ${(targetX - maxX).toFixed(1)} or reduce pan target`);
-            } else {
-                console.log(`🎬 [PAN] ✅ Target X is within bounds: ${targetX} (no clamping needed)`);
+                console.warn(`🎬 [PAN] ⚠️ Target X clamped by camera bounds: ${targetX.toFixed(1)} -> ${clampedTargetX.toFixed(1)} (bounds ${JSON.stringify(camera.getBounds())})`);
             }
 
             console.log(`🎬 [PAN] Starting camera pan from (${currentScrollX.toFixed(0)}, ${currentScrollY.toFixed(0)}) to (${clampedTargetX.toFixed(0)}, ${clampedTargetY.toFixed(0)}) over ${duration}ms`);
-            console.log(`🎬 [PAN] Camera bounds: ${JSON.stringify(currentBounds)}, zoom: ${camera.zoom}`);
 
             // Stop following before panning
             camera.stopFollow();
@@ -157,11 +141,11 @@ class CameraActions {
                     const finalScrollY = camera.scrollY;
                     const virtualWidth = this.scene.virtualWidth || 1200;
                     const expectedTargetX = clampedTargetX;
-                    
+
                     console.log(`🎬 [PAN] ✅ Tween COMPLETED - Camera at (${finalScrollX.toFixed(1)}, ${finalScrollY.toFixed(1)})`);
                     console.log(`🎬 [PAN] ✅ Expected target: (${expectedTargetX.toFixed(1)}, ${clampedTargetY.toFixed(1)})`);
                     console.log(`🎬 [PAN] ✅ Difference: (${(finalScrollX - expectedTargetX).toFixed(1)}, ${(finalScrollY - clampedTargetY).toFixed(1)})`);
-                    console.log(`🎬 [PAN] ✅ Virtual world width: ${virtualWidth} (zoom doesn't affect FOV), camera right edge: ${(finalScrollX + virtualWidth).toFixed(1)}`);
+                    console.log(`🎬 [PAN] ✅ Visible world: ${camera.worldView.x.toFixed(1)} - ${camera.worldView.right.toFixed(1)}`);
                     
                     // Check where the critic enemy appears (known position from level config)
                     const criticEntity = this.getEntity('enemy_critic');
@@ -282,8 +266,7 @@ class CameraActions {
             console.log(`🎬 Camera position before bounds: (${oldScrollX}, ${oldScrollY}), zoom: ${camera.zoom}`);
             console.log(`🎬 Old camera bounds: ${oldBounds.x}, ${oldBounds.y}, ${oldBounds.width}x${oldBounds.height}`);
 
-            // Zoom only affects rendering scale, not FOV - camera always sees virtualWidth (1200) world units
-            // No bounds adjustment needed - use bounds as specified
+            // Bounds are in world units as specified; Phaser handles the zoom offset when clamping
             camera.setBounds(
                 bounds.x !== undefined ? bounds.x : camera.getBounds().x,
                 bounds.y !== undefined ? bounds.y : camera.getBounds().y,
@@ -295,20 +278,14 @@ class CameraActions {
             const newScrollX = camera.scrollX;
             const newScrollY = camera.scrollY;
 
-            // Clamp scroll to the new bounds to avoid negative Y or overshoot
-            // Zoom doesn't affect FOV - camera always sees virtualWidth (1200) world units
-            const virtualWidth = this.scene.virtualWidth || 1200;
-            const virtualHeight = this.scene.virtualHeight || 720;
-            const maxScrollX = newBounds.x + newBounds.width - virtualWidth;
-            const maxScrollY = newBounds.y + newBounds.height - virtualHeight;
-            camera.scrollX = Phaser.Math.Clamp(camera.scrollX, newBounds.x, maxScrollX);
-            camera.scrollY = Phaser.Math.Clamp(camera.scrollY, newBounds.y, maxScrollY);
-            
+            // Clamp scroll to the new bounds with Phaser's own rule - it offsets the bounds
+            // by (displayWidth - width)/2 for a zoomed camera, so a scroll that is already
+            // showing the intended edge stays put (see the pan action above).
+            camera.scrollX = camera.clampX(camera.scrollX);
+            camera.scrollY = camera.clampY(camera.scrollY);
+
             console.log(`🎬 📏 Final bounds state:`);
             console.log(`🎬 📏   - New bounds: x=${newBounds.x}, y=${newBounds.y}, width=${newBounds.width.toFixed(1)}, height=${newBounds.height}`);
-            console.log(`🎬 📏   - virtualWidth: ${virtualWidth}, virtualHeight: ${virtualHeight} (zoom doesn't affect FOV)`);
-            console.log(`🎬 📏   - maxScrollX: ${maxScrollX.toFixed(1)} (${newBounds.x} + ${newBounds.width.toFixed(1)} - ${virtualWidth})`);
-            console.log(`🎬 📏   - maxScrollY: ${maxScrollY.toFixed(1)}`);
             console.log(`🎬 Camera position after bounds: (${camera.scrollX}, ${camera.scrollY}) (was: ${newScrollX}, ${newScrollY})`);
 
             // Check if camera was clamped

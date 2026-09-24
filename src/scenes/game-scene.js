@@ -12,6 +12,11 @@ class GameScene extends Phaser.Scene {
     }
 
     init(data) {
+        // create() is async: Phaser does NOT await it, so update() starts running while
+        // create() is still awaiting level initialization and this.player is still null.
+        // Gate update() on this flag so nothing runs against a half-built scene.
+        this.isSceneReady = false;
+        
         // Clear persistent state from previous runs to prevent stale references
         this.player = null;
         this.enemies = [];
@@ -61,9 +66,12 @@ class GameScene extends Phaser.Scene {
         }
         
         // Initialize debug/testing mode
-        this.isTestMode = window.DEBUG_MODE || this.selectedLevelId === 'test' || window.LEVEL_TEST_MODE === true;
+        // NOTE: isTestMode disables enemy spawning outright, so it must NOT be driven by
+        // window.DEBUG_MODE - otherwise jumping to a real level with ?debug=true&level=N
+        // loads a level with no enemies at all. Debug overlays still follow DEBUG_MODE.
+        this.isTestMode = this.selectedLevelId === 'test' || window.LEVEL_TEST_MODE === true;
         this.coordinateRecordingEnabled = this.isTestMode || window.DEBUG_MODE;
-        this.debugOverlayVisible = this.isTestMode;
+        this.debugOverlayVisible = this.isTestMode || window.DEBUG_MODE;
         
         // Store initialization data for CharacterManager (initialized in create())
         this._characterInitData = {
@@ -110,7 +118,6 @@ class GameScene extends Phaser.Scene {
         
         // World and level management
         this.worldManager = new WorldManager(this);
-        this.levelManager = new LevelManager(this);
         
         // Gameplay systems
         // DialogueManager will be initialized after uiScene is available
@@ -134,35 +141,19 @@ class GameScene extends Phaser.Scene {
         this.checkpointManager = new CheckpointManager(this);
         this.livesManager = new LivesManager(this);
         // Note: effectSystem initialized in preload() for asset loading
-        this.levelInitializationManager = new LevelInitializationManager(
-            this,
-            this.worldManager,
-            this.levelManager,
-            this.environmentManager,
-            this.inputManager,
-            this.eventManager,
-            this.audioManager
-        );
         
-        // Initialize level transition manager (needs all other managers)
+        // The one place levels are built and torn down (see LevelLifecycle.js), and the
+        // in-place transition that sequences it
+        this.levelLifecycle = new LevelLifecycle(this);
         this.levelTransitionManager = new LevelTransitionManager(this);
-        this.levelTransitionManager.initialize({
-            livesManager: this.livesManager,
-            characterManager: this.characterManager,
-            enemySpawnManager: this.enemySpawnManager,
-            weaponManager: this.weaponManager,
-            itemPickupManager: this.itemPickupManager,
-            eventManager: this.eventManager,
-            audioManager: this.audioManager,
-            levelInitializationManager: this.levelInitializationManager,
-            worldManager: this.worldManager,
-            uiManager: this.uiManager
-        });
         
         console.log('🎮 All managers initialized');
     }
 
     async create() {
+        // No legal "i" button during gameplay (covers the touch attack buttons)
+        if (window.LegalInfo) window.LegalInfo.hide();
+        
         console.log(`🎯 GameScene: Creating level ${this.selectedLevelId} with ${this.selectedCharacter}`);
         
         // Launch and get reference to UI Scene
@@ -186,11 +177,17 @@ class GameScene extends Phaser.Scene {
         this.virtualHeight = 720;
         LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight);
         
-        // Handle window resizing
-        this.scale.on('resize', (gameSize) => {
+        // Handle window resizing (kept as a named handler so shutdown() removes only ours)
+        this._onResize = () => {
             console.log('📏 Resizing GameScene...');
             LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight);
-        });
+        };
+        this.scale.on('resize', this._onResize);
+        
+        // Phaser does not call shutdown() by itself. Without this, a scene restart (game
+        // over) leaves the previous HUD, dialogue box and weapon HUD on the still-alive
+        // UIScene and the next create() draws them all again on top.
+        this.events.once('shutdown', this.shutdown, this);
         
         // No loading needed - assets already loaded in PreloadScene
         this.isLoading = false;
@@ -229,6 +226,9 @@ class GameScene extends Phaser.Scene {
             }
         }
         
+        // P / ESC open the pause menu (touch: the || button in the touch overlay)
+        this.setupPauseKey();
+        
         // Update WeaponManager with uiScene reference (created in preload before uiScene was available)
         if (this.weaponManager) {
             this.weaponManager.uiScene = this.uiScene;
@@ -245,132 +245,89 @@ class GameScene extends Phaser.Scene {
             }
         );
         
-        // Initialize environment (sets up world bounds and backgrounds)
+        // Default physics world bounds (each level replaces them)
         this.environmentManager.initializeWorld();
         
-        // Get street limits from environment manager
-        const streetBounds = this.environmentManager.getStreetBounds();
-        this.streetTopLimit = streetBounds.top;
-        this.streetBottomLimit = streetBounds.bottom;
-        
-        // Pass street bounds to input manager for vertical movement limits
-        this.inputManager.setStreetBounds(this.streetTopLimit, this.streetBottomLimit);
-        if (this.extrasManager) {
-            this.extrasManager.setStreetBounds(this.streetTopLimit, this.streetBottomLimit);
-        }
-        console.log(`🎯 GameScene: Street bounds configured: ${this.streetTopLimit} - ${this.streetBottomLimit}`);
-        
-        // Initialize level system FIRST (loads world and sets spawn point)
-        // Character creation now happens after level initialization completes
-        await this.levelInitializationManager.initializeLevel(
-            this.selectedLevelId,
-            () => this.onLevelInitializationComplete()
-        );
-        
-        // Set up camera properties
+        // ------------------------------------------------------------
+        // ONE-TIME SETUP - survives level transitions.
+        // Anything per-level belongs in LevelLifecycle.build() instead.
+        // ------------------------------------------------------------
         this.cameras.main.roundPixels = true;
-
-        // Input is now handled by InputManager
-
-        // Create animations for all characters and enemies with a small delay to ensure assets are loaded
-        this.time.delayedCall(100, () => {
-            console.log('Creating animations...');
-            // Create animations for all characters
-            ALL_CHARACTERS.forEach(characterConfig => {
-                this.animationSetupManager.createCharacterAnimations(characterConfig);
-            });
-
-            // Create animations for enemies
-            ALL_ENEMY_TYPES.forEach(enemyConfig => {
-                this.animationSetupManager.createCharacterAnimations(enemyConfig);
-            });
-
-            // Effect animations already created earlier (in onLevelInitializationComplete)
-
-            // Start player idle animation
-            this.player.anims.play(`${this.currentCharacterConfig.name}_idle`, true);
-        });
-
-        // Animation manager will be initialized after character creation
         
-        // Initialize enemy system (using centralized config)
-        // Note: enemySpawnManager is already initialized in initializeManagers()
-        this.enemySpawnManager.initialize({
-            maxEnemies: ENEMY_CONFIG.maxEnemiesOnScreen,
-            spawnInterval: ENEMY_CONFIG.spawnInterval,
-            isTestMode: this.isTestMode,
-            isLoading: this.isLoading
-        });
+        // Animations for every character, enemy and effect. All spritesheets are loaded
+        // by the boot scenes before this scene starts, so this is safe to do up front.
+        ALL_CHARACTERS.forEach(config => this.animationSetupManager.createCharacterAnimations(config));
+        ALL_ENEMY_TYPES.forEach(config => this.animationSetupManager.createCharacterAnimations(config));
+        if (this.effectSystem) {
+            this.effectSystem.createEffectAnimations();
+            // Ensure crisp pixel-art filtering for effect spritesheets
+            try {
+                if (this.textures.exists('tornado')) {
+                    const tex = this.textures.get('tornado');
+                    if (tex && tex.setFilter) {
+                        tex.setFilter(Phaser.Textures.FilterMode.NEAREST);
+                    }
+                }
+            } catch (e) {
+                console.warn('Could not set pixel filter for tornado spritesheet:', e);
+            }
+        }
         
-        // Initialize jump tracking
         this.isJumping = false;
-        
-        // Initialize player health system
         this.playerMaxHealth = 100;
         this.playerCurrentHealth = this.playerMaxHealth;
+        // NOTE: this.playerScore was set in init() (it is preserved across a game-over
+        // restart) - do not zero it here.
         
-        // Initialize player score system
-        this.playerScore = 0;
-        
-        // Initialize UI system  
         this.uiManager.initializeUI();
         
-        // Initialize DebugManager if in test mode or debug mode
-        // Always initialize for checkpoint navigation (developer feature)
+        // DebugManager - checkpoint navigation is a developer feature even outside debug mode
+        this.debugManager = new DebugManager(this);
         if (this.isTestMode || window.DEBUG_MODE) {
             console.log('🔍 [GameScene] Creating DebugManager (test/debug mode)');
-            this.debugManager = new DebugManager(this);
             this.debugManager.initialize(this.isTestMode, this.coordinateRecordingEnabled, this.debugOverlayVisible);
-            // Create debug graphics for hitbox visualization
             this.debugGraphics = this.add.graphics();
             this.debugManager.setDebugGraphics(this.debugGraphics);
         } else {
-            // Still create debug manager for checkpoint navigation even if not in debug mode
-            console.log('🔍 [GameScene] Creating DebugManager for checkpoint navigation (developer feature)');
-            this.debugManager = new DebugManager(this);
-            this.debugManager.initialize(false, false, false); // Not in test mode, but still get checkpoint nav
+            this.debugManager.initialize(false, false, false);
         }
         
-        // Initialize health bar with full health (fix: bar wasn't showing initially)
-        const activeChar = this.characterManager.getActiveCharacterData();
-        this.uiManager.updateHealthBar(activeChar.health, activeChar.maxHealth);
-        
-        // Initialize dual character health display
-        this.uiManager.updateDualCharacterHealth(
-            this.characterManager.characters.tireek.health, 
-            this.characterManager.characters.tryston.health, 
-            this.characterManager.getActiveCharacterName()
-        );
-        
-        // Remove the duplicate health bar creation since UI manager handles it
-        // this.createHealthBar(); // Commented out - UI manager handles health bar
-        
-        // Initialize score display
-        this.uiManager.updateScoreDisplay(this.playerScore);
-        
-        // Initialize lives system
         this.livesManager.initialize();
-        this.uiManager.updateLivesDisplay(this.livesManager.getLives());
         
-        // Initialize weapon system
         this.weaponManager.createWeaponAnimations();
         this.weaponManager.initializeWeapons();
         this.weaponManager.createWeaponUI();
         
-        // Initialize item pickup system
         this.itemPickupManager.createParticleEffect();
         
-        // Note: Level system and Level 1 world already initialized before createBothCharacters()
+        // Safety net for the isSceneReady gate: create() is async, so anything that throws
+        // after this point becomes a silent unhandled rejection and the rest of create()
+        // never runs. Prefer a partly-initialised but playable scene over a dead one.
+        this.time.delayedCall(3000, () => {
+            if (!this.isSceneReady && this.player) {
+                console.error('🎯 GameScene.create() did not finish - enabling update loop anyway');
+                this.isSceneReady = true;
+            }
+        });
         
-        // Start background music only for Level 1 here; other levels use LevelManager
-        if (this.selectedLevelId === 1) {
-            console.log('🎵 Starting background music for Level 1...');
-            this.audioManager.playBackgroundMusic('fadeMusic');
+        // ------------------------------------------------------------
+        // PER-LEVEL SETUP - world, characters, camera, spawner, audio, events
+        // ------------------------------------------------------------
+        const built = await this.levelLifecycle.build(this.selectedLevelId);
+        if (!built) {
+            console.error(`🎯 GameScene: level ${this.selectedLevelId} failed to build`);
         }
         
-        // Start street ambiance for level 1
-        console.log('🔊 Starting street ambiance...');
-        this.audioManager.startAmbiance('streetAmbiance', 0.15);
+        // HUD values that need the characters to exist
+        const activeChar = this.characterManager.getActiveCharacterData();
+        this.uiManager.updateHealthBar(activeChar.health, activeChar.maxHealth);
+        this.uiManager.updateDualCharacterHealth(
+            this.characterManager.characters.tireek.health,
+            this.characterManager.characters.tryston.health,
+            this.characterManager.getActiveCharacterName()
+        );
+        this.uiManager.updateScoreDisplay(this.playerScore);
+        this.uiManager.updateLivesDisplay(this.livesManager.getLives());
         
         // Set up automatic fullscreen on first interaction (if not already requested)
         this.setupAutoFullscreen();
@@ -378,6 +335,109 @@ class GameScene extends Phaser.Scene {
         // Fade in from black
         this.cameras.main.fadeIn(1000, 0, 0, 0);
         console.log('🎬 Fading in to gameplay...');
+        
+        // Everything is wired up - let update() start running
+        this.isSceneReady = true;
+    }
+    
+    // ========================================
+    // PLAYER BINDING
+    // ========================================
+    
+    // Point every system at the given character sprite. Called by LevelLifecycle.build()
+    // once the characters exist, and on every character switch. This used to be copied
+    // in four places with slightly different subsets of the same wiring - keep it here.
+    bindPlayer(sprite) {
+        if (!sprite) {
+            console.error('🎯 bindPlayer: no sprite given');
+            return;
+        }
+        this.player = sprite;
+        this.selectedCharacter = this.characterManager.getActiveCharacterName();
+        this.currentCharacterConfig = this.characterManager.currentCharacterConfig;
+        if (!this.player.characterConfig) {
+            this.player.characterConfig = this.currentCharacterConfig;
+        }
+        this.isJumping = false; // a freshly bound character is always on the ground
+        
+        this.animationManager = new AnimationStateManager(this.player);
+        this.animationSetupManager.setupAnimationEvents(
+            this.currentCharacterConfig, this.player, this.animationManager, this.isJumping
+        );
+        
+        if (!this.combatManager) {
+            this.combatManager = new CombatManager(this, this.characterManager, this.enemies);
+            this.combatManager.initialize(
+                this.player, this.animationManager, this.uiManager, this.audioManager,
+                this.streetTopLimit, this.streetBottomLimit, this.autoSwitchThreshold
+            );
+        } else {
+            this.combatManager.player = this.player;
+            this.combatManager.animationManager = this.animationManager;
+        }
+        
+        if (!this.playerPhysicsManager) {
+            this.playerPhysicsManager = new PlayerPhysicsManager(
+                this, this.player, this.animationManager, this.environmentManager, this.inputManager
+            );
+            this.playerPhysicsManager.initialize(this.streetTopLimit, this.streetBottomLimit, this.audioManager);
+            // Created mid-build: stay frozen until the lifecycle releases gameplay
+            this.playerPhysicsManager.disabled = !!(this.levelLifecycle && this.levelLifecycle.busy);
+        } else {
+            this.playerPhysicsManager.player = this.player;
+            this.playerPhysicsManager.animationManager = this.animationManager;
+            this.playerPhysicsManager.setIsJumping(false);
+        }
+        
+        this.enemySpawnManager.setReferences(
+            this.player, this.streetTopLimit, this.streetBottomLimit,
+            this.eventCameraLocked || false, this.playerCurrentHealth, this.playerMaxHealth
+        );
+        
+        if (this.debugManager) {
+            this.debugManager.setReferences(
+                this.player, this.enemies, this.streetTopLimit, this.streetBottomLimit,
+                () => this.combatManager ? this.combatManager.getPlayerAttackHitbox() : null
+            );
+        }
+        
+        if (!this.eventCameraLocked) {
+            this.cameras.main.startFollow(this.player, true, 0.1, 0);
+        }
+        
+        // A brand-new sprite has no animation yet; a switched-in one is already animating
+        const idleKey = `${this.currentCharacterConfig.name}_idle`;
+        if (!this.player.anims.isPlaying && this.anims.exists(idleKey)) {
+            this.player.anims.play(idleKey, true);
+        }
+    }
+    
+    // Run one physics step even while the world is paused for a cutscene.
+    //
+    // Physics bodies here are the full sprite frame x scale (nobody calls setSize), so a
+    // freshly placed character whose body overlaps the world edge gets pushed inside by
+    // collideWorldBounds - but only when the world actually steps. Cutscenes pause the
+    // world before that first step, and the dialogue manager unpauses it for a few
+    // frames between lines, so characters visibly snapped into place on the second line.
+    // Call this after placing anything (spawn, createCharacters, pause) so it is already
+    // at its resting spot on the first line.
+    settlePhysics() {
+        const world = this.physics && this.physics.world;
+        if (!world) return;
+        // Scale first: a body is sized from the sprite's current scale during preUpdate
+        if (this.playerPhysicsManager && this.player && this.player.active) {
+            this.playerPhysicsManager.updatePerspective();
+        }
+        (this.enemies || []).forEach(enemy => {
+            if (enemy && enemy.sprite && enemy.sprite.active && enemy.updatePerspective) {
+                enemy.updatePerspective();
+            }
+        });
+        const wasPaused = world.isPaused;
+        world.isPaused = false;
+        world.update(this.time.now, world._frameTimeMS || (1000 / 60)); // preUpdate + one step
+        world.postUpdate();                                             // write bodies back to sprites
+        world.isPaused = wasPaused;
     }
     
     setupAutoFullscreen() {
@@ -408,106 +468,6 @@ class GameScene extends Phaser.Scene {
         }
     }
 
-    initializeLevel1World() {
-        console.log('🌍 Initializing Level 1 world...');
-        
-        // Load metadata
-        const metadata = this.cache.json.get('level_1_metadata');
-        if (!metadata) {
-            console.error('🌍 Level 1 metadata not found!');
-            return;
-        }
-        
-        console.log('🌍 📊 Metadata loaded:', metadata);
-        console.log('🌍 📊 Number of segments:', metadata.segments.length);
-        metadata.segments.forEach((seg, i) => {
-            console.log(`🌍 📊 Segment ${i}: x=${seg.x_position}, width=${seg.width}, filename=${seg.filename}`);
-        });
-        
-        // Calculate spawn point (customized for Level 1 intro scene)
-        const spawnX = 185;
-        const spawnY = 512;
-        console.log(`🌍 📊 Calculated spawn point: x=${spawnX}, y=${spawnY}`);
-        
-        // Register Level 1 world configuration
-        const worldConfig = {
-            segments: metadata.segments,
-            metadataPath: 'assets/backgrounds/level_1_segments/metadata.json',
-            spawnPoint: {
-                x: spawnX,
-                y: spawnY
-            },
-            bounds: {
-                x: metadata.segments[0].x_position,
-                y: 0,
-                width: metadata.segments[metadata.segments.length - 1].x_position + 
-                      metadata.segments[metadata.segments.length - 1].width - 
-                      metadata.segments[0].x_position,
-                height: 720
-            }
-        };
-        
-        console.log('🌍 📊 World config:', worldConfig);
-        
-        // Register and create the world
-        this.worldManager.registerWorld('level_1', worldConfig);
-        this.worldManager.createWorld('level_1');
-        
-        console.log('🌍 Level 1 world initialized successfully');
-    }
-    
-    createParallaxBackground() {
-        console.log('🌍 Creating parallax background...');
-
-        // Check if texture exists
-        if (!this.textures.exists('parallax_background')) {
-            console.error('🌍 Parallax background texture not found!');
-            console.log('🌍 Available textures:', Object.keys(this.textures.list).slice(0, 20));
-            return;
-        }
-
-        const texture = this.textures.get('parallax_background');
-        const textureWidth = texture.source[0].width;
-        const textureHeight = texture.source[0].height;
-
-        console.log(`🌍 Parallax texture dimensions: ${textureWidth}x${textureHeight}`);
-
-        // Get world width from world bounds
-        const worldWidth = (this.physics && this.physics.world && this.physics.world.bounds) ? this.physics.world.bounds.width : 1200;
-        console.log(`🌍 World width: ${worldWidth}px`);
-
-        // Create a tileSprite that will repeat the texture
-        const tileSprite = this.add.tileSprite(
-            0,                    // x
-            -360,                 // y (raised up by 50% of 720 = 360px)
-            worldWidth * 2,       // width (make it wider than world)
-            720,                  // height
-            'parallax_background' // texture key
-        );
-
-        tileSprite.setOrigin(0, 0);
-        tileSprite.setDepth(-200); // Behind segments (-100)
-        tileSprite.setScrollFactor(0.2);
-        tileSprite.setAlpha(0.8); // Slight transparency for blending
-
-        console.log(`🌍 TileSprite properties:`, {
-            x: tileSprite.x,
-            y: tileSprite.y,
-            width: tileSprite.width,
-            height: tileSprite.height,
-            depth: tileSprite.depth,
-            visible: tileSprite.visible,
-            alpha: tileSprite.alpha,
-            scrollFactorX: tileSprite.scrollFactorX,
-            scrollFactorY: tileSprite.scrollFactorY
-        });
-
-        // Store reference for potential animation
-        this.parallaxBackground = tileSprite;
-
-        console.log('🌍 Parallax tileSprite created successfully!');
-    }
-
     // ========================================
     // DEPRECATED METHODS REMOVED
     // ========================================
@@ -518,7 +478,7 @@ class GameScene extends Phaser.Scene {
     // - Enemy spawning -> EnemySpawnManager
     // - Animation setup -> AnimationSetupManager
     // - Debug features -> DebugManager
-    // - Level initialization -> LevelInitializationManager
+    // - Level build/teardown -> LevelLifecycle
     
     playerTakeDamage(damage) {
         // Use CombatManager
@@ -534,33 +494,7 @@ class GameScene extends Phaser.Scene {
                 if (this.characterManager) {
                     const result = this.characterManager.switchCharacter(forceSwitch, this.animationManager, this.isJumping, this.eventCameraLocked || false);
                     if (result && result.success) {
-                        this.player = result.newPlayer;
-                        this.selectedCharacter = result.newCharacter;
-                        this.currentCharacterConfig = this.characterManager.currentCharacterConfig;
-
-                        // Ensure player sprite has characterConfig set (safety check)
-                        if (!this.player.characterConfig) {
-                            this.player.characterConfig = this.currentCharacterConfig;
-                        }
-
-                        // Reset jumping state (new character always starts on ground)
-                        this.isJumping = false;
-                        
-                        // Update all managers with new player
-                        this.animationManager = new AnimationStateManager(this.player);
-                        this.animationSetupManager.setupAnimationEvents(this.currentCharacterConfig, this.player, this.animationManager, this.isJumping);
-                        if (this.playerPhysicsManager) {
-                            this.playerPhysicsManager.player = this.player;
-                            this.playerPhysicsManager.animationManager = this.animationManager;
-                            this.playerPhysicsManager.setIsJumping(false); // Reset jumping state in physics manager
-                        }
-                        if (this.combatManager) {
-                            this.combatManager.player = this.player;
-                            this.combatManager.animationManager = this.animationManager;
-                        }
-                        if (!this.eventCameraLocked) {
-                            this.cameras.main.startFollow(this.player, true, 0.1, 0);
-                        }
+                        this.bindPlayer(result.newPlayer);
                     }
                 }
             }
@@ -585,35 +519,10 @@ class GameScene extends Phaser.Scene {
             }
         );
         
-        // Update player reference if character was switched
-        this.player = this.characterManager.getActiveCharacter();
-        this.selectedCharacter = this.characterManager.getActiveCharacterName();
-        this.currentCharacterConfig = this.characterManager.currentCharacterConfig;
-        
-        // Update managers with new player if switched
-        if (this.animationManager && this.player) {
-            // Reset jumping state (new character always starts on ground)
-            this.isJumping = false;
-            
-            // Ensure player sprite has characterConfig set (safety check)
-            if (!this.player.characterConfig) {
-                this.player.characterConfig = this.currentCharacterConfig;
-                console.log('⚠️ Set characterConfig on player sprite after handleCharacterDown');
-            }
-            
-            this.animationManager = new AnimationStateManager(this.player);
-            if (this.animationSetupManager) {
-                this.animationSetupManager.setupAnimationEvents(this.currentCharacterConfig, this.player, this.animationManager, this.isJumping);
-            }
-            if (this.playerPhysicsManager) {
-                this.playerPhysicsManager.player = this.player;
-                this.playerPhysicsManager.animationManager = this.animationManager;
-                this.playerPhysicsManager.setIsJumping(false); // Reset jumping state in physics manager
-            }
-            if (this.combatManager) {
-                this.combatManager.player = this.player;
-                this.combatManager.animationManager = this.animationManager;
-            }
+        // Rebind to whichever character is active now (it may have switched)
+        const active = this.characterManager.getActiveCharacter();
+        if (active && this.animationManager) {
+            this.bindPlayer(active);
         }
     }
     
@@ -624,6 +533,12 @@ class GameScene extends Phaser.Scene {
     }
     
     update(time, delta) {
+        // Scene still being built by the async create() (see init()), or a level is
+        // being torn down / built by LevelLifecycle
+        if (!this.isSceneReady || !this.player || (this.levelLifecycle && this.levelLifecycle.busy)) {
+            return;
+        }
+        
         // Update character regeneration
         if (this.characterManager) {
             this.characterManager.update(delta);
@@ -688,14 +603,16 @@ class GameScene extends Phaser.Scene {
             const activeChar = this.characterManager ? this.characterManager.getActiveCharacterData() : null;
             if (activeChar) {
                 this.playerCurrentHealth = activeChar.health;
+                if (this.effectSystem && activeChar.maxHealth) {
+                    this.effectSystem.updateHealthVignette(activeChar.health / activeChar.maxHealth);
+                }
                 this.enemySpawnManager.setReferences(
                     this.player,
                     this.streetTopLimit,
                     this.streetBottomLimit,
                     this.eventCameraLocked || false,
                     this.playerCurrentHealth,
-                    this.playerMaxHealth,
-                    this.levelManager
+                    this.playerMaxHealth
                 );
             }
         }
@@ -945,50 +862,14 @@ class GameScene extends Phaser.Scene {
                     const switchSucceeded = result && (result.success === true || result === true);
                     
                     if (switchSucceeded && result.newPlayer) {
-                        // Update references
-                        this.player = result.newPlayer;
-                        this.selectedCharacter = result.newCharacter;
-                        this.currentCharacterConfig = this.characterManager.currentCharacterConfig;
+                        // One rebind for every switch path (manual, low-health auto-switch,
+                        // character down). This used to be a hand-copied subset of
+                        // bindPlayer() that skipped resetting the jump state.
+                        this.bindPlayer(result.newPlayer);
                         
-                        // Ensure player sprite has characterConfig set (safety check)
-                        if (!this.player.characterConfig) {
-                            this.player.characterConfig = this.currentCharacterConfig;
-                        }
-                        
-                        // Reset animation manager with new character
-                        this.animationManager = new AnimationStateManager(this.player);
-                        
-                        // Set up animation events for new character
-                        this.animationSetupManager.setupAnimationEvents(
-                            this.currentCharacterConfig,
-                            this.player,
-                            this.animationManager,
-                            this.isJumping
-                        );
-                        
-                        // Update physics manager with new player and animation manager
-                        if (this.playerPhysicsManager) {
-                            this.playerPhysicsManager.player = this.player;
-                            this.playerPhysicsManager.animationManager = this.animationManager;
-                            // CRITICAL: Ensure physics manager is enabled after switch
-                            this.playerPhysicsManager.disabled = false;
-                        }
-                        
-                        // Update combat manager with new player and animation manager
-                        if (this.combatManager) {
-                            this.combatManager.player = this.player;
-                            this.combatManager.animationManager = this.animationManager;
-                        }
-                        
-                        // CRITICAL: Ensure input manager is enabled after switch
-                        if (this.inputManager) {
-                            this.inputManager.disabled = false;
-                        }
-                        
-                        // Re-setup camera follow ONLY if camera is not locked by event system
-                        if (!this.eventCameraLocked) {
-                            this.cameras.main.startFollow(this.player, true, 0.1, 0);
-                        }
+                        // CRITICAL: Ensure physics and input are enabled after a manual switch
+                        if (this.playerPhysicsManager) this.playerPhysicsManager.disabled = false;
+                        if (this.inputManager) this.inputManager.disabled = false;
                         
                         return true; // Switch successful, skip other input
                     }
@@ -1058,372 +939,115 @@ class GameScene extends Phaser.Scene {
     // - destroyAllEnemies -> EnemySpawnManager
     // - setupCoordinateRecording, updateCoordinateRecording, recordPosition, showPositionMarker -> DebugManager
     // - createDebugOverlay, updateDebugOverlay, updateGridOverlay -> DebugManager
-    // - createParallaxBackground, createParallaxBackgroundFromConfig -> LevelInitializationManager
-    // - loadLevelFromJSON, loadLevelFromConfig, setupTestLevel, initializeUnifiedLevelSystem -> LevelInitializationManager
+    // - createParallaxBackground, createParallaxBackgroundFromConfig -> LevelLifecycle
+    // - loadLevelFromJSON, loadLevelFromConfig, setupTestLevel, initializeUnifiedLevelSystem -> LevelLifecycle
 
-    resetPlayerState() {
-        // Get spawn point from world manager
-        const spawnPoint = this.worldManager.getSpawnPoint();
-
-        // Reset camera first - stop follow and position at spawn point
-        this.cameras.main.stopFollow();
-        const cameraTargetX = Math.max(0, spawnPoint.x - this.cameras.main.width / 2);
-        this.cameras.main.setScroll(cameraTargetX, 0);
-
-        // Update camera bounds to match current world bounds
-        if (this.physics && this.physics.world && this.physics.world.bounds) {
-            const worldBounds = this.physics.world.bounds;
-            this.cameras.main.setBounds(worldBounds.x, worldBounds.y, worldBounds.width, worldBounds.height);
-        }
-
-        // Reset both character sprites to spawn point using CharacterManager
-        if (this.characterManager) {
-            const tireekSprite = this.characterManager.characters.tireek.sprite;
-            const trystonSprite = this.characterManager.characters.tryston.sprite;
-            
-            if (tireekSprite) {
-                tireekSprite.setPosition(spawnPoint.x, spawnPoint.y);
-                tireekSprite.setVelocity(0, 0);
-                tireekSprite.body.reset(spawnPoint.x, spawnPoint.y);
-            }
-            if (trystonSprite) {
-                trystonSprite.setPosition(spawnPoint.x, spawnPoint.y);
-                trystonSprite.setVelocity(0, 0);
-                trystonSprite.body.reset(spawnPoint.x, spawnPoint.y);
-            }
-        }
-
-        // Reset player reference
-        this.player.setPosition(spawnPoint.x, spawnPoint.y);
-        this.player.setVelocity(0, 0);
-        this.player.body.reset(spawnPoint.x, spawnPoint.y);
-
-        // Restart camera follow
-        this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
-
-        // Reset player state
-        this.isJumping = false;
-        this.canDoubleJump = true;
-        this.doubleJumpUsed = false;
-        this.isFacingRight = true;
-
-        // Partially restore health (75% of max) using CharacterManager
-        if (this.characterManager) {
-            this.characterManager.heal('tireek', this.characterManager.characters.tireek.maxHealth * 0.75);
-            this.characterManager.heal('tryston', this.characterManager.characters.tryston.maxHealth * 0.75);
-        }
-
-        // Update UI
-        if (this.uiManager && this.characterManager) {
-            const activeChar = this.characterManager.getActiveCharacterData();
-            this.uiManager.updateHealthBar(activeChar.health, activeChar.maxHealth);
-            this.uiManager.updateDualCharacterHealth(
-                this.characterManager.characters.tireek.health,
-                this.characterManager.characters.tryston.health,
-                this.characterManager.getActiveCharacterName()
-            );
-        }
-
-        // Resume gameplay
-        this.isLoading = false;
-
-        console.log(`🎯 RESET COMPLETE: Player at (${Math.round(this.player.x)}, ${Math.round(this.player.y)})`);
-    }
-    
     // ========================================
     // LEVEL LIFECYCLE METHODS
     // ========================================
     
+    // ========================================
+    // PAUSE MENU
+    // ========================================
+    setupPauseKey() {
+        if (!this.input.keyboard) return;
+        this.input.keyboard.on('keydown-P', () => this.requestPause());
+        this.input.keyboard.on('keydown-ESC', () => this.requestPause());
+    }
+    
+    canPause() {
+        if (!this.isSceneReady || !this.player) return false;
+        if (this.levelLifecycle && this.levelLifecycle.busy) return false;
+        if (this.levelTransitionManager && this.levelTransitionManager.isTransitioning) return false;
+        if (this.dialogueManager && typeof this.dialogueManager.isActive === 'function' && this.dialogueManager.isActive()) return false;
+        if (this.characterManager && this.characterManager.isHandlingGameOver) return false;
+        if (this.scene.isActive('PauseScene') || this.scene.isPaused()) return false;
+        return true;
+    }
+    
+    // Returns true if the game paused. Pauses this scene and the touch scene (their
+    // update loops, physics, tweens, timers and input all stop) and launches PauseScene
+    // on top. UIScene keeps drawing the HUD.
+    requestPause() {
+        if (!this.canPause()) return false;
+        console.log('⏸️ Pausing game');
+        
+        // Silence only what is playing now, so resume never revives a sound that
+        // something else had stopped or paused on purpose
+        this._soundsPausedByMenu = (this.sound.sounds || []).filter(s => s && s.isPlaying);
+        this._soundsPausedByMenu.forEach(s => s.pause());
+        
+        this.scene.launch('PauseScene');
+        this.scene.bringToTop('PauseScene');
+        if (this.scene.isActive('TouchControlsScene')) this.scene.pause('TouchControlsScene');
+        this.scene.pause();
+        return true;
+    }
+    
+    resumeFromPause() {
+        console.log('▶️ Resuming game');
+        if (this.scene.isPaused('TouchControlsScene')) this.scene.resume('TouchControlsScene');
+        if (this.scene.isPaused()) this.scene.resume();
+        
+        (this._soundsPausedByMenu || []).forEach(s => { if (s && s.isPaused) s.resume(); });
+        this._soundsPausedByMenu = null;
+        
+        // Keys and touches held when the menu opened never got their release events
+        if (this.input.keyboard) this.input.keyboard.resetKeys();
+        if (this.touchControlsOverlay) this.touchControlsOverlay.onGameResumed();
+    }
+    
+    quitToMenu() {
+        console.log('🏠 Quitting to main menu from pause');
+        (this._soundsPausedByMenu || []).forEach(s => { if (s) s.stop(); });
+        this._soundsPausedByMenu = null;
+        
+        if (this.scene.isActive('TouchControlsScene') || this.scene.isPaused('TouchControlsScene')) {
+            this.scene.stop('TouchControlsScene');
+        }
+        // MainMenuScene.create() stops UIScene itself
+        if (window.sceneManager) window.sceneManager.currentScene = 'MainMenuScene';
+        this.scene.start('MainMenuScene'); // shuts this scene down (see shutdown()) and starts the menu
+    }
+    
     shutdown() {
         console.log('🎮 GameScene: Shutdown - Cleaning up all resources...');
         
-        // Destroy touch controls overlay to prevent duplicate rendering
+        // Everything this scene drew onto the OTHER scenes (UIScene, TouchControlsScene)
+        // must go, or the next create() stacks a second copy on top of it
         if (this.touchControlsOverlay) {
-            console.log('📱 Destroying touch controls overlay...');
             this.touchControlsOverlay.destroy();
             this.touchControlsOverlay = null;
         }
-        
-        // Cleanup UI manager
         if (this.uiManager) {
             this.uiManager.destroy();
+            this.uiManager = null;
+        }
+        if (this.dialogueManager) {
+            this.dialogueManager.destroy();
+            this.dialogueManager = null;
+        }
+        if (this.weaponManager && this.weaponManager.weaponUIContainer) {
+            this.weaponManager.weaponUIContainer.destroy();
+            this.weaponManager.weaponUIContainer = null;
+        }
+        if (this.audioManager && this.audioManager.destroy) {
+            this.audioManager.destroy();
         }
         
-        // Remove resize listener to prevent memory leaks
-        this.scale.off('resize');
+        // Only our own resize listener - UIScene has one on the same ScaleManager
+        if (this._onResize) {
+            this.scale.off('resize', this._onResize);
+            this._onResize = null;
+        }
         
         console.log('🎮 GameScene: Shutdown complete');
     }
     
-    onLevelCleanup() {
-        console.log('🎮 GameScene: Cleaning up level...');
-        
-        // Remove resize listener to prevent memory leaks
-        this.scale.off('resize');
-        
-        // Clear events
-        if (this.eventManager) {
-            this.eventManager.clearEvents();
-        }
-        
-        // Destroy all enemies using EnemySpawnManager
-        if (this.enemySpawnManager) {
-            this.enemySpawnManager.destroyAll();
-        }
-        
-        // Clear all projectiles
-        if (this.weaponManager) {
-            this.weaponManager.clearAllProjectiles();
-        }
-        
-        // Clear item pickups
-        if (this.itemPickupManager) {
-            this.itemPickupManager.clearAllPickups();
-        }
-        
-        // Stop enemy spawning
-        this.isLoading = true; // Stops enemy spawning in update loop
-    }
-    
     // ========================================
-    // LEVEL INITIALIZATION (delegated to LevelInitializationManager)
+    // LEVEL INITIALIZATION
     // ========================================
+    // Delegated entirely to LevelLifecycle (build/teardown) - see bindPlayer() above
+    // for the one hook it calls back into this scene.
     
-    onLevelInitializationComplete() {
-        console.log('🎯 Level initialization complete, creating characters and finalizing setup...');
-        
-        // Use LevelInitializationManager to complete initialization
-        const bounds = this.levelInitializationManager.onLevelInitializationComplete(
-            this.characterManager,
-            this.animationSetupManager,
-            () => this.updateLevelDisplay && this.updateLevelDisplay()
-        );
-        
-        // Update street bounds
-        this.streetTopLimit = bounds.streetTopLimit;
-        this.streetBottomLimit = bounds.streetBottomLimit;
-        this.inputManager.setStreetBounds(this.streetTopLimit, this.streetBottomLimit);
-        if (this.extrasManager) {
-            this.extrasManager.setStreetBounds(this.streetTopLimit, this.streetBottomLimit);
-        }
-        
-        // CRITICAL: Update player reference FIRST before any position checks or camera operations
-        // This ensures we're working with the correct player sprite from the new level
-        // Get the new player from character manager (characters were just created)
-        const newPlayer = this.characterManager.getActiveCharacter();
-        if (!newPlayer) {
-            console.error('🎯 ERROR: No active character found after character creation!');
-            return;
-        }
-        
-        // CRITICAL: Verify this is actually a new player sprite, not the old one
-        // Check if player reference changed or if we need to update it
-        if (this.player && this.player === newPlayer) {
-            console.log(`🎯 Player reference unchanged, but verifying it's the correct sprite...`);
-        } else {
-            console.log(`🎯 Updating player reference from ${this.player ? 'old' : 'null'} to new sprite`);
-        }
-        
-        this.player = newPlayer;
-        this.currentCharacterConfig = this.characterManager.currentCharacterConfig;
-        this.selectedCharacter = this.characterManager.getActiveCharacterName();
-        console.log(`🎯 Player reference updated: ${this.selectedCharacter}`);
-        console.log(`🎯 New player sprite position: (${this.player.x}, ${this.player.y})`);
-        console.log(`🎯 New player sprite active: ${this.player.active}, visible: ${this.player.visible}`);
-        
-        // CRITICAL: Get spawn point and reset player position BEFORE any camera operations
-        // This prevents the old camera scroll position from affecting player positioning
-        const spawnPoint = this.worldManager.getSpawnPoint();
-        console.log(`🎯 Spawn point for new level: (${spawnPoint.x}, ${spawnPoint.y})`);
-        console.log(`🎯 Player position vs spawn: player at (${this.player.x}, ${this.player.y}), spawn at (${spawnPoint.x}, ${spawnPoint.y})`);
-        
-        // Stop camera follow immediately to prevent interference
-        this.cameras.main.stopFollow();
-        
-        // Log player position (characters were just created at spawn point)
-        console.log(`🎯 Player position after character creation: (${this.player.x}, ${this.player.y})`);
-        console.log(`🎯 Spawn point: (${spawnPoint.x}, ${spawnPoint.y})`);
-        if (this.player.body) {
-            console.log(`🎯 Player body position: (${this.player.body.x}, ${this.player.body.y})`);
-        }
-        
-        // CRITICAL: Reset camera scroll position to spawn point BEFORE any other camera operations
-        // This prevents the old camera position from affecting the new level
-        const worldBounds = this.physics && this.physics.world && this.physics.world.bounds 
-            ? this.physics.world.bounds 
-            : { x: 0, width: 1200 };
-        // camera.width is in screen pixels, but we need world coordinates
-        // World width visible = screen width / zoom, or use virtualWidth directly
-        const virtualWidth = this.virtualWidth || 1200;
-        const cameraWorldWidth = virtualWidth; // This is the world width the camera can see
-        const minCameraX = worldBounds.x;
-        const maxCameraX = worldBounds.x + worldBounds.width - cameraWorldWidth;
-        const cameraTargetX = Math.max(minCameraX, Math.min(maxCameraX, spawnPoint.x - cameraWorldWidth / 2));
-        
-        console.log(`🎯 Camera positioning: spawn at (${spawnPoint.x}, ${spawnPoint.y}), screen width=${this.cameras.main.width}, zoom=${this.cameras.main.zoom}, world width=${cameraWorldWidth}, targetX=${cameraTargetX}`);
-        
-        console.log(`🎯 Resetting camera scroll from (${this.cameras.main.scrollX}, ${this.cameras.main.scrollY}) to (${cameraTargetX}, 0)`);
-        this.cameras.main.setScroll(cameraTargetX, 0);
-        console.log(`🎯 Camera positioned at spawn: scrollX=${cameraTargetX}, player at (${spawnPoint.x}, ${spawnPoint.y}), world bounds: x=${worldBounds.x}, width=${worldBounds.width}`);
-        
-        // Initialize checkpoint system with level config and world bounds
-        if (this.checkpointManager && this.physics && this.physics.world && this.physics.world.bounds) {
-            const levelConfig = this.levelManager?.currentLevelConfig || this.selectedLevelConfig;
-            const worldBounds = this.physics.world.bounds;
-            this.checkpointManager.initialize(levelConfig, worldBounds);
-            console.log('📍 Checkpoint system initialized');
-        }
-        
-        // Update score display if we have a preserved score (from Game Over restart)
-        if (this.uiManager && this.playerScore > 0) {
-            this.uiManager.updateScoreDisplay(this.playerScore);
-            console.log(`🔄 Score display updated: ${this.playerScore}`);
-        }
-        
-        // Initialize animation state manager now that player exists
-        this.animationManager = new AnimationStateManager(this.player);
-        console.log('🎯 Animation manager initialized');
-        
-        // Log player position before starting camera follow
-        const finalSpawnCheck = this.worldManager.getSpawnPoint();
-        console.log(`🎯 Before camera follow: player at (${this.player?.x || 'N/A'}, ${this.player?.y || 'N/A'}), spawn at (${finalSpawnCheck.x}, ${finalSpawnCheck.y})`);
-        
-        // Start camera following player LAST (only if not locked by event system AND not in transition)
-        // During transitions, the transition manager will handle camera positioning
-        // This ensures player position is correct before camera starts following
-        if (!this.eventCameraLocked && !this.levelTransitionManager?.isTransitioning) {
-            console.log(`🎯 Starting camera follow on player at (${Math.round(this.player.x)}, ${Math.round(this.player.y)})`);
-            this.cameras.main.startFollow(this.player, true, 0.1, 0);
-            console.log(`🎯 Camera follow started. Camera scroll: (${this.cameras.main.scrollX}, ${this.cameras.main.scrollY})`);
-        } else {
-            if (this.levelTransitionManager?.isTransitioning) {
-                console.log(`🎯 Camera follow skipped (level transition in progress - transition manager will handle)`);
-            } else {
-                console.log(`🎯 Camera follow skipped (event camera locked)`);
-            }
-        }
-        
-        // Check if any events should trigger immediately (player already past trigger)
-        // Skip during level transitions - transition manager will handle this
-        // Skip during Game Over restarts - we want to start fresh from level beginning
-        if (this.eventManager && this.player && !this.levelTransitionManager?.isTransitioning && !this.isGameOverRestart) {
-            this.eventManager.checkInitialTriggers();
-        } else if (this.isGameOverRestart) {
-            console.log('🔄 Skipping event auto-triggers due to Game Over restart');
-            // Clear the flag after use
-            this.isGameOverRestart = false;
-        }
-        
-        // Update debug manager references if it exists
-        if (this.debugManager) {
-            this.debugManager.setReferences(
-                this.player,
-                this.enemies,
-                this.streetTopLimit,
-                this.streetBottomLimit,
-                () => this.combatManager?.getPlayerAttackHitbox?.() || null
-            );
-        }
-
-        // Create effect animations immediately (before character switch can happen)
-        if (this.effectSystem) {
-            this.effectSystem.createEffectAnimations();
-            
-            // Ensure crisp pixel-art filtering for effect spritesheets
-            try {
-                if (this.textures.exists('tornado')) {
-                    const tex = this.textures.get('tornado');
-                    if (tex && tex.setFilter) {
-                        tex.setFilter(Phaser.Textures.FilterMode.NEAREST);
-                    }
-                }
-            } catch (e) {
-                console.warn('Could not set pixel filter for tornado spritesheet:', e);
-            }
-        }
-        
-        // Set up animation complete listeners for current character
-        this.animationSetupManager.setupAnimationEvents(
-            this.currentCharacterConfig,
-            this.player,
-            this.animationManager,
-            this.isJumping
-        );
-        
-        // SYNC FIX: Ensure we use the active enemies array from spawn manager before creating CombatManager
-        if (this.enemySpawnManager && this.enemySpawnManager.enemies) {
-            if (this.enemies !== this.enemySpawnManager.enemies) {
-                console.log('🔄 Re-syncing enemies array before CombatManager init');
-                this.enemies = this.enemySpawnManager.enemies;
-            }
-        }
-
-        // Initialize CombatManager
-        this.combatManager = new CombatManager(this, this.characterManager, this.enemies, this.levelManager);
-        this.combatManager.initialize(
-            this.player,
-            this.animationManager,
-            this.uiManager,
-            this.audioManager,
-            this.streetTopLimit,
-            this.streetBottomLimit,
-            this.autoSwitchThreshold
-        );
-        
-        // Initialize PlayerPhysicsManager
-        this.playerPhysicsManager = new PlayerPhysicsManager(
-            this,
-            this.player,
-            this.animationManager,
-            this.environmentManager,
-            this.inputManager
-        );
-        this.playerPhysicsManager.initialize(
-            this.streetTopLimit,
-            this.streetBottomLimit,
-            this.audioManager
-        );
-        
-        // CRITICAL: If we're in a level transition, keep physics manager disabled
-        // This prevents the player from moving during the settle delay
-        if (this.levelTransitionManager?.isTransitioning) {
-            this.playerPhysicsManager.disabled = true;
-            console.log('🔧 PlayerPhysicsManager disabled during level transition');
-        }
-        
-        // Initialize EnemySpawnManager references
-        this.enemySpawnManager.setReferences(
-            this.player,
-            this.streetTopLimit,
-            this.streetBottomLimit,
-            this.eventCameraLocked || false,
-            this.playerCurrentHealth,
-            this.playerMaxHealth,
-            this.levelManager
-        );
-        
-        // Initialize DebugManager references if it exists
-        if (this.debugManager) {
-            this.debugManager.setReferences(
-                this.player,
-                this.enemies,
-                this.streetTopLimit,
-                this.streetBottomLimit,
-                () => this.combatManager.getPlayerAttackHitbox()
-            );
-        }
-        
-        // Start player idle animation
-        this.player.anims.play(`${this.currentCharacterConfig.name}_idle`, true);
-    }
-    
-    updateLevelDisplay() {
-        // Update level info in UI
-        if (this.uiManager) {
-            this.uiManager.updateLevelDisplay(
-                this.levelManager.currentLevel,
-                (this.levelManager.getCurrentLevelConfig() && this.levelManager.getCurrentLevelConfig().name) || 'Unknown Level'
-            );
-        }
-    }
 }

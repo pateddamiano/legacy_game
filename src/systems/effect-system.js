@@ -28,6 +28,18 @@ class EffectSystem {
             frameHeight: 96
         });
         
+        // The Negatives' take on the tornado (same 3-frame layout), played when a boss spawns in
+        this.scene.load.spritesheet('negative_tornado', 'assets/effects/negative_tornado.png', {
+            frameWidth: 96,
+            frameHeight: 96
+        });
+
+        // Blue fire trail for the Negatives' thrown record (8 frames stacked vertically)
+        this.scene.load.spritesheet('bluefire', 'assets/effects/bluefire_8frame.png', {
+            frameWidth: 128,
+            frameHeight: 128
+        });
+        
         // Add load completion callback for tornado
         this.scene.load.on('filecomplete-spritesheet-tornado', (key, type, data) => {
             console.log('✅ Tornado spritesheet loaded successfully:', { key, type });
@@ -37,6 +49,28 @@ class EffectSystem {
     createEffectAnimations() {
         console.log('🌪️ Creating effect animations...');
         
+        // Blue fire (looping) - used by projectiles whose weapon config has effect: 'bluefire'
+        if (this.scene.textures.exists('bluefire') && !this.scene.anims.exists('bluefire_effect')) {
+            const fireTexture = this.scene.textures.get('bluefire');
+            this.scene.anims.create({
+                key: 'bluefire_effect',
+                frames: this.scene.anims.generateFrameNumbers('bluefire', { start: 0, end: fireTexture.frameTotal - 2 }),
+                frameRate: 16,
+                repeat: -1
+            });
+        }
+        
+        // Negative tornado (play once) - spawnTornadoEffect(..., 'negative_tornado')
+        if (this.scene.textures.exists('negative_tornado') && !this.scene.anims.exists('negative_tornado_effect')) {
+            const negTexture = this.scene.textures.get('negative_tornado');
+            this.scene.anims.create({
+                key: 'negative_tornado_effect',
+                frames: this.scene.anims.generateFrameNumbers('negative_tornado', { start: 0, end: negTexture.frameTotal - 2 }),
+                frameRate: 12,
+                repeat: 0
+            });
+        }
+
         // Check if spritesheet exists first
         if (!this.scene.textures.exists('tornado')) {
             console.warn('❌ Tornado spritesheet not found in textures, skipping animation creation');
@@ -86,23 +120,24 @@ class EffectSystem {
     // EFFECT SPAWNING
     // ========================================
     
-    spawnTornadoEffect(x, y, scale, depth, onComplete) {
+    // variant: 'tornado' (default, the player's switch effect) or 'negative_tornado' (boss spawn-in)
+    spawnTornadoEffect(x, y, scale, depth, onComplete, variant = 'tornado') {
         // Check if animation exists
-        if (!this.scene.anims.exists('tornado_effect')) {
-            console.warn('⚡ Tornado animation not found, cannot spawn effect');
+        if (!this.scene.anims.exists(`${variant}_effect`)) {
+            console.warn(`⚡ ${variant} animation not found, cannot spawn effect`);
             if (onComplete) {
                 onComplete();
             }
             return { sprite: null, duration: 0 };
         }
-        
+
         // Create tornado effect sprite
-        const tornadoSprite = this.scene.add.sprite(x, y, 'tornado');
+        const tornadoSprite = this.scene.add.sprite(x, y, variant);
         tornadoSprite.setScale(scale * 1.2); // Slightly larger than character
         tornadoSprite.setDepth(depth + 1); // Above character
-        
+
         // Play tornado animation
-        tornadoSprite.anims.play('tornado_effect');
+        tornadoSprite.anims.play(`${variant}_effect`);
         
         // Play tornado wind sound effect
         if (this.scene.audioManager) {
@@ -130,12 +165,199 @@ class EffectSystem {
         
         console.log('🌪️ Tornado effect spawned at', { x, y, scale, duration: animationDuration });
         
-        // Apply wind effect to nearby enemies
-        this.applyWindEffectToEnemies(x, y, WIND_RADIUS, WIND_BASE_FORCE, WIND_DURATION);
+        // Apply wind effect to nearby enemies (the player's tornado only - a boss
+        // spawning in shouldn't shove the other enemies around)
+        if (variant === 'tornado') {
+            this.applyWindEffectToEnemies(x, y, WIND_RADIUS, WIND_BASE_FORCE, WIND_DURATION);
+        }
         
         return { sprite: tornadoSprite, duration: animationDuration };
     }
     
+    // ========================================
+    // GAME FEEL: HIT-STOP, BOSS SHAKE, DEATH JUICE, LOW-HEALTH VIGNETTE
+    // ========================================
+    // Tunables live in GAME_CONFIG.juice
+
+    get juice() {
+        return (typeof GAME_CONFIG !== 'undefined' && GAME_CONFIG.juice) || null;
+    }
+
+    // Freeze the world for a few frames. Uses the physics and animation time scales
+    // rather than world.isPaused, which dialogue, death and event pauses all toggle
+    // directly - stacking on those would risk un-pausing them.
+    hitStop(duration) {
+        if (!duration || duration <= 0) return;
+        const s = this.scene;
+        const until = s.time.now + duration;
+        if (this._hitStopActive && until <= this._hitStopUntil) return; // shorter than the one running
+        this._hitStopUntil = until;
+        if (!this._hitStopActive) {
+            this._hitStopActive = true;
+            this._hitStopSaved = { physics: s.physics.world.timeScale, anims: s.anims.globalTimeScale };
+            s.physics.world.timeScale = 1e6;
+            s.anims.globalTimeScale = 0;
+        }
+        // Exactly one timer owns the freeze. A longer stop requested mid-freeze replaces
+        // it. Its callback must never decide "too early" and bail: Phaser timers count a
+        // smoothed frame delta while time.now is the raw clock, so on an uneven frame
+        // rate (phones) the timer can fire before time.now reaches `until`. The old
+        // version returned in that case and, the timer being one-shot, nothing ever
+        // unfroze the world - buttons still made sounds but nobody could move.
+        if (this._hitStopTimer) this._hitStopTimer.remove(false);
+        this._hitStopTimer = s.time.delayedCall(duration, () => this.endHitStop());
+    }
+
+    endHitStop() {
+        const s = this.scene;
+        if (this._hitStopTimer) {
+            this._hitStopTimer.remove(false);
+            this._hitStopTimer = null;
+        }
+        if (!this._hitStopActive) return;
+        this._hitStopActive = false;
+        this._hitStopUntil = 0;
+        s.physics.world.timeScale = this._hitStopSaved.physics;
+        s.anims.globalTimeScale = this._hitStopSaved.anims;
+        // Drop the frame time that banked up while frozen, or Arcade's fixed step would
+        // run catch-up steps on the next frame and lurch everything forward
+        s.physics.world._elapsed = 0;
+    }
+
+    // Safety net, called every frame: if the freeze somehow outlives its timer, end it
+    checkHitStop() {
+        if (this._hitStopActive && this.scene.time.now >= this._hitStopUntil + 250) {
+            console.warn('⏱️ Hit-stop overran its timer - ending it from update()');
+            this.endHitStop();
+        }
+    }
+
+    isBossFightActive() {
+        const bosses = this.scene.bosses || [];
+        return bosses.some(b => b && b.sprite && b.sprite.active && b.health > 0);
+    }
+
+    bossShake(kind) {
+        const cfg = this.juice && this.juice.bossShake && this.juice.bossShake[kind];
+        if (!cfg) return;
+        if (window.GameSettings && window.GameSettings.reduceEffects()) return; // Settings: reduce flashing & shake
+        this.scene.cameras.main.shake(cfg.duration, cfg.intensity);
+    }
+
+    // Called right after the player lands a hit (punch or record) on an enemy
+    onEnemyHit(enemy) {
+        const juice = this.juice;
+        if (!juice || !enemy) return;
+        const killed = enemy.isBoss ? enemy.health <= 0 : enemy.state === ENEMY_STATES.DEAD;
+        const stop = juice.hitStop || {};
+        this.hitStop(killed ? stop.kill : (enemy.isBoss ? stop.bossHit : stop.hit));
+        if (enemy.isBoss) this.bossShake(killed ? 'defeat' : 'hit');
+    }
+
+    // Called when the player takes damage; only shakes while a boss is up
+    onPlayerHurt() {
+        if (this.isBossFightActive()) this.bossShake('hurt');
+    }
+
+    // Regular enemy killing blow: shove away from the hit and squash-and-stretch the body
+    onEnemyDeath(enemy, source) {
+        const cfg = this.juice && this.juice.enemyDeath;
+        const sprite = enemy && enemy.sprite;
+        if (!cfg || !sprite || !sprite.active) return;
+
+        if (source && sprite.body) {
+            const dir = sprite.x >= source.x ? 1 : -1;
+            sprite.setVelocityX(dir * cfg.knockback);
+            this.scene.time.delayedCall(cfg.knockbackDuration, () => {
+                if (sprite.active && sprite.body) sprite.setVelocityX(0);
+            });
+        }
+
+        // Enemy.update() returns early once DEAD, so perspective scaling won't fight this tween
+        this.scene.tweens.add({
+            targets: sprite,
+            scaleX: sprite.scaleX * cfg.stretchX,
+            scaleY: sprite.scaleY * cfg.squashY,
+            duration: cfg.squashDuration,
+            yoyo: true,
+            ease: 'Quad.easeOut'
+        });
+    }
+
+    // Drive the vignette from the active character's health fraction (0-1). Call every frame.
+    updateHealthVignette(healthFraction) {
+        const cfg = this.juice && this.juice.lowHealthVignette;
+        if (!cfg) return;
+        const cam = this.scene.cameras.main;
+        if (this._vignette === undefined) {
+            // Post FX are WebGL only; remember a null so we don't retry every frame on Canvas
+            const webgl = this.scene.sys.renderer && this.scene.sys.renderer.type === Phaser.WEBGL;
+            this._vignette = (webgl && cam.postFX) ? cam.postFX.addVignette(0.5, 0.5, 1, 0) : null;
+        }
+        if (!this._vignette) return;
+
+        // 0 above the threshold, closing in and darkening towards 0 health
+        const t = Phaser.Math.Clamp(1 - healthFraction / cfg.startBelow, 0, 1);
+        let strength = t * cfg.maxStrength;
+        // No pulsing when the player has asked for reduced flashing
+        if (t > 0 && healthFraction <= cfg.pulseBelow && !(window.GameSettings && window.GameSettings.reduceEffects())) {
+            const pulse = (Math.sin((this.scene.time.now / cfg.pulsePeriod) * Math.PI * 2) + 1) / 2;
+            strength += pulse * cfg.pulseStrength;
+        }
+        this._vignette.strength = strength;
+        this._vignette.radius = 1 - t * (1 - cfg.minRadius);
+    }
+
+    // ========================================
+    // PLAYER AURA (looping fire behind the player, e.g. the final boss fight)
+    // ========================================
+    // opts: effect (spritesheet/anim base, default 'bluefire'), hue (degrees to rotate the
+    // colours - 190 turns the blue fire yellow; 0 keeps it), scale (multiple of the player's
+    // height, default 1.1), offsetY (px below the player's centre for the flame base), alpha
+
+    setPlayerAura(opts = {}) {
+        const effect = opts.effect || 'bluefire';
+        if (!this.scene.anims.exists(`${effect}_effect`)) {
+            console.warn(`🔥 Player aura: animation ${effect}_effect not found`);
+            return;
+        }
+        this.clearPlayerAura();
+
+        const aura = this.scene.add.sprite(0, 0, effect);
+        aura.setOrigin(0.5, 0.85);          // flame base sits near the feet
+        aura.setAlpha(opts.alpha !== undefined ? opts.alpha : 0.9);
+        aura.anims.play(`${effect}_effect`, true);
+        // Real hue rotation (a tint would only multiply the blue towards black). WebGL only.
+        if (opts.hue && aura.preFX) {
+            aura.preFX.addColorMatrix().hue(opts.hue);
+        }
+        aura.auraOpts = { scale: opts.scale !== undefined ? opts.scale : 1.1, offsetY: opts.offsetY || 0 };
+        this._playerAura = aura;
+        this.updatePlayerAura();
+        console.log(`🔥 Player aura on (${effect}, hue ${opts.hue || 0})`);
+    }
+
+    clearPlayerAura() {
+        if (this._playerAura) {
+            this._playerAura.destroy();
+            this._playerAura = null;
+        }
+    }
+
+    // Follows whichever character is active (survives switches) and stays just behind them
+    updatePlayerAura() {
+        const aura = this._playerAura;
+        if (!aura || !aura.active) return;
+        const player = this.scene.player;
+        if (!player || !player.active) { aura.setVisible(false); return; }
+        aura.setVisible(player.visible);   // hidden with the player during the switch tornado
+        const targetHeight = player.displayHeight * aura.auraOpts.scale;
+        aura.setScale(targetHeight / aura.height);
+        aura.x = player.x;
+        aura.y = player.y + player.displayHeight * 0.35 + aura.auraOpts.offsetY;
+        aura.setDepth(player.depth - 1);
+    }
+
     // ========================================
     // WIND EFFECT
     // ========================================
@@ -210,6 +432,8 @@ class EffectSystem {
     
     // Clean up all active effects (useful for scene transitions)
     cleanupAllEffects() {
+        this.endHitStop();
+        this.clearPlayerAura();
         this.activeEffects.forEach(sprite => {
             if (sprite && sprite.active) {
                 sprite.destroy();
@@ -220,6 +444,9 @@ class EffectSystem {
     }
     
     update() {
+        this.checkHitStop();
+        this.updatePlayerAura();
+
         // Update effect positions to follow targets
         this.activeEffects.forEach(sprite => {
             if (sprite && sprite.active && sprite.target) {

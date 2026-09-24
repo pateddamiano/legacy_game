@@ -7,6 +7,7 @@
     "metadata": "assets/backgrounds/level_2_segments/metadata.json"
   },
   "world": { "top": 350, "bottom": 491 },
+  "perspectiveVariance": 0.6,
   "spawn": { "x": 290, "y": 410 },
   "audio": { 
     "music": "casinoMusic",
@@ -61,7 +62,9 @@
         { "type": "clearEnemiesOffscreen", "xThreshold": 6800, "direction": "right", "excludeIds": ["boss_critic"] },
         { "type": "spawnBoss", "bossType": "critic", "position": { "x": 7760, "y": 425 }, "id": "boss_critic" },
         { "type": "playMusic", "musicKey": "staminaMusic" },
-        { "type": "camera", "pan": { "x": 6803, "duration": 2000, "ease": "Power2" } },
+        { "type": "showEmote", "target": "player", "text": "!", "duration": 2600 },
+        { "type": "wait", "duration": 400 },
+        { "type": "camera", "pan": { "x": 6803 }, "duration": 2000, "ease": "Power2" },
         { "type": "camera", "setBounds": { "x": 6803, "y": 0, "width": 2400, "height": 720 } },
         { "type": "wait", "duration": 500 },
         { "type": "setDialogueStyle", "position": { "x": 640, "y": 600 }, "textSizes": { "speaker": 35, "message": 35 } },
@@ -86,6 +89,8 @@
         { "type": "setDialogueStyle", "position": { "x": 640, "y": 360 }, "size": { "width": 700, "height": 200 }, "textSizes": { "speaker": 40, "message": 35 }, "wordWrapWidth": 660 },
         { "type": "dialogue", "dialogue": { "speaker": "", "text": "The Critic falls defeated on the platform. The path forward is clear." } },
         { "type": "dialogue", "dialogue": { "speaker": "", "text": "Find and eliminate The Negatives before they find you..." } },
+        { "type": "fade", "direction": "out", "duration": 1000, "color": { "r": 0, "g": 0, "b": 0 } },
+        { "type": "cutscene", "cutsceneId": "level_3_alley" },
         { "type": "loadLevel", "levelId": 3 }
       ]
     }

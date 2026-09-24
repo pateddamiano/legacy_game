@@ -124,7 +124,11 @@ class SceneManager {
         console.log('🎬 Game.scene exists?', !!this.game?.scene);
         
         // If we're already in the target scene, don't restart it
-        if (this.currentScene === sceneKey) {
+        // currentScene can be stale: the menu starts GameScene with scene.start() directly,
+        // so after a full run it still says 'MainMenuScene' and the return to the menu
+        // from the ending was skipped - black screen, nothing running. Only skip when
+        // the scene is genuinely active.
+        if (this.currentScene === sceneKey && this.game.scene.isActive(sceneKey)) {
             console.log(`🎬 ⚠️ Already in ${sceneKey}, skipping transition`);
             return;
         }

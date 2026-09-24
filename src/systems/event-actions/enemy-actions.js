@@ -76,9 +76,9 @@ class EnemyActions {
         }
         
         // Add to enemies array
-        if (!this.scene.enemies) {
-            this.scene.enemies = [];
-        }
+        // Resolve through EventUtilities so we push into the array the spawn manager
+        // and combat manager are actually reading (see getEnemiesArray)
+        this.eventManager.utilities.getEnemiesArray();
         const enemyIndex = this.scene.enemies.length;
         this.scene.enemies.push(enemy);
         
@@ -115,6 +115,9 @@ class EnemyActions {
                 }
             });
         }
+        
+        // Resolve the new body against the world bounds now (see GameScene.settlePhysics)
+        if (this.scene.settlePhysics) this.scene.settlePhysics();
         
         // Advance to next action
         this.advanceAction();
@@ -181,12 +184,13 @@ class EnemyActions {
         }
     }
     
+    // action._noAdvance: destroy without advancing the event (an async move calls this)
     executeDestroyEnemy(action) {
         const target = action.target;
         
         if (!target) {
             console.warn('🎬 DestroyEnemy action missing target');
-            this.advanceAction();
+            if (!action._noAdvance) this.advanceAction();
             return;
         }
         
@@ -204,7 +208,7 @@ class EnemyActions {
             if (this.scene.eventEnemyProtection) {
                 this.scene.eventEnemyProtection.unregisterEnemy(target);
             }
-            this.advanceAction();
+            if (!action._noAdvance) this.advanceAction();
             return;
         }
         
@@ -303,7 +307,7 @@ class EnemyActions {
         console.log(`🎬 Enemy destroyed: ${target} (removed from array and map)`);
         
         // Advance action synchronously (no delays)
-        this.advanceAction();
+        if (!action._noAdvance) this.advanceAction();
     }
     
     executeWaitForEnemyDestroy(action) {

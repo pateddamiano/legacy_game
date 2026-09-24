@@ -80,7 +80,7 @@ class InputManager {
             sfxToggle: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.N),
             // Level testing keys
             nextLevel: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L),
-            levelStatus: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P),
+            // P is the pause key - handled in GameScene.setupPauseKey(), not here
             // Touch controls toggle (for testing)
             touchControlsToggle: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.T)
         };
@@ -168,7 +168,7 @@ class InputManager {
             this.inputState.sfxToggle = this.keys.sfxToggle ? Phaser.Input.Keyboard.JustDown(this.keys.sfxToggle) : false;
         // Level testing input states
         this.inputState.nextLevel = this.keys.nextLevel ? Phaser.Input.Keyboard.JustDown(this.keys.nextLevel) : false;
-        this.inputState.levelStatus = this.keys.levelStatus ? Phaser.Input.Keyboard.JustDown(this.keys.levelStatus) : false;
+        this.inputState.levelStatus = false; // P was repurposed as the pause key
         this.inputState.touchControlsToggle = this.keys.touchControlsToggle ? Phaser.Input.Keyboard.JustDown(this.keys.touchControlsToggle) : false;
             
             // Update unified input controller with keyboard actions
@@ -189,8 +189,51 @@ class InputManager {
     // MOVEMENT HANDLING
     // ========================================
     
+    // -1 / 0 / 1 from the stick (past a deadzone) or the arrow keys
+    getHorizontalIntent() {
+        const DEADZONE = 0.35;
+        let x = 0;
+        if (this.unifiedInput) {
+            x = this.unifiedInput.getMovementVector().x;
+        } else if (this.inputState.left) {
+            x = -1;
+        } else if (this.inputState.right) {
+            x = 1;
+        }
+        if (x <= -DEADZONE) return -1;
+        if (x >= DEADZONE) return 1;
+        return 0;
+    }
+    
+    // Movement wins over a punch that is already playing: pushing the stick the OTHER
+    // way cancels the rest of the swing so the player can turn and walk off straight
+    // away. Before, a ground attack blocked all movement and turning for its whole
+    // length, and when mashing there is nearly always a swing playing - so the stick
+    // was effectively ignored. The first ATTACK_CANCEL_MIN_MS of a swing can't be
+    // cancelled, so wiggling the stick can't be used to punch faster.
+    cancelAttackIfTurning(player, animationManager, isJumping) {
+        if (!player || !animationManager || isJumping) return false;
+        if (animationManager.currentState !== 'attack' || !animationManager.animationLocked) return false;
+        
+        const intent = this.getHorizontalIntent();
+        if (intent === 0) return false;
+        const facing = player.flipX ? -1 : 1;
+        if (intent === facing) return false; // pushing forward: let the punch finish
+        
+        const startedAt = animationManager.attackStartedAt || 0;
+        if (this.scene.time.now - startedAt < InputManager.ATTACK_CANCEL_MIN_MS) return false;
+        
+        animationManager.animationLocked = false;
+        animationManager.lockTimer = 0;
+        animationManager.currentState = 'idle';
+        if (typeof animationManager.clearQueue === 'function') animationManager.clearQueue();
+        return true;
+    }
+    
     handleMovement(player, animationManager, isJumping) {
         if (!player || !player.body) return;
+        
+        this.cancelAttackIfTurning(player, animationManager, isJumping);
         
         const body = player.body;
         let isMoving = false;
@@ -304,8 +347,19 @@ class InputManager {
         if (!attackPressed) return false;
         
         const charName = player.characterConfig.name;
-        
+
+        // Returns true ONLY when a new swing starts. GameScene uses that to re-arm
+        // hitByCurrentAttack on every enemy, so returning true for a press that merely
+        // buffers a follow-up (or re-triggers an air kick mid-air) let the swing already
+        // in progress land again on each tap - mashing the touch button melted bosses.
         if (isJumping) {
+            if (animationManager.currentState === 'airkick' && animationManager.animationLocked) {
+                return false; // already kicking - don't restart the swing
+            }
+            // Kick the way the stick points
+            const airIntent = this.getHorizontalIntent();
+            if (airIntent !== 0) player.setFlipX(airIntent < 0);
+            
             // Air attack - shorter lock time and different state
             animationManager.currentState = 'airkick';
             animationManager.animationLocked = true;
@@ -319,10 +373,17 @@ class InputManager {
         } else {
             // Ground combo attack
             if (animationManager.currentState === 'attack') {
-                // Try to queue the attack if we're already attacking
+                // Try to queue the attack if we're already attacking (the current swing
+                // keeps its hit flags - nothing new has started)
                 animationManager.queueAttack();
+                return false;
             } else {
-                // Start new attack
+                // Start new attack, facing the way the stick points so the player can
+                // turn and hit an enemy behind them in one move
+                const intent = this.getHorizontalIntent();
+                if (intent !== 0) player.setFlipX(intent < 0);
+                animationManager.attackStartedAt = this.scene.time.now;
+                
                 const attackType = animationManager.startCombo();
                 const animConfig = player.characterConfig.animations[attackType];
                 const animationDuration = (animConfig.frames / animConfig.frameRate) * 1000;
@@ -583,3 +644,6 @@ class InputManager {
 
 // Make InputManager available globally
 window.InputManager = InputManager;
+
+// A ground punch can be cancelled by pushing the stick backwards only after this long
+InputManager.ATTACK_CANCEL_MIN_MS = 150;
