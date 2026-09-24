@@ -388,6 +388,9 @@ class TouchControlsOverlay {
             recordThrow: null
         };
         
+        // Pause button (top centre of the screen; taps call GameScene.requestPause)
+        this.pauseButton = null;
+        
         // Visibility state
         this.visible = false;
         
@@ -545,11 +548,11 @@ class TouchControlsOverlay {
             this.buttons.jump.setBaseScale(responsiveScale);
         }
         
-        // Left: Attack (Punch)
+        // Bottom: Attack (Punch)
         this.buttons.punch = new ActionButton(
             this.renderScene,
-            buttonCenterX - spacing,
-            buttonCenterY,
+            buttonCenterX,
+            buttonCenterY + spacing,
             finalButtonSize,
             'ATTACK',
             'punch',
@@ -560,10 +563,10 @@ class TouchControlsOverlay {
             this.buttons.punch.setBaseScale(responsiveScale);
         }
         
-        // Right: Switch (Character Switch)
+        // Left: Switch (Character Switch)
         this.buttons.characterSwitch = new ActionButton(
             this.renderScene,
-            buttonCenterX + spacing,
+            buttonCenterX - spacing,
             buttonCenterY,
             finalButtonSize,
             'SWITCH',
@@ -575,11 +578,11 @@ class TouchControlsOverlay {
             this.buttons.characterSwitch.setBaseScale(responsiveScale);
         }
         
-        // Bottom: Throw (Record Throw)
+        // Right: Throw (Record Throw)
         this.buttons.recordThrow = new ActionButton(
             this.renderScene,
-            buttonCenterX,
-            buttonCenterY + spacing,
+            buttonCenterX + spacing,
+            buttonCenterY,
             finalButtonSize,
             'THROW',
             'recordThrow',
@@ -589,6 +592,8 @@ class TouchControlsOverlay {
         if (this.buttons.recordThrow) {
             this.buttons.recordThrow.setBaseScale(responsiveScale);
         }
+        
+        this.createPauseButton(metrics, responsiveScale);
         
         // Store scale for potential updates on resize
         this.currentScale = responsiveScale;
@@ -641,7 +646,92 @@ class TouchControlsOverlay {
         
         this.currentScale = responsiveScale;
         this.repositionJoystick(responsiveScale);
+        this.repositionPauseButton(responsiveScale);
         console.log('📱 Touch controls scale updated to:', responsiveScale);
+    }
+    
+    // ========================================
+    // PAUSE BUTTON
+    // ========================================
+    // A small "||" button just right of the top centre of the screen - clear of the HUD
+    // (health bar + weapon recharge icon on the left, score on the right, boss bar at
+    // the bottom) and of both thumbs.
+    createPauseButton(metrics, scale) {
+        const s = this.renderScene;
+        const cfg = this.config.buttons;
+        const size = Math.max(cfg.size * 0.46 * scale, 38);
+        const layerDepth = (typeof cfg.layerDepth === 'number') ? cfg.layerDepth : 5000;
+        
+        const container = s.add.container(0, 0);
+        container.setDepth(layerDepth);
+        container.setScrollFactor(0);
+        
+        const depth = s.add.circle(cfg.depthOffset ?? 5, cfg.depthOffset ?? 5, size / 2, cfg.depthColor ?? 0x2a2a2a, cfg.depthOpacity ?? 0.6);
+        const glow = s.add.circle(0, 0, size / 2 + 5, cfg.glowColor ?? 0x6fd3ff, (typeof cfg.glowOpacity === 'number') ? cfg.glowOpacity : 0.25);
+        if (glow.setBlendMode) glow.setBlendMode(Phaser.BlendModes.ADD);
+        const bg = s.add.circle(0, 0, size / 2, cfg.backgroundColor, cfg.opacity);
+        bg.setStrokeStyle(cfg.strokeWidth ?? 3, cfg.strokeColor ?? 0xFFFFFF, cfg.strokeAlpha ?? 0.7);
+        
+        // Two vertical bars
+        const bars = s.add.graphics();
+        bars.fillStyle(cfg.textColor ?? 0xFFFFFF, 1);
+        const barW = size * 0.13, barH = size * 0.42, gap = size * 0.12;
+        bars.fillRect(-gap - barW, -barH / 2, barW, barH);
+        bars.fillRect(gap, -barH / 2, barW, barH);
+        
+        container.add([depth, glow, bg, bars]);
+        
+        bg.setInteractive({ useHandCursor: false });
+        bg.on('pointerdown', () => {
+            container.setScale(0.9);
+            // TouchControlsScene is paused right after this, so its pointerup never
+            // arrives - onGameResumed() restores the scale instead
+            if (this.scene && typeof this.scene.requestPause === 'function') {
+                if (!this.scene.requestPause()) container.setScale(1);
+            } else {
+                container.setScale(1);
+            }
+        });
+        
+        this.pauseButton = { container, size };
+        this.repositionPauseButton(scale);
+    }
+    
+    repositionPauseButton(scale) {
+        if (!this.pauseButton || !this.pauseButton.container) return;
+        const metrics = this.getScreenMetrics();
+        const rightOfCentre = 90 * scale; // keeps it off the weapon recharge icon at the HUD's centre-left
+        // Line the button up with the weapon recharge icon: the icon sits at weaponUiConfig.y
+        // (virtual units) scaled by the HUD's uiScale, inside the letterboxed viewport - while
+        // this scene spans the whole window, so add the viewport's top offset.
+        const weaponIconY = (this.scene && this.scene.weaponManager && this.scene.weaponManager.weaponUiConfig)
+            ? this.scene.weaponManager.weaponUiConfig.y : 92;
+        const hudScale = (metrics.viewport && metrics.viewport.scale) || scale;
+        const hudTop = (metrics.viewport && metrics.viewport.y) || 0;
+        this.pauseButton.container.setPosition(metrics.screenWidth / 2 + rightOfCentre, hudTop + weaponIconY * hudScale);
+        this.pauseButton.container.setScale(1);
+    }
+    
+    // Called by GameScene.resumeFromPause(): the touch scene missed every pointerup
+    // while it was paused, so drop whatever was held when the pause tap landed
+    onGameResumed() {
+        if (this.pauseButton && this.pauseButton.container) this.pauseButton.container.setScale(1);
+        this.releaseAll();
+    }
+    
+    releaseAll() {
+        if (this.joystick && this.joystick.activePointerId !== null) {
+            this.joystick.onTouchEnd({ id: this.joystick.activePointerId });
+        }
+        Object.values(this.buttons).forEach(button => {
+            if (button && button.activePointerId !== null) {
+                button.onTouchEnd({ id: button.activePointerId });
+            }
+        });
+        if (this.unifiedInput) {
+            this.unifiedInput.reset();
+            this.unifiedInput.setTouchActive(false);
+        }
     }
     
     update() {
@@ -697,6 +787,10 @@ class TouchControlsOverlay {
                 button.setVisible(visible);
             }
         });
+        
+        if (this.pauseButton && this.pauseButton.container) {
+            this.pauseButton.container.setVisible(visible);
+        }
     }
     
     destroy() {
@@ -716,6 +810,11 @@ class TouchControlsOverlay {
             }
         });
         this.buttons = {};
+        
+        if (this.pauseButton && this.pauseButton.container) {
+            this.pauseButton.container.destroy();
+        }
+        this.pauseButton = null;
         
         console.log('📱 ========== TouchControlsOverlay.destroy() END ==========');
     }

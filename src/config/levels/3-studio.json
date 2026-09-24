@@ -27,8 +27,6 @@
       "actions": [
         { "type": "pause", "targets": ["player", "enemies"] },
         { "type": "wait", "duration": 1200 },
-        { "type": "dialogue", "dialogue": { "speaker": "Tireek", "text": "We're in. Whole place smells like stale smoke and bad deals." } },
-        { "type": "dialogue", "dialogue": { "speaker": "Tryston", "text": "Then the drive is down that hall. Keep moving." } },
         { "type": "resume", "targets": ["player", "enemies"] }
       ]
     },
@@ -46,12 +44,12 @@
         { "type": "wait", "duration": 400 },
         { "type": "camera", "pan": { "x": 3250 }, "duration": 1800, "ease": "Power2" },
         { "type": "wait", "duration": 400 },
+        { "type": "setDialogueStyle", "position": { "x": 640, "y": 600 }, "textSizes": { "speaker": 35, "message": 35 } },
         { "type": "dialogue", "dialogue": { "speaker": "Tireek", "text": "Whoa! That's... that's a negative version of us!" } },
         { "type": "dialogue", "dialogue": { "speaker": "Tryston", "text": "Yeah... this can't be good." } },
         { "type": "dialogue", "dialogue": { "speaker": "Negative Tireek", "text": "Surprised? The label built us to look just like you." } },
         { "type": "dialogue", "dialogue": { "speaker": "Negative Tryston", "text": "We took your album so you'd have no leverage left." } },
         { "type": "dialogue", "dialogue": { "speaker": "Negative Tireek", "text": "No album means no choice. You'll sign whatever 360 deal they put in front of you." } },
-        { "type": "dialogue", "dialogue": { "speaker": "Negative Tryston", "text": "Meet us out back if you want it. Get through the label's people first." } },
         { "type": "flip", "target": "enemy_neg_tireek_cameo", "flipX": false },
         { "type": "flip", "target": "enemy_neg_tryston_cameo", "flipX": false },
         { "type": "move", "target": "enemy_neg_tireek_cameo", "to": { "x": "+=700", "y": 452 }, "duration": 1500, "ease": "Power2", "destroyOnComplete": true, "async": true },
@@ -72,7 +70,7 @@
         { "type": "pause", "targets": ["player", "enemies"] },
         { "type": "camera", "stopFollow": true },
         { "type": "stopEnemySpawning", "clearEnemies": true },
-        { "type": "dialogue", "dialogue": { "speaker": "Tryston", "text": "Back door's open. They went out into the alley." } },
+        { "type": "dialogue", "dialogue": { "speaker": "Tryston", "text": "Back door's unlocked. They went out into the alley." } },
         { "type": "dialogue", "dialogue": { "speaker": "Tireek", "text": "Good. No more running." } },
         { "type": "fade", "direction": "out", "duration": 1000, "color": { "r": 0, "g": 0, "b": 0 } },
         { "type": "loadLevel", "levelId": 4 }

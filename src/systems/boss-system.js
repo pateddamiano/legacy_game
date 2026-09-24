@@ -62,6 +62,7 @@ const BOSS_TYPE_CONFIGS = {
         // Weapon throwing
         throwWeaponCooldown: 1250,    // Minimum time between weapon throws (ms
         throwWeaponRange: 1000,        // Range at which boss will throw weapons
+        noThrowRange: 400,             // Player closer than this: no throws, so they can close in
         throwWeaponType: 'rating',     // Will randomly select rating_0 through rating_4
         
         // Edge-standing behavior
@@ -74,7 +75,7 @@ const BOSS_TYPE_CONFIGS = {
     negative_tireek: {
         // Corrupted mirror of Tireek - a straight melee duelist, no gimmicks
         name: 'Negative Tireek',
-        health: 150,
+        health: 250,
         speed: 260,
         attackCooldown: 300,
         playerDamage: 8,
@@ -91,6 +92,7 @@ const BOSS_TYPE_CONFIGS = {
         // Weapon throwing: the record, slow, wrapped in blue fire
         throwWeaponCooldown: 1500,
         throwWeaponRange: 1000,
+        noThrowRange: 400,             // Player closer than this: no throws, so they can close in
         throwWeaponType: 'vinyl_boss',
         throwAnimation: 'cross',       // played while throwing (they have no dedicated throw anim)
 
@@ -105,7 +107,7 @@ const BOSS_TYPE_CONFIGS = {
     negative_tryston: {
         // Corrupted mirror of Tryston - a straight melee duelist, no gimmicks
         name: 'Negative Tryston',
-        health: 150,
+        health: 250,
         speed: 260,
         attackCooldown: 300,
         playerDamage: 8,
@@ -122,6 +124,7 @@ const BOSS_TYPE_CONFIGS = {
         // Weapon throwing: the record, slow, wrapped in blue fire
         throwWeaponCooldown: 1500,
         throwWeaponRange: 1000,
+        noThrowRange: 400,             // Player closer than this: no throws, so they can close in
         throwWeaponType: 'vinyl_boss',
         throwAnimation: 'cross',       // played while throwing (they have no dedicated throw anim)
 
@@ -202,6 +205,9 @@ class Boss extends Enemy {
         this.throwWeaponCooldown = mergedConfig.throwWeaponCooldown;
         this.throwWeaponRange = mergedConfig.throwWeaponRange || 600;
         this.throwWeaponType = mergedConfig.throwWeaponType || 'vinyl';
+        // Inside this horizontal distance the boss stops throwing (it used to be only the
+        // ~140px melee range, so closing the distance meant eating throw after throw)
+        this.noThrowRange = mergedConfig.noThrowRange || 400;
 
         // Edge-standing behavior
         this.standOnEdges = mergedConfig.standOnEdges || false;
@@ -235,34 +241,41 @@ class Boss extends Enemy {
         console.log(`👹 Boss ${this.bossName} spawned at (${x}, ${y}) - Health: ${this.health}/${this.maxHealth}`);
     }
     
-    // Helper method to update facing direction based on current edge
+    // The strip of the visible arena the boss hops between: the camera's visible world
+    // (worldView, which accounts for the fit-to-screen zoom) inset by edgeMargin.
+    // camera.scrollX + camera.width is NOT the visible area on a zoomed camera, which
+    // put jump targets off-screen or on the wrong side on phones.
+    getArenaEdges() {
+        const cam = this.scene && this.scene.cameras && this.scene.cameras.main;
+        if (!cam) return null;
+        let left = cam.worldView ? cam.worldView.x : 0;
+        let right = cam.worldView ? cam.worldView.right : 0;
+        if (!(right > left)) { // worldView not computed yet (first frame)
+            left = cam.scrollX;
+            right = cam.scrollX + cam.width;
+        }
+        const margin = Math.min(this.edgeMargin || 150, (right - left) / 4);
+        return { left: left + margin, right: right - margin, center: (left + right) / 2 };
+    }
+    
+    // Face the player. Used to face "toward the centre of the arena", which left the
+    // boss punching thin air whenever the player got behind it. Also records which side
+    // of the arena the boss is actually on (not mid-jump - proceedWithJump owns it then).
     updateFacingDirection() {
         if (!this.sprite) return;
         
-        // Determine current edge if not set, or if boss has moved significantly
-        if (this.scene && this.scene.cameras) {
-            const camera = this.scene.cameras.main;
-            const cameraCenter = camera.scrollX + camera.width / 2;
-            const bossX = this.sprite.x;
-            
-            // Only update edge if boss has moved to a different side of the camera
-            // Don't recalculate based on player position - use boss's actual position
-            const newEdge = bossX < cameraCenter ? 'left' : 'right';
-            
-            // Only update if edge actually changed (boss jumped to other side)
-            // Don't change edge just because player moved
-            if (!this.currentEdge || this.currentEdge !== newEdge) {
-                this.currentEdge = newEdge;
-            }
+        if (this.state !== BOSS_STATES.JUMPING) {
+            const arena = this.getArenaEdges();
+            if (arena) this.currentEdge = this.sprite.x < arena.center ? 'left' : 'right';
         }
         
-        // On right side: face left toward center/player (flipX = true)
-        // On left side: face right toward center/player (flipX = false)
-        if (this.currentEdge === 'right') {
-            this.sprite.setFlipX(true); // Face left toward center
-        } else if (this.currentEdge === 'left') {
-            this.sprite.setFlipX(false); // Face right toward center
+        const target = (this.scene && this.scene.player && this.scene.player.active) ? this.scene.player : this.player;
+        if (target && Math.abs(target.x - this.sprite.x) > 4) {
+            this.sprite.setFlipX(target.x < this.sprite.x); // flipX = facing left
+        } else if (!target) {
+            this.sprite.setFlipX(this.currentEdge === 'right');
         }
+        this.facingLeft = this.sprite.flipX; // hitbox side follows the sprite
     }
     
     setState(newState) {
@@ -449,11 +462,8 @@ class Boss extends Enemy {
     
     // Update behavior during attack state - maintain facing direction
     updateAttackingBehavior() {
-        // Ensure boss maintains correct facing direction during attack
-        // Boss should face based on edge position, not player position
-        this.updateFacingDirection();
-        
-        // Update facingLeft to match current flipX state (for hitbox calculations)
+        // Facing is set toward the player when the swing starts (startAttack) and held
+        // for the swing, so the player can still dodge round behind a committed punch
         this.facingLeft = this.sprite.flipX;
     }
     
@@ -464,8 +474,7 @@ class Boss extends Enemy {
         // Don't start attacks if paused by event system
         if (this.eventPaused) return;
         
-        // Ensure boss is facing the correct direction before attacking
-        // Boss should face based on edge position, not player position
+        // Turn to the player before swinging
         this.updateFacingDirection();
         
         // Use boss config attack types
@@ -801,8 +810,15 @@ class Boss extends Enemy {
             }
         };
         
-        // Start the flash pattern
-        this.scene.time.delayedCall(flashOnDuration, flashPattern);
+        // Start the flash pattern - or, with reduced flashing on, show it steadily for the
+        // same time instead of strobing
+        if (window.GameSettings && window.GameSettings.reduceEffects()) {
+            this.scene.time.delayedCall(freezeDuration, () => {
+                if (this.notGoodSprite) this.notGoodSprite.setVisible(false);
+            });
+        } else {
+            this.scene.time.delayedCall(flashOnDuration, flashPattern);
+        }
         
         // Unlock player after freeze duration (jumpDuration / 1.5 or flash duration, whichever is longer)
         this.scene.time.delayedCall(freezeDuration, () => {
@@ -894,35 +910,20 @@ class Boss extends Enemy {
 
         this.setState(BOSS_STATES.JUMPING);
 
-        // For edge-standing bosses, jump to the opposite edge of the arena
-        const camera = this.scene.cameras.main;
-        const cameraLeft = camera.scrollX + this.edgeMargin;
-        const cameraRight = camera.scrollX + camera.width - this.edgeMargin;
+        // Jump to whichever arena edge is farthest from the player. This used to flip a
+        // remembered currentEdge flag, which drifted out of sync with where the boss
+        // really stood (edge-standing overwrote it without moving him), so jumps landed
+        // back on the same spot - a flip in place on top of the player.
+        const arena = this.getArenaEdges();
+        const playerX = ((this.scene.player && this.scene.player.active) ? this.scene.player : this.player).x;
         const bossX = this.sprite.x;
-        const cameraCenter = camera.scrollX + camera.width / 2;
-
-        // Determine current edge if not set
-        if (!this.currentEdge) {
-            // Determine which edge we're closer to
-            this.currentEdge = bossX < cameraCenter ? 'left' : 'right';
-            console.log(`👹 [BOSS_JUMP] currentEdge was null, determined it to be: ${this.currentEdge} (bossX=${bossX}, cameraCenter=${cameraCenter})`);
-        }
-
-        let targetX;
-        if (this.currentEdge === 'left') {
-            // Currently on left edge, jump directly to right edge
-            targetX = cameraRight; // Jump directly to the edge
-            this.currentEdge = 'right';
-            console.log(`👹 [BOSS_JUMP] Jumping from LEFT to RIGHT: bossX=${bossX}, cameraLeft=${cameraLeft}, targetX=${targetX.toFixed(1)}, cameraRight=${cameraRight}`);
-        } else {
-            // Currently on right edge, jump directly to left edge
-            targetX = cameraLeft; // Jump directly to the edge
-            this.currentEdge = 'left';
-            console.log(`👹 [BOSS_JUMP] Jumping from RIGHT to LEFT: bossX=${bossX}, cameraRight=${cameraRight}, targetX=${targetX.toFixed(1)}, cameraLeft=${cameraLeft}`);
-        }
+        const targetX = Math.abs(playerX - arena.right) >= Math.abs(playerX - arena.left) ? arena.right : arena.left;
+        this.currentEdge = targetX === arena.right ? 'right' : 'left';
+        console.log(`👹 [BOSS_JUMP] ${this.bossName} jumping ${bossX.toFixed(0)} -> ${targetX.toFixed(0)} (${this.currentEdge} edge; player at ${playerX.toFixed(0)}, arena ${arena.left.toFixed(0)}-${arena.right.toFixed(0)})`);
         
-        // Update facing direction after determining new edge
-        this.updateFacingDirection();
+        // Face the way we're jumping; landing turns back to the player
+        if (Math.abs(targetX - bossX) > 4) this.sprite.setFlipX(targetX < bossX);
+        this.sprite.setVelocity(0, 0);
 
         // Keep Y position similar
         const targetY = this.sprite.y;
@@ -1112,11 +1113,10 @@ class Boss extends Enemy {
             return;
         }
         
-        // PRIORITY: Don't throw weapons if player is close enough for melee attacks
-        // This allows the boss to use melee attacks when close, and ranged attacks when far
+        // Don't throw once the player has closed in: inside noThrowRange the boss holds
+        // its fire (and melees when they're in punching range)
         const meleeAttackRange = this.attackRange || ENEMY_CONFIG.attackRange || 140;
-        if (distanceToPlayer <= meleeAttackRange) {
-            // Player is close - let melee attack system handle it instead
+        if (distanceToPlayer <= Math.max(meleeAttackRange, this.noThrowRange)) {
             return;
         }
         
@@ -1197,49 +1197,26 @@ class Boss extends Enemy {
     }
 
     updateEdgeStanding() {
-        // Stand on the edges of the camera view
-        const camera = this.scene.cameras.main;
-        const cameraLeft = camera.scrollX + this.edgeMargin;
-        const cameraRight = camera.scrollX + camera.width - this.edgeMargin;
-
-        // Determine which edge to stand on based on player position
-        const playerCenter = this.player.x;
-        const cameraCenter = camera.scrollX + camera.width / 2;
-
-        let targetEdge, targetX;
-
-        if (playerCenter < cameraCenter) {
-            // Player is on left side, stand on right edge
-            targetEdge = 'right';
-            targetX = cameraRight;
-        } else {
-            // Player is on right side, stand on left edge
-            targetEdge = 'left';
-            targetX = cameraLeft;
-        }
-
-        // Move to edge if not already there
-        if (this.currentEdge !== targetEdge) {
-            this.currentEdge = targetEdge;
-            this.updateFacingDirection(); // Update facing direction when edge changes
-
-            // Smooth movement to edge
-            const moveSpeed = this.speed * 0.5; // Slower movement to edges
-            const distance = Math.abs(this.sprite.x - targetX);
-
-            if (distance > 10) { // Only move if not already at edge
-                const direction = targetX > this.sprite.x ? 1 : -1;
-                this.sprite.setVelocityX(direction * moveSpeed);
-                // Facing direction is handled by updateFacingDirection() above
+        // Hold the nearest arena edge - walk back to it if knocked off it. Crossing to the
+        // far side is the jump's job. The old version picked the edge opposite the player
+        // and set a velocity for a single frame (the next frame zeroed it), so the boss
+        // never moved but its currentEdge flag claimed it had - which broke every jump.
+        const arena = this.getArenaEdges();
+        if (!arena) return;
+        const targetX = this.sprite.x < arena.center ? arena.left : arena.right;
+        const dist = targetX - this.sprite.x;
+        
+        if (!this.isKnockedBack) {
+            if (Math.abs(dist) > 12) {
+                this.sprite.setVelocityX(Math.sign(dist) * this.speed * 0.5);
             } else {
-                // Stop moving when at edge, but stay in WALKING state so attacks work
                 this.sprite.setVelocityX(0);
-                this.setState(BOSS_STATES.WALKING);
             }
-        } else {
-            // Already on correct edge, stop moving but stay in WALKING state so attacks work
-            this.sprite.setVelocityX(0);
-            this.setState(BOSS_STATES.WALKING);
+        }
+        
+        this.updateFacingDirection();
+        if (this.state !== BOSS_STATES.WALKING) {
+            this.setState(BOSS_STATES.WALKING); // stay in WALKING so melee/throws still fire
         }
     }
     

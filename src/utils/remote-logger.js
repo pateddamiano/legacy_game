@@ -14,7 +14,12 @@
     const originalLog = console.log.bind(console);
     const initialConfig = (typeof window !== 'undefined' && window.REMOTE_LOG_CONFIG) ? window.REMOTE_LOG_CONFIG : {};
 
-    const urlOptIn = (typeof location !== 'undefined') && new URLSearchParams(location.search).get('remotelog') === '1';
+    // ?remotelog=1 turns the mirror on; ?remotelog=http://host:port/log also points it
+    // at that server for the session (handy when the LAN IP in the config is stale)
+    const remoteParam = (typeof location !== 'undefined') ? new URLSearchParams(location.search).get('remotelog') : null;
+    const urlOverride = remoteParam && /^https?:\/\//.test(remoteParam) ? remoteParam : null;
+    if (urlOverride) initialConfig.serverUrl = urlOverride;
+    const urlOptIn = remoteParam === '1' || Boolean(urlOverride);
     let mirrorEnabled = Boolean(initialConfig.mirrorConsole) || urlOptIn;
 
     const MAX_QUEUE = 200;      // lines held while waiting to send
@@ -125,6 +130,18 @@
             remoteLog(...args);
         }
     };
+
+    // Mirror warnings and errors too (the on-screen error banner reports through
+    // console.error), tagged so they stand out in the server log
+    ['warn', 'error'].forEach(level => {
+        const original = console[level].bind(console);
+        console[level] = function patchedConsole(...args) {
+            original(...args);
+            if (mirrorEnabled) {
+                remoteLog(`[${level.toUpperCase()}]`, ...args);
+            }
+        };
+    });
 
     if (mirrorEnabled) {
         originalLog(`📡 Remote console mirroring ON -> ${getConfig().serverUrl}`);

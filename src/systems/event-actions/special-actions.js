@@ -89,6 +89,7 @@ class SpecialActions {
         this.eventManager.activeEvent = event;
         this.eventManager.actionQueue = [...event.actions]; // Copy actions array
         this.eventManager.currentActionIndex = 0;
+        this.eventManager.recordEventStart(event);
 
         // Execute first action
         this.eventManager.executeNextAction();
@@ -348,6 +349,39 @@ class SpecialActions {
     // Pops a piece of text above a character's head (default: red "!" over the player),
     // bobs it, and fades it after `duration`. Non-blocking - the event continues at once.
     // Optional: color, fontSize, offsetY (default: just above the visible head).
+    // Looping fire behind the player, e.g. { "type": "playerAura", "effect": "bluefire", "hue": 190 }
+    // (hue rotates the sprite's colours in degrees - 190 turns the blue fire yellow).
+    // { "type": "playerAura", "enabled": false } removes it.
+    executePlayerAura(action) {
+        if (this.scene.effectSystem) {
+            if (action.enabled === false) {
+                this.scene.effectSystem.clearPlayerAura();
+            } else {
+                this.scene.effectSystem.setPlayerAura(action);
+            }
+        } else {
+            console.warn('🎬 PlayerAura: effectSystem unavailable');
+        }
+        this.advanceAction();
+    }
+
+    // Refill both characters' health, e.g. { "type": "healPlayers" } before a boss fight
+    executeHealPlayers(action) {
+        const cm = this.scene.characterManager;
+        if (cm && typeof cm.healAll === 'function') {
+            cm.healAll();
+            // Quick green flash so the player notices
+            const player = this.scene.player;
+            if (player && player.active) {
+                player.setTint(0x66ff88);
+                this.scene.time.delayedCall(350, () => { if (player.active) player.clearTint(); });
+            }
+        } else {
+            console.warn('🎬 HealPlayers: characterManager unavailable');
+        }
+        this.advanceAction();
+    }
+
     executeShowEmote(action) {
         const target = (!action.target || action.target === 'player') ? this.scene.player : this.getEntity(action.target);
         if (!target) {

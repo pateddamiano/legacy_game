@@ -303,7 +303,7 @@ class AudioManager {
 
         // Play the sound effect
         this.sound.play(sfxKey, {
-            volume: volume
+            volume: (window.GameSettings ? window.GameSettings.sfx(volume) : volume) // player's SFX volume setting
         });
 
         console.log(`🎵 Playing ${sfxKey}`);
@@ -562,7 +562,7 @@ class AudioManager {
         
         // Create and play looping running sound
         this.runningSoundEffect = this.sound.add('playerRunning', {
-            volume: 0.15,
+            volume: (window.GameSettings ? window.GameSettings.sfx(0.15) : 0.15),
             loop: true
         });
         this.runningSoundEffect.play();
@@ -594,7 +594,7 @@ class AudioManager {
         
         // Create and play looping ambiance sound
         this.ambianceSoundEffect = this.sound.add(ambianceKey, {
-            volume: volume,
+            volume: (window.GameSettings ? window.GameSettings.sfx(volume) : volume),
             loop: true
         });
         this.ambianceSoundEffect.play();
@@ -658,7 +658,7 @@ class AudioManager {
         }
         this.scene.tweens.add({
             targets: this.subwayPassingSound,
-            volume: targetVolume,
+            volume: window.GameSettings ? window.GameSettings.sfx(targetVolume) : targetVolume,
             duration: duration,
             ease: 'Linear',
             onComplete: () => {
@@ -866,7 +866,7 @@ class AudioManager {
         
         // Create and play looping typing sound
         this.textTypingSound = this.sound.add('textTyping', {
-            volume: 0.075,
+            volume: (window.GameSettings ? window.GameSettings.sfx(0.075) : 0.075),
             loop: true
         });
         this.textTypingSound.play();

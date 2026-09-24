@@ -96,6 +96,9 @@ class DialogueManager {
         );
         this.dialogueBox.setStrokeStyle(3, 0xFFD700);
         this.dialogueBox.setScrollFactor(0);
+        // The configured geometry (levels change it via setDialogueStyle). Each line shown
+        // may temporarily grow the box beyond this height so the text always fits.
+        this.boxConfig = { x: panelX, y: panelY, width: panelWidth, height: panelHeight };
         
         // Speaker name
         this.speakerText = this.uiScene.add.text(
@@ -256,10 +259,15 @@ class DialogueManager {
         
         // Start typewriter effect
         this.fullText = dialogue.text;
+        this.fitBoxToText(this.fullText);
         this.displayedText = '';
         this.charIndex = 0;
         this.messageText.setText('');
         this.continuePrompt.setAlpha(0);
+        
+        // Ignore advance input for a moment so a player mashing attack when the line
+        // pops up can't dismiss it before reading it
+        this.inputUnlockAt = Date.now() + DialogueManager.INPUT_GUARD_MS;
         
         // Start typewriter
         this.startTypewriter();
@@ -457,6 +465,12 @@ class DialogueManager {
         
         // Set up touch input for dialogue (tap to advance)
         // Only register taps on dialogue box/overlay, not on gameplay controls
+        // Drop the previous line's tap listeners first. They used to pile up (one more per
+        // line shown), so one tap late in a level ran advanceDialogue() several times -
+        // skipping the typewriter AND dismissing the line in the same tap.
+        if (this.dialogueBox) this.dialogueBox.off('pointerdown');
+        if (this.overlay) this.overlay.off('pointerdown');
+        
         if (this.dialogueBox) {
             this.dialogueBox.on('pointerdown', (pointer) => {
                 if (this.isActive && this.isTouchInDialogueArea(pointer)) {
@@ -502,10 +516,13 @@ class DialogueManager {
      */
     advanceDialogue() {
         if (!this.isActive) return;
+        // Still inside the guard window (see showDialogue / skip below)
+        if (this.inputUnlockAt && Date.now() < this.inputUnlockAt) return;
         
         if (this.typewriterTimer) {
-            // Skip typewriter
+            // Skip typewriter, then hold briefly so a double tap can't also dismiss
             this.skipTypewriter();
+            this.inputUnlockAt = Date.now() + DialogueManager.SKIP_GUARD_MS;
         } else {
             // Dismiss dialogue
             this.hideDialogue();
@@ -673,45 +690,10 @@ class DialogueManager {
             console.warn('💬 Cannot set dialogue position - UI not created yet');
             return;
         }
-        
-        // Use provided coordinates or keep current position
-        const screenX = x !== undefined ? x : this.dialogueBox.x;
-        const screenY = y !== undefined ? y : this.dialogueBox.y;
-        
-        // Update dialogue box position
-        this.dialogueBox.setPosition(screenX, screenY);
-        
-        // Recalculate text positions based on box center and current size
-        const boxWidth = this.dialogueBox.width;
-        const boxHeight = this.dialogueBox.height;
-        const halfWidth = Math.floor(boxWidth / 2);
-        const halfHeight = Math.floor(boxHeight / 2);
-        
-        // Update speaker text position (relative to box center)
-        if (this.speakerText) {
-            this.speakerText.setPosition(
-                screenX - halfWidth + 16,
-                screenY - halfHeight + 10
-            );
-        }
-        
-        // Update message text position (relative to box center)
-        if (this.messageText) {
-            this.messageText.setPosition(
-                screenX - halfWidth + 16,
-                screenY - halfHeight + 38
-            );
-        }
-        
-        // Update continue prompt position (relative to box center)
-        if (this.continuePrompt) {
-            this.continuePrompt.setPosition(
-                screenX + halfWidth - 10,
-                screenY + halfHeight - 18
-            );
-        }
-        
-        console.log(`💬 Dialogue position set to: (${screenX}, ${screenY})`);
+        if (x !== undefined) this.boxConfig.x = x;
+        if (y !== undefined) this.boxConfig.y = y;
+        this.layoutBox();
+        console.log(`💬 Dialogue position set to: (${this.boxConfig.x}, ${this.boxConfig.y})`);
     }
     
     // Configure dialogue box size
@@ -720,43 +702,70 @@ class DialogueManager {
             console.warn('💬 Cannot set dialogue size - UI not created yet');
             return;
         }
+        if (width !== undefined) this.boxConfig.width = width;
+        if (height !== undefined) this.boxConfig.height = height;
+        if (this.messageText && this.messageText.style && width !== undefined) {
+            this.messageText.style.wordWrapWidth = width - 32;
+        }
+        this.layoutBox();
+        console.log(`💬 Dialogue size set to: ${this.boxConfig.width}x${this.boxConfig.height}`);
+    }
+    
+    // Lay the box, speaker, message and prompt out from one geometry. Defaults to the
+    // configured geometry; fitBoxToText() passes a taller (and possibly shifted) one.
+    layoutBox(geom = null) {
+        if (!this.dialogueBox) return;
+        const g = geom || this.boxConfig;
+        const halfWidth = Math.floor(g.width / 2);
+        const halfHeight = Math.floor(g.height / 2);
+        const left = g.x - halfWidth;
+        const top = g.y - halfHeight;
         
-        const newWidth = width !== undefined ? width : this.dialogueBox.width;
-        const newHeight = height !== undefined ? height : this.dialogueBox.height;
-        
-        // Update dialogue box size
-        this.dialogueBox.setSize(newWidth, newHeight);
-        
-        // Update text positions to stay within box
-        const halfWidth = Math.floor(newWidth / 2);
-        const halfHeight = Math.floor(newHeight / 2);
+        this.dialogueBox.setPosition(g.x, g.y);
+        this.dialogueBox.setSize(g.width, g.height);
         
         if (this.speakerText) {
-            this.speakerText.setPosition(
-                this.dialogueBox.x - halfWidth + 16,
-                this.dialogueBox.y - halfHeight + 10
-            );
+            this.speakerText.setPosition(left + 16, top + 10);
         }
-        
         if (this.messageText) {
-            this.messageText.setPosition(
-                this.dialogueBox.x - halfWidth + 16,
-                this.dialogueBox.y - halfHeight + 38
-            );
-            // Update word wrap width
-            if (this.messageText.style) {
-                this.messageText.style.wordWrapWidth = newWidth - 32;
-            }
+            // Sit under the speaker name whatever size it is (levels enlarge it)
+            const speakerHeight = this.speakerText ? Math.max(this.speakerText.height, 28) : 28;
+            this.messageText.setPosition(left + 16, top + 10 + speakerHeight);
         }
-        
         if (this.continuePrompt) {
-            this.continuePrompt.setPosition(
-                this.dialogueBox.x + halfWidth - 10,
-                this.dialogueBox.y + halfHeight - 18
-            );
+            this.continuePrompt.setPosition(g.x + halfWidth - 10, g.y + halfHeight - 18);
         }
+    }
+    
+    // Grow the box so the whole (wrapped) message fits under the speaker name with
+    // room for the continue prompt, and keep it on screen. Never shrinks below the
+    // configured height, so short lines look the same as before.
+    fitBoxToText(text) {
+        if (!this.dialogueBox || !this.messageText || !this.boxConfig) return;
+        const virtualHeight = 720;
+        const margin = 8;
         
-        console.log(`💬 Dialogue size set to: ${newWidth}x${newHeight}`);
+        // Measure with the real text (typewriter starts empty), then clear it again
+        this.messageText.setText(text || '');
+        const textHeight = this.messageText.height;
+        this.messageText.setText('');
+        
+        const speakerHeight = this.speakerText ? Math.max(this.speakerText.height, 28) : 28;
+        const promptRoom = 30; // bottom padding so the last line clears the [SPACE]/[TAP] prompt
+        const needed = Math.ceil(10 + speakerHeight + textHeight + promptRoom);
+        
+        const geom = Object.assign({}, this.boxConfig);
+        geom.height = Math.max(this.boxConfig.height, needed);
+        // Grown around its centre the box may run off the bottom (boss-arena boxes sit
+        // at y=600): push it up as far as needed, but never past the top
+        const half = Math.floor(geom.height / 2);
+        geom.y = Math.min(geom.y, virtualHeight - margin - half);
+        geom.y = Math.max(geom.y, margin + half);
+        
+        if (geom.height !== this.boxConfig.height) {
+            console.log(`💬 Dialogue box grown to fit text: ${this.boxConfig.height} -> ${geom.height}px (text ${Math.round(textHeight)}px)`);
+        }
+        this.layoutBox(geom);
     }
     
     // Configure text sizes
@@ -775,6 +784,7 @@ class DialogueManager {
             this.messageText.setFontSize(messageSize);
             console.log(`💬 Message text size set to: ${messageSize}`);
         }
+        this.layoutBox();
     }
     
     // Configure word wrap width for message text
@@ -900,10 +910,16 @@ class DialogueManager {
 // Box outline + speaker name colour. Add a row here to recolour a speaker everywhere;
 // a dialogue line can also set "color": "#rrggbb" directly to override for that line.
 DialogueManager.DEFAULT_ACCENT = '#FFD700';
+// ms after a line appears during which taps / SPACE are ignored
+DialogueManager.INPUT_GUARD_MS = 1200;
+// ms after skipping the typewriter before the next tap can dismiss the line
+DialogueManager.SKIP_GUARD_MS = 350;
 DialogueManager.SPEAKER_ACCENTS = [
     { match: /^negative\b/i, color: '#ff2a2a' },  // Negative Tireek / Negative Tryston
     { match: /^narrator$/i,   color: '#c4c4c4' },  // Narrator (also lines with no speaker)
-    { match: /^(the )?critic$/i, color: '#FFF44F' } // The Critic: lemon yellow, distinct from the default gold
+    { match: /^(the )?critic$/i, color: '#FFF44F' }, // The Critic: lemon yellow, distinct from the default gold
+    { match: /^rozotadi$/i,   color: '#3B82F6' },  // Rozotadi (level 1 tip-off): blue
+    { match: /^misfit$/i,     color: '#22C55E' }   // Misfit (level 2 tip-off): green
 ];
 DialogueManager.accentForSpeaker = function (speaker) {
     // A line with no speaker is shown as NARRATOR, so style it the same way

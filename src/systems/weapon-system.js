@@ -15,7 +15,7 @@ const WEAPON_CONFIG = {
         damage: 25,
         speed: 800, // Increased from 600 for faster throwing
         range: 800, // Max distance before disappearing
-        cooldown: 5000, // 5 seconds in milliseconds
+        cooldown: 4000, // 4 seconds between throws (was 5)
         size: { width: 64, height: 64 },
         hitbox: { width: 64, height: 64 }, // Increased hitbox for easier hits
         animations: {
@@ -34,7 +34,7 @@ const WEAPON_CONFIG = {
         spinningAnim: 'vinyl_record_spinning', // reuse the player's spin animation
         bossProjectile: true,
         effect: 'bluefire',
-        damage: 12,
+        damage: 6,
         speed: 450,
         range: 900,
         cooldown: 1500,
@@ -43,8 +43,8 @@ const WEAPON_CONFIG = {
         animations: {
             spinning: { frames: 4, frameRate: 20, repeat: -1 }
         },
-        verticalTolerance: 60,
-        collisionThreshold: 45
+        verticalTolerance: 40,   // same dodge windows as the Critic's ratings
+        collisionThreshold: 40
     },
     // Boss rating weapons - different star ratings
     rating_0: {
@@ -212,7 +212,7 @@ class Projectile {
         
         if (this.scene.sound && this.scene.cache.audio.has('weaponRecordThrow')) {
             this.throwSound = this.scene.sound.add('weaponRecordThrow', {
-                volume: 0.3,
+                volume: (window.GameSettings ? window.GameSettings.sfx(0.3) : 0.3),
                 loop: false
             });
             this.throwSound.play();
@@ -712,20 +712,23 @@ class WeaponManager {
                         // Pass projectile position for knockback effect (knockback away from projectile)
                         const knockbackSource = projectile.sprite || null;
                         enemy.takeDamage(damage, knockbackSource);
+                        if (this.scene.effectSystem) this.scene.effectSystem.onEnemyHit(enemy); // hit-stop / boss shake
                         
                         // Enhanced red flash effect for weapon hits
                         enemy.sprite.setTint(0xff0000); // Bright red tint
                         enemy.sprite.setAlpha(0.8); // Slightly transparent for flash effect
                         
-                        // Flash effect with multiple pulses
-                        this.scene.time.delayedCall(100, () => {
+                        // Flash effect with multiple pulses (skipped with reduced flashing on:
+                        // the enemy just stays red until the 300ms clear below)
+                        const strobe = !(window.GameSettings && window.GameSettings.reduceEffects());
+                        if (strobe) this.scene.time.delayedCall(100, () => {
                             if (enemy.sprite && enemy.sprite.active) {
                                 enemy.sprite.setTint(0xffffff); // White flash
                                 enemy.sprite.setAlpha(1.0);
                             }
                         });
                         
-                        this.scene.time.delayedCall(200, () => {
+                        if (strobe) this.scene.time.delayedCall(200, () => {
                             if (enemy.sprite && enemy.sprite.active) {
                                 enemy.sprite.setTint(0xff0000); // Red flash again
                                 enemy.sprite.setAlpha(0.8);

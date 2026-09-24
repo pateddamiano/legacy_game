@@ -16,7 +16,7 @@
 // side ("Failed to fetch"). That was the "stuck on black after the level 1
 // stairway" bug. The logger now batches and backs off, but keep it opt-in.
 const REMOTE_LOG_CONFIG = {
-    serverUrl: 'http://192.168.1.71:9000/log', // Change to your LAN IP for phone access
+    serverUrl: 'http://192.168.1.240:9000/log', // Change to your LAN IP for phone access
     timeoutMs: 1200,                           // Abort fetch quickly so the game never stalls
     mirrorConsole: false                       // Opt in with ?remotelog=1 or console.remote = true
 };

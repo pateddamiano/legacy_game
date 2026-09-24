@@ -336,6 +336,7 @@ class CharacterManager {
             
             // Define callback function separately so we can attach the target property to it
             const onSwitchComplete = () => {
+                if (this._pendingSwitchComplete === onSwitchComplete) this._pendingSwitchComplete = null;
                 // Animation complete callback
                 // Show new character
                 newPlayer.setVisible(true);
@@ -367,8 +368,13 @@ class CharacterManager {
                     newPlayer.body.acceleration.y = 0;
                 }
                 
-                // Reset animation state to idle (in case old character was in attack/airkick)
-                if (newPlayer.anims) {
+                // Show idle - unless the player already started a punch during the tornado.
+                // Cutting that punch's animation off here meant its 'animationcomplete'
+                // never fired, which (with the old lock-timer bug) froze the character.
+                const sceneAnim = this.scene.animationManager;
+                const midAttack = sceneAnim && sceneAnim.animationLocked &&
+                    (sceneAnim.currentState === 'attack' || sceneAnim.currentState === 'airkick');
+                if (newPlayer.anims && !midAttack) {
                     const charName = this.characters[newChar].config.name;
                     newPlayer.anims.play(`${charName}_idle`, true);
                 }
@@ -400,6 +406,12 @@ class CharacterManager {
             // Attach the new player sprite as the target for the effect to follow
             // Note: Even though newPlayer is invisible initially, we want the tornado to follow where it IS (which moves with physics/input)
             onSwitchComplete.target = newPlayer;
+            
+            // Safety net: the completion runs on a scene timer, and EventManager's
+            // cleanupEventState() wipes ALL scene timers (restarting an event after a
+            // respawn). If that happens mid-switch, update() finishes the switch.
+            this._pendingSwitchComplete = onSwitchComplete;
+            this._pendingSwitchAt = currentTime;
 
             if (this.scene.effectSystem) {
                 const effectResult = this.scene.effectSystem.spawnTornadoEffect(
@@ -470,6 +482,13 @@ class CharacterManager {
     
     update(delta) {
         this.updateHealthRegeneration(delta);
+        
+        if (this._pendingSwitchComplete && this.scene.time.now - this._pendingSwitchAt > 1000) {
+            console.warn('👥 Character switch completion never fired (timer cleared?) - finishing it now');
+            const finish = this._pendingSwitchComplete;
+            this._pendingSwitchComplete = null;
+            finish();
+        }
     }
     
     updateHealthRegeneration(delta) {
@@ -554,6 +573,24 @@ class CharacterManager {
         return charData.health;
     }
     
+    // Both characters back to full health, auto-switch re-armed (boss fight lead-in)
+    healAll() {
+        Object.values(this.characters).forEach(charData => {
+            charData.health = charData.maxHealth;
+            charData.autoSwitchAvailable = true;
+        });
+        if (this.uiManager) {
+            const active = this.characters[this.getActiveCharacterName()];
+            this.uiManager.updateHealthBar(active.health, active.maxHealth);
+            this.uiManager.updateDualCharacterHealth(
+                this.characters.tireek.health,
+                this.characters.tryston.health,
+                this.getActiveCharacterName()
+            );
+        }
+        console.log('💚 Both characters restored to full health');
+    }
+    
     // ========================================
     // CHARACTER STATE MANAGEMENT
     // ========================================
@@ -563,7 +600,15 @@ class CharacterManager {
     }
     
     getActiveCharacterName() {
-        return Object.keys(this.characters).find(name => this.characters[name].isActive) || 'tireek';
+        // selectedCharacter is updated synchronously by every switch. The isActive flags are
+        // NOT: switchCharacter() clears the old one immediately but only sets the new one when
+        // the tornado finishes ~250ms later, so scanning them mid-switch found nobody and fell
+        // back to 'tireek' - wrong whenever you had just become Tryston. GameScene.bindPlayer
+        // (right after every auto-switch) then recorded the wrong character, and a hit landing
+        // inside that window was applied to Tireek's health instead of Tryston's.
+        return this.selectedCharacter
+            || Object.keys(this.characters).find(name => this.characters[name].isActive)
+            || 'tireek';
     }
     
     getActiveCharacterData() {
@@ -905,8 +950,13 @@ class CharacterManager {
         
         // Check if death occurred during an event - if so, restart the event
         if (this.deathDuringEventId && this.scene.eventManager) {
-            console.log(`🔄 Respawning during event: ${this.deathDuringEventId} - will re-trigger event`);
-            this.respawnAtPosition(checkpoint.x, checkpoint.y, onGameOver, loseLifeOnRespawn, this.deathDuringEventId);
+            // Put the player back where the event first fired (e.g. the start of the boss arena),
+            // not on a %-of-level checkpoint, which can be right next to the boss
+            const start = this.scene.eventManager.getEventStartPosition(this.deathDuringEventId);
+            const respawnX = start ? start.x : checkpoint.x;
+            const respawnY = start ? start.y : checkpoint.y;
+            console.log(`🔄 Respawning during event: ${this.deathDuringEventId} at (${Math.round(respawnX)}, ${Math.round(respawnY)}) ${start ? '(event start)' : '(checkpoint - no start recorded)'} - will re-trigger event`);
+            this.respawnAtPosition(respawnX, respawnY, onGameOver, loseLifeOnRespawn, this.deathDuringEventId);
         } else {
             this.respawnAtPosition(checkpoint.x, checkpoint.y, onGameOver, loseLifeOnRespawn);
         }
@@ -934,6 +984,20 @@ class CharacterManager {
             if (this.uiManager) {
                 this.uiManager.updateLivesDisplay(remainingLives, true); // true = flash the lost life
             }
+        }
+        
+        // Try again during an event (boss fight): remember each living boss's health so
+        // the restarted event spawns them back at it. destroyAll() below removes them.
+        // A game over goes through restartLevel() instead and starts fresh.
+        if (retriggerEventId && this.scene.eventManager) {
+            const carry = {};
+            (this.scene.bosses || []).forEach(boss => {
+                if (!boss || !(boss.health > 0)) return;
+                const key = boss.eventId || (boss.bossConfig && boss.bossConfig.type);
+                if (key) carry[key] = boss.health;
+            });
+            this.scene.eventManager.bossHealthCarry = carry;
+            console.log('👹 Carrying boss health into the retry:', carry);
         }
         
         // Reset game over flag BEFORE doing anything else to prevent race conditions
@@ -1053,6 +1117,9 @@ class CharacterManager {
     
     restartLevel(onGameOver) {
         console.log('🔄 GAME OVER RESTART: Complete scene teardown starting...');
+        
+        // Game over: bosses start at full health again
+        if (this.scene.eventManager) this.scene.eventManager.bossHealthCarry = null;
         
         // Store only what we need to preserve
         // Use startOfLevelScore if available to reset score to what it was at level start

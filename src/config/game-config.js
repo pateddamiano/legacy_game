@@ -32,6 +32,35 @@ const GAME_CONFIG = {
         touchMovementMultiplier: 1.25, // Make analog stick feel snappier without changing keyboard
         touchDeadZone: 0.04            // Ignore very slight ghost inputs near center
     },
+
+    // 🎮 GAME FEEL ("juice") - applied by EffectSystem
+    juice: {
+        // ms the world freezes when a hit lands (physics + animations), by hit kind
+        hitStop: { hit: 60, bossHit: 90, kill: 140 },
+        // Camera shake, boss fights only: player lands a hit / player gets hit / boss goes down
+        bossShake: {
+            hit:    { duration: 80,  intensity: 0.004 },
+            hurt:   { duration: 160, intensity: 0.008 },
+            defeat: { duration: 500, intensity: 0.015 }
+        },
+        // Regular enemies on the killing blow: shoved back from the hit and squashed
+        enemyDeath: {
+            knockback: 520,          // px/s away from whatever hit them
+            knockbackDuration: 220,  // ms before they stop sliding
+            stretchX: 1.25,          // scale multipliers at the peak of the squash...
+            squashY: 0.75,
+            squashDuration: 90       // ...reached in this many ms, then back (yoyo)
+        },
+        // Screen-edge vignette that closes in as health drops (WebGL only)
+        lowHealthVignette: {
+            startBelow: 0.5,     // health fraction where it starts to appear
+            maxStrength: 0.7,    // darkness at 0 health
+            minRadius: 0.55,     // how far in it reaches at 0 health (1 = edges only)
+            pulseBelow: 0.25,    // health fraction under which it pulses
+            pulseStrength: 0.15,
+            pulsePeriod: 900     // ms per pulse
+        }
+    },
     
     // Enemy settings
     enemy: {

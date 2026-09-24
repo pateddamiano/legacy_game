@@ -46,6 +46,8 @@
         { "type": "stopEnemySpawning", "clearEnemies": false },
         { "type": "clearEnemiesOffscreen", "xThreshold": 8600, "direction": "right", "excludeIds": ["enemy_critic"] },
         { "type": "spawnEnemy", "enemyType": "critic", "position": { "x": 8655, "y": 518 }, "id": "enemy_critic", "flipX": true, "protectionLevel": "invulnerable" },
+        { "type": "showEmote", "target": "player", "text": "!", "duration": 2600 },
+        { "type": "wait", "duration": 400 },
         { "type": "camera", "pan": { "x": 7845 }, "duration": 2000, "ease": "Power2" },
         { "type": "camera", "setBounds": { "x": 7845, "y": 0, "width": 2400, "height": 720 } },
         { "type": "wait", "duration": 500 },

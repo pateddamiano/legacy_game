@@ -152,7 +152,8 @@ class EventUtilities {
      * Returns { enemy, enemyIndex } or null
      */
     getEnemyById(enemyId) {
-        if (!enemyId || !enemyId.startsWith('enemy_')) {
+        // Bosses are registered under their spawnBoss id (e.g. boss_critic)
+        if (!enemyId || !(enemyId.startsWith('enemy_') || enemyId.startsWith('boss_'))) {
             return null;
         }
         

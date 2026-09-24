@@ -33,7 +33,7 @@ window.CUTSCENE_CONFIGS = {
         },
         music: 'fireMusic',
         musicVolume: 0.5,
-        // Real in-game models standing on the street, facing Bri. originY is where the
+        // Real in-game models standing on the street, facing Brianna Emily. originY is where the
         // feet sit inside the frame (0 = top, 1 = bottom) so they line up on feetY.
         characters: [
             { type: 'player', name: 'tireek', x: 280, feetY: 470, scale: 3.3, originY: 0.875 },
@@ -46,7 +46,7 @@ window.CUTSCENE_CONFIGS = {
                 text: 'The trail off the platform ends in an alley on the edge of town.'
             },
             {
-                speaker: 'BRI',
+                speaker: 'BRIANNA EMILY',
                 text: 'Tireek! Tryston! I got a tip that the people who stole your album are in that studio.',
                 boxColor: 0xC026D3,
                 speakerColor: '#E879F9'
@@ -56,8 +56,8 @@ window.CUTSCENE_CONFIGS = {
                 text: 'You sure it\'s them?'
             },
             {
-                speaker: 'BRI',
-                text: 'Positive. Recording light\'s on, and nobody around here books studio time this late.',
+                speaker: 'BRIANNA EMILY',
+                text: 'Positive. Recording light\'s on... I saw a mysterious blue glow in the window just a minute ago...',
                 boxColor: 0xC026D3,
                 speakerColor: '#E879F9'
             },
@@ -66,11 +66,7 @@ window.CUTSCENE_CONFIGS = {
                 text: 'If The Negatives have our album, it\'s behind that door.'
             },
             {
-                speaker: 'TIREEK',
-                text: 'Then we go in and take it back.'
-            },
-            {
-                speaker: 'BRI',
+                speaker: 'BRIANNA EMILY',
                 text: 'Just be careful in there. Whatever they have waiting for you, this is going to be a trial by fire.',
                 boxColor: 0xC026D3,
                 speakerColor: '#E879F9'
@@ -83,14 +79,18 @@ window.CUTSCENE_CONFIGS = {
     ending_golden_record: {
         // No music key: "Satellites" already started when the Negatives fell (level 4 events)
         showcase: {
-            image: { key: 'endingGoldenRecord', path: 'assets/ending/goldenrecord.png' },
-            y: 290,            // centre of the record and its glow
-            height: 400,       // displayed height of the record image
-            bobDistance: 12,   // how far it hovers up and down
-            bobDuration: 1800,
-            glowSize: 760,
+            image: { key: 'endingAlbumCover', path: 'assets/ending/album_cover.jpg' },
+            // Where tapping the album (or the line under it) goes - opens in a new tab.
+            // ++ on Spotify (share-tracking ?si= parameter dropped)
+            listenUrl: 'https://open.spotify.com/artist/3xCff7q5qapdIdlAJKKLXz',
             title: 'THE END',
-            subtitle: 'Listen to LEGACY (Deluxe) by ++ now'
+            listenText: {
+                touch: 'Tap the album to listen to LEGACY (Deluxe) by ++',
+                desktop: 'Click the album to listen to LEGACY (Deluxe) by ++'
+            },
+            menuText: 'MAIN MENU',
+            menuDelay: 2500,   // ms before the MAIN MENU button appears
+            bobDuration: 1800
         }
     }
 };

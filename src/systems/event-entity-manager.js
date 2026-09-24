@@ -218,6 +218,17 @@ class EventEntityManager {
         pausedIndices.forEach(index => {
             this.resumeEnemy(index);
         });
+
+        // Enemies spawned while the event had everything paused (spawnBoss / spawnEnemy
+        // flag them eventPaused at creation) were never recorded in pausedEntities, so the
+        // index loop above can't reach them - a boss spawned mid-dialogue would just stand
+        // there after 'resume'. Skip anything a 'move' tween is still driving.
+        this.scene.enemies.forEach(enemy => {
+            if (!enemy || !enemy.eventPaused || !enemy.sprite) return;
+            const midMove = (enemy.sprite.eventTweens || []).some(t => t && t.isPlaying && t.isPlaying());
+            if (midMove) return;
+            enemy.eventPaused = false;
+        });
     }
     
     pauseEnemy(index) {

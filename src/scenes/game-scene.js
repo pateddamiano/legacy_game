@@ -151,6 +151,9 @@ class GameScene extends Phaser.Scene {
     }
 
     async create() {
+        // No legal "i" button during gameplay (covers the touch attack buttons)
+        if (window.LegalInfo) window.LegalInfo.hide();
+        
         console.log(`🎯 GameScene: Creating level ${this.selectedLevelId} with ${this.selectedCharacter}`);
         
         // Launch and get reference to UI Scene
@@ -222,6 +225,9 @@ class GameScene extends Phaser.Scene {
                 console.log(`📱 Touch controls overlay ${shouldShow ? 'shown' : 'hidden'}`);
             }
         }
+        
+        // P / ESC open the pause menu (touch: the || button in the touch overlay)
+        this.setupPauseKey();
         
         // Update WeaponManager with uiScene reference (created in preload before uiScene was available)
         if (this.weaponManager) {
@@ -597,6 +603,9 @@ class GameScene extends Phaser.Scene {
             const activeChar = this.characterManager ? this.characterManager.getActiveCharacterData() : null;
             if (activeChar) {
                 this.playerCurrentHealth = activeChar.health;
+                if (this.effectSystem && activeChar.maxHealth) {
+                    this.effectSystem.updateHealthVignette(activeChar.health / activeChar.maxHealth);
+                }
                 this.enemySpawnManager.setReferences(
                     this.player,
                     this.streetTopLimit,
@@ -853,50 +862,14 @@ class GameScene extends Phaser.Scene {
                     const switchSucceeded = result && (result.success === true || result === true);
                     
                     if (switchSucceeded && result.newPlayer) {
-                        // Update references
-                        this.player = result.newPlayer;
-                        this.selectedCharacter = result.newCharacter;
-                        this.currentCharacterConfig = this.characterManager.currentCharacterConfig;
+                        // One rebind for every switch path (manual, low-health auto-switch,
+                        // character down). This used to be a hand-copied subset of
+                        // bindPlayer() that skipped resetting the jump state.
+                        this.bindPlayer(result.newPlayer);
                         
-                        // Ensure player sprite has characterConfig set (safety check)
-                        if (!this.player.characterConfig) {
-                            this.player.characterConfig = this.currentCharacterConfig;
-                        }
-                        
-                        // Reset animation manager with new character
-                        this.animationManager = new AnimationStateManager(this.player);
-                        
-                        // Set up animation events for new character
-                        this.animationSetupManager.setupAnimationEvents(
-                            this.currentCharacterConfig,
-                            this.player,
-                            this.animationManager,
-                            this.isJumping
-                        );
-                        
-                        // Update physics manager with new player and animation manager
-                        if (this.playerPhysicsManager) {
-                            this.playerPhysicsManager.player = this.player;
-                            this.playerPhysicsManager.animationManager = this.animationManager;
-                            // CRITICAL: Ensure physics manager is enabled after switch
-                            this.playerPhysicsManager.disabled = false;
-                        }
-                        
-                        // Update combat manager with new player and animation manager
-                        if (this.combatManager) {
-                            this.combatManager.player = this.player;
-                            this.combatManager.animationManager = this.animationManager;
-                        }
-                        
-                        // CRITICAL: Ensure input manager is enabled after switch
-                        if (this.inputManager) {
-                            this.inputManager.disabled = false;
-                        }
-                        
-                        // Re-setup camera follow ONLY if camera is not locked by event system
-                        if (!this.eventCameraLocked) {
-                            this.cameras.main.startFollow(this.player, true, 0.1, 0);
-                        }
+                        // CRITICAL: Ensure physics and input are enabled after a manual switch
+                        if (this.playerPhysicsManager) this.playerPhysicsManager.disabled = false;
+                        if (this.inputManager) this.inputManager.disabled = false;
                         
                         return true; // Switch successful, skip other input
                     }
@@ -972,6 +945,70 @@ class GameScene extends Phaser.Scene {
     // ========================================
     // LEVEL LIFECYCLE METHODS
     // ========================================
+    
+    // ========================================
+    // PAUSE MENU
+    // ========================================
+    setupPauseKey() {
+        if (!this.input.keyboard) return;
+        this.input.keyboard.on('keydown-P', () => this.requestPause());
+        this.input.keyboard.on('keydown-ESC', () => this.requestPause());
+    }
+    
+    canPause() {
+        if (!this.isSceneReady || !this.player) return false;
+        if (this.levelLifecycle && this.levelLifecycle.busy) return false;
+        if (this.levelTransitionManager && this.levelTransitionManager.isTransitioning) return false;
+        if (this.dialogueManager && typeof this.dialogueManager.isActive === 'function' && this.dialogueManager.isActive()) return false;
+        if (this.characterManager && this.characterManager.isHandlingGameOver) return false;
+        if (this.scene.isActive('PauseScene') || this.scene.isPaused()) return false;
+        return true;
+    }
+    
+    // Returns true if the game paused. Pauses this scene and the touch scene (their
+    // update loops, physics, tweens, timers and input all stop) and launches PauseScene
+    // on top. UIScene keeps drawing the HUD.
+    requestPause() {
+        if (!this.canPause()) return false;
+        console.log('⏸️ Pausing game');
+        
+        // Silence only what is playing now, so resume never revives a sound that
+        // something else had stopped or paused on purpose
+        this._soundsPausedByMenu = (this.sound.sounds || []).filter(s => s && s.isPlaying);
+        this._soundsPausedByMenu.forEach(s => s.pause());
+        
+        this.scene.launch('PauseScene');
+        this.scene.bringToTop('PauseScene');
+        if (this.scene.isActive('TouchControlsScene')) this.scene.pause('TouchControlsScene');
+        this.scene.pause();
+        return true;
+    }
+    
+    resumeFromPause() {
+        console.log('▶️ Resuming game');
+        if (this.scene.isPaused('TouchControlsScene')) this.scene.resume('TouchControlsScene');
+        if (this.scene.isPaused()) this.scene.resume();
+        
+        (this._soundsPausedByMenu || []).forEach(s => { if (s && s.isPaused) s.resume(); });
+        this._soundsPausedByMenu = null;
+        
+        // Keys and touches held when the menu opened never got their release events
+        if (this.input.keyboard) this.input.keyboard.resetKeys();
+        if (this.touchControlsOverlay) this.touchControlsOverlay.onGameResumed();
+    }
+    
+    quitToMenu() {
+        console.log('🏠 Quitting to main menu from pause');
+        (this._soundsPausedByMenu || []).forEach(s => { if (s) s.stop(); });
+        this._soundsPausedByMenu = null;
+        
+        if (this.scene.isActive('TouchControlsScene') || this.scene.isPaused('TouchControlsScene')) {
+            this.scene.stop('TouchControlsScene');
+        }
+        // MainMenuScene.create() stops UIScene itself
+        if (window.sceneManager) window.sceneManager.currentScene = 'MainMenuScene';
+        this.scene.start('MainMenuScene'); // shuts this scene down (see shutdown()) and starts the menu
+    }
     
     shutdown() {
         console.log('🎮 GameScene: Shutdown - Cleaning up all resources...');

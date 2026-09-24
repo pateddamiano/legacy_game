@@ -972,7 +972,10 @@ class Enemy {
             }
             
             this.setState(ENEMY_STATES.DEAD);
-            
+
+            // Death juice: shove back from the hit and squash-and-stretch (after setState, which zeroes velocity)
+            if (this.scene.effectSystem) this.scene.effectSystem.onEnemyDeath(this, knockbackSource);
+
             // Play enemy death sound effect
             if (this.scene.audioManager) {
                 this.scene.audioManager.playEnemyDeath();

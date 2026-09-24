@@ -29,28 +29,36 @@ class AnimationStateManager {
             }
         }
 
-        // Update animation lock timer
-        if (this.lockTimer > 0) {
+        // Update animation lock timer. The lock ALWAYS expires when its timer runs out.
+        //
+        // This used to return early whenever a queued attack was pending inside the
+        // buffer window - which also skipped the unlock check below. If a queued press
+        // landed on the frame the timer crossed zero, the timer went negative, the whole
+        // block (guarded by lockTimer > 0) never ran again, and the player stayed
+        // "attacking" forever: no movement, attacks only re-queued. The attack
+        // animation's 'animationcomplete' handler usually rescued it, but anything that
+        // cut the animation short (a character switch finishing and playing idle, a hit
+        // freeze) left the character frozen until the next switch built a fresh manager.
+        // Holding a touch button queued a press every frame, making it near-certain.
+        let nextAttack = null;
+        if (this.animationLocked || this.lockTimer > 0) {
             this.lockTimer -= deltaTime;
             
-            // Check if we're in the buffer window and have queued attacks
+            // Queued attacks are consumed here (nothing executes them yet - see the note
+            // on queueAttack in InputManager.handleAttackInput)
             if (this.queuedAttacks.length > 0 && this.lockTimer <= this.bufferWindow) {
-                const nextAttack = this.executeQueuedAttack();
-                if (nextAttack) {
-                    console.log("Executing buffered attack:", nextAttack);
-                    return nextAttack; // Signal to game that we need to execute this attack
-                }
+                nextAttack = this.executeQueuedAttack();
             }
             
             if (this.lockTimer <= 0) {
-                console.log("Animation lock timer expired, unlocking");
+                this.lockTimer = 0;
                 this.animationLocked = false;
                 if (this.currentState === 'attack' || this.currentState === 'airkick') {
-                    console.log("Resetting attack state to idle after lock timer");
                     this.currentState = 'idle';
                 }
             }
         }
+        return nextAttack;
     }
 
     executeQueuedAttack() {

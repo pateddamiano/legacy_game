@@ -54,6 +54,9 @@ class PlayerPhysicsManager {
     handleMovement() {
         if (!this.inputManager || !this.player || !this.player.body) return;
         
+        // Stick pushed the other way mid-punch? Cancel the punch so movement wins
+        this.inputManager.cancelAttackIfTurning(this.player, this.animationManager, this.isJumping);
+        
         // Check if we're doing an air kick (jumping + attacking)
         const isAirKick = this.isJumping && (this.animationManager && this.animationManager.currentState === 'airkick');
         

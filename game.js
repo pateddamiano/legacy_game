@@ -63,9 +63,25 @@ if (window.DEBUG_MODE) {
         (document.getElementById('game-container') || document.body).appendChild(el);
         return el;
     }
-    window.__showGameError = function (title, err) {
-        const stack = err && err.stack ? err.stack.split('\n').slice(0, 5).join('\n    ') : String(err);
-        const line = `[${new Date().toLocaleTimeString()}] ${title}\n    ${stack}`;
+    // Renders one error as: "Name: message", then "at file:line:col", then stack frames.
+    // Safari's err.stack has no message line and Chrome's does, so both are normalised
+    // here - otherwise on a phone the banner showed only this handler's own frame.
+    function describeError(err, loc) {
+        const isObj = err && typeof err === 'object';
+        const name = (isObj && err.name) || 'Error';
+        const message = isObj ? (err.message || String(err)) : String(err);
+        const origin = window.location.origin + '/';
+        let frames = (isObj && typeof err.stack === 'string') ? err.stack.split('\n') : [];
+        if (frames.length && frames[0].indexOf(message) !== -1) frames = frames.slice(1); // Chrome repeats the message
+        frames = frames.map(f => f.trim().split(origin).join('')).filter(Boolean).slice(0, 6);
+        const lines = [`${name}: ${message}`];
+        if (loc && loc.filename) {
+            lines.push(`at ${String(loc.filename).split(origin).join('')}:${loc.lineno}:${loc.colno}`);
+        }
+        return lines.concat(frames);
+    }
+    window.__showGameError = function (title, err, loc) {
+        const line = `[${new Date().toLocaleTimeString()}] ${title}\n    ${describeError(err, loc).join('\n    ')}`;
         seen.push(line);
         console.error('🛑', title, err);
         try {
@@ -73,7 +89,12 @@ if (window.DEBUG_MODE) {
             document.getElementById('game-error-banner-text').textContent =
                 'GAME ERROR - select to copy, ✕ to dismiss\n\n' + seen.slice(-4).join('\n\n');
         } catch (e) {}
-        // Also hand it to the dev server so it lands in the server log even if nobody copies it
+        // Ship it to the remote log server (remote-logging-config.js) so it can be read
+        // from the desktop even when nobody copies it off the phone
+        try {
+            if (typeof window.remoteLog === 'function') window.remoteLog('[GAME ERROR]', line);
+        } catch (e) {}
+        // And to the dev server, for servers that accept it
         try {
             fetch('/__error', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: line, keepalive: true }).catch(() => {});
         } catch (e) {}
@@ -96,8 +117,25 @@ if (window.DEBUG_MODE) {
             }
         }, 300);
     }
+    // Errors thrown by scripts the browser itself injects into the page (crypto wallet
+    // providers like window.ethereum from Brave / MetaMask / Coinbase Wallet browsers,
+    // extensions, in-app browsers) arrive here too. They are reported against the page
+    // URL at line 1, or with no filename at all, and they say nothing about the game -
+    // so log them but keep them off the banner.
+    function isInjectedScriptError(e) {
+        const msg = String(e.message || '');
+        if (/window\.ethereum|selectedAddress|solana|tronWeb|__CHROME_EXT|extension:\/\//i.test(msg)) return true;
+        if (!e.filename) return true;                                   // cross-origin "Script error."
+        const pageUrl = window.location.href.split('#')[0];
+        return e.filename === pageUrl && e.lineno <= 1;                 // page:1 = injected, not index.html
+    }
     window.addEventListener('error', (e) => {
-        window.__showGameError('Uncaught error', e.error || new Error(e.message + ' @ ' + e.filename + ':' + e.lineno));
+        if (isInjectedScriptError(e)) {
+            console.warn('⚠️ Ignoring error from a browser-injected script (not the game):', e.message, '@', e.filename + ':' + e.lineno);
+            return;
+        }
+        const loc = { filename: e.filename, lineno: e.lineno, colno: e.colno };
+        window.__showGameError('Uncaught error', e.error || new Error(e.message || 'Script error (no details from the browser)'), loc);
         ensureLoopAlive();
     });
     window.addEventListener('unhandledrejection', (e) => {
@@ -147,6 +185,7 @@ if (window.DEBUG_MODE) {
                 CutsceneScene,
                 UIScene,
                 TouchControlsScene,
+                PauseScene,
                 GameScene
             ]
         };

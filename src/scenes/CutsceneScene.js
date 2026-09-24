@@ -73,6 +73,13 @@ class CutsceneScene extends Phaser.Scene {
             return;
         }
 
+        // End card: laid out against the real screen, not the 1200x720 letterbox
+        this.showcase = this.config.showcase || null;
+        if (this.showcase) {
+            this.createShowcaseScreen();
+            return;
+        }
+
         // Use the same fixed virtual dimensions as the game world
         this.virtualWidth = 1200;
         this.virtualHeight = 720;
@@ -109,13 +116,8 @@ class CutsceneScene extends Phaser.Scene {
             this.createCutsceneCharacters();
         }
 
-        this.showcase = this.config.showcase || null;
-        if (this.showcase) {
-            this.createShowcase();
-        } else {
-            this.createCinematicBars();
-            this.createDialogueUI();
-        }
+        this.createCinematicBars();
+        this.createDialogueUI();
 
         this.lines = this.config.lines || [];
 
@@ -130,12 +132,6 @@ class CutsceneScene extends Phaser.Scene {
         }
 
         this.setupInput();
-
-        if (this.showcase) {
-            // End card: no dialogue, no skip prompt. Fade in and let it sit.
-            this.cameras.main.fadeIn(1500, 0, 0, 0);
-            return;
-        }
 
         // Skip prompt
         const promptText = (window.DeviceManager && window.DeviceManager.shouldShowTouchControls())
@@ -229,15 +225,85 @@ class CutsceneScene extends Phaser.Scene {
         });
     }
 
-    // End card: a hovering image over a radial glow (yellow centre fading to dark),
-    // with a title and subtitle, then a prompt to return to the main menu.
-    createShowcase() {
-        const s = this.showcase;
-        const centerX = this.virtualWidth / 2;
-        const imageY = s.y !== undefined ? s.y : 290;
+    // ========================================
+    // END CARD (showcase)
+    // ========================================
+    // A hovering album cover over a radial glow, a title, a tap-to-listen line and a
+    // MAIN MENU button. Uses a full-screen camera at zoom 1 and sizes everything from
+    // the actual screen, so it fits a phone as well as a desktop window, and it is
+    // rebuilt on resize / rotation. (It used to be drawn at a fixed size inside the
+    // 1200x720 letterbox, which clipped the glow into a box and crowded small screens.)
+    createShowcaseScreen() {
+        this.configureFullScreenCamera();
 
-        // Radial glow: opaque yellow in the middle, fully transparent at the edge
-        const glowSize = s.glowSize || 760;
+        // Music: reuse GameScene's AudioManager (see create())
+        const gameScene = this.scene.get('GameScene');
+        this.audioManager = (gameScene && gameScene.audioManager) ? gameScene.audioManager : null;
+        if (this.audioManager && this.config.music) {
+            const volume = this.config.musicVolume !== undefined ? this.config.musicVolume : null;
+            this.audioManager.playBackgroundMusic(this.config.music, false, volume);
+        }
+
+        this.showcaseObjects = [];
+        this.buildShowcase();
+
+        this.onResize = () => {
+            this.configureFullScreenCamera();
+            this.buildShowcase();
+        };
+        this.scale.on('resize', this.onResize);
+
+        // Keyboard: SPACE / ESC go back to the menu once the button is showing
+        if (this.input.keyboard) {
+            const back = () => { if (this.showcaseReady) this.returnToMainMenu(); };
+            this.input.keyboard.on('keydown-SPACE', back);
+            this.input.keyboard.on('keydown-ESC', back);
+        }
+
+        // The menu button appears after a moment so a stray tap from the boss fight
+        // can't skip the ending
+        const delay = this.showcase.menuDelay !== undefined ? this.showcase.menuDelay : 2500;
+        this.time.delayedCall(delay, () => {
+            this.showcaseReady = true;
+            if (this.menuButton) {
+                this.tweens.add({ targets: this.menuButton, alpha: 1, duration: 800 });
+            }
+        });
+
+        this.cameras.main.fadeIn(1500, 0, 0, 0);
+    }
+
+    configureFullScreenCamera() {
+        const w = (this.scale && this.scale.width) || window.innerWidth;
+        const h = (this.scale && this.scale.height) || window.innerHeight;
+        const cam = this.cameras.main;
+        cam.setViewport(0, 0, w, h);
+        cam.setZoom(1);
+        cam.setBounds();
+        cam.setScroll(0, 0);
+        cam.setBackgroundColor('#000000');
+    }
+
+    buildShowcase() {
+        (this.showcaseObjects || []).forEach(obj => {
+            this.tweens.killTweensOf(obj);
+            obj.destroy();
+        });
+        this.showcaseObjects = [];
+        const keep = obj => { this.showcaseObjects.push(obj); return obj; };
+
+        const s = this.showcase;
+        const w = this.scale.width;
+        const h = this.scale.height;
+        const cx = w / 2;
+        const font = GAME_CONFIG.ui.fontFamily;
+        const isTouch = !!(window.DeviceManager && window.DeviceManager.shouldShowTouchControls());
+
+        // --- Album cover + glow ---------------------------------------------
+        const coverSize = Math.round(Math.min(h * 0.5, w * 0.42));
+        const coverY = Math.round(h * 0.34);
+
+        const glowSize = Math.min(2048, Math.round(coverSize * 2.4));
         if (this.textures.exists('cutsceneShowcaseGlow')) {
             this.textures.remove('cutsceneShowcaseGlow');
         }
@@ -245,67 +311,111 @@ class CutsceneScene extends Phaser.Scene {
         const ctx = glowTexture.getContext();
         const half = glowSize / 2;
         const gradient = ctx.createRadialGradient(half, half, 0, half, half, half);
-        gradient.addColorStop(0, 'rgba(255, 224, 80, 0.95)');
-        gradient.addColorStop(0.35, 'rgba(255, 190, 30, 0.55)');
-        gradient.addColorStop(0.7, 'rgba(180, 120, 10, 0.18)');
+        gradient.addColorStop(0, 'rgba(255, 224, 80, 0.9)');
+        gradient.addColorStop(0.35, 'rgba(255, 190, 30, 0.5)');
+        gradient.addColorStop(0.7, 'rgba(180, 120, 10, 0.16)');
         gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, glowSize, glowSize);
         glowTexture.refresh();
 
-        const glow = this.add.image(centerX, imageY, 'cutsceneShowcaseGlow').setDepth(1);
+        const glow = keep(this.add.image(cx, coverY, 'cutsceneShowcaseGlow').setDepth(1));
         this.tweens.add({
             targets: glow,
-            alpha: { from: 0.8, to: 1 },
+            alpha: { from: 0.75, to: 1 },
             duration: 2200,
             ease: 'Sine.easeInOut',
             yoyo: true,
             repeat: -1
         });
 
-        // The hovering image itself
-        const image = this.add.image(centerX, imageY, s.image.key).setDepth(2);
-        image.setScale((s.height || 400) / image.height);
-        const bob = s.bobDistance !== undefined ? s.bobDistance : 12;
+        const shadowOffset = Math.max(4, Math.round(coverSize * 0.025));
+        const shadow = keep(this.add.rectangle(cx + shadowOffset, coverY + shadowOffset, coverSize, coverSize, 0x000000, 0.45).setDepth(2));
+        const cover = keep(this.add.image(cx, coverY, s.image.key).setDepth(3));
+        cover.setDisplaySize(coverSize, coverSize);
+        const coverScale = cover.scaleX;
+
+        const bob = Math.max(4, Math.round(coverSize * 0.03));
         this.tweens.add({
-            targets: image,
-            y: imageY - bob,
+            targets: [cover, shadow],
+            y: `-=${bob}`,
             duration: s.bobDuration || 1800,
             ease: 'Sine.easeInOut',
             yoyo: true,
             repeat: -1
         });
 
-        // Title + subtitle fade in after the picture has settled
-        const title = this.add.text(centerX, 560, s.title || '', {
-            fontFamily: GAME_CONFIG.ui.fontFamily,
-            fontSize: '72px',
+        // Tap / click the cover to listen
+        cover.setInteractive({ useHandCursor: true });
+        cover.on('pointerover', () => cover.setScale(coverScale * 1.04));
+        cover.on('pointerout', () => cover.setScale(coverScale));
+        // pointerup, not pointerdown: browsers only allow window.open inside a real
+        // click/tap, and Phaser hands us pointerup from inside the DOM event
+        cover.on('pointerup', () => this.openListenLink());
+
+        // --- Text -----------------------------------------------------------
+        const fitWidth = (text, maxWidth) => {
+            if (text.width > maxWidth) text.setScale(maxWidth / text.width);
+            return text;
+        };
+
+        const title = keep(this.add.text(cx, Math.round(h * 0.665), s.title || 'THE END', {
+            fontFamily: font,
+            fontSize: `${Math.round(Math.min(h * 0.085, 80))}px`,
             color: '#FFD700',
-            fontStyle: 'bold'
-        }).setOrigin(0.5).setDepth(3).setAlpha(0);
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: Math.max(2, Math.round(h * 0.006))
+        }).setOrigin(0.5).setDepth(4));
+        fitWidth(title, w * 0.9);
 
-        const subtitle = this.add.text(centerX, 625, s.subtitle || '', {
-            fontFamily: GAME_CONFIG.ui.fontFamily,
-            fontSize: '36px',
-            color: '#FFFFFF'
-        }).setOrigin(0.5).setDepth(3).setAlpha(0);
-
-        this.tweens.add({ targets: [title, subtitle], alpha: 1, delay: 1800, duration: 1500 });
-
-        // After a few seconds, offer the way back to the menu
-        const promptText = (window.DeviceManager && window.DeviceManager.shouldShowTouchControls())
-            ? 'Tap to return to the main menu'
-            : 'Press SPACE to return to the main menu';
-        const prompt = this.add.text(centerX, this.virtualHeight - 40, promptText, {
-            fontFamily: GAME_CONFIG.ui.fontFamily,
-            fontSize: GAME_CONFIG.ui.fontSize.label,
-            color: '#888888'
-        }).setOrigin(0.5).setDepth(3).setAlpha(0);
-
-        this.time.delayedCall(5000, () => {
-            this.showcaseReady = true;
-            this.tweens.add({ targets: prompt, alpha: 1, duration: 800 });
+        const listenCopy = s.listenText || {};
+        const listen = keep(this.add.text(cx, Math.round(h * 0.765),
+            (isTouch ? listenCopy.touch : listenCopy.desktop) || 'Tap the album to listen', {
+                fontFamily: font,
+                fontSize: `${Math.round(Math.min(h * 0.05, 44))}px`,
+                color: '#FFFFFF',
+                align: 'center'
+            }).setOrigin(0.5).setDepth(4));
+        fitWidth(listen, w * 0.92);
+        listen.setInteractive({ useHandCursor: true });
+        listen.on('pointerup', () => this.openListenLink());
+        this.tweens.add({
+            targets: listen,
+            alpha: { from: 1, to: 0.6 },
+            duration: 1100,
+            ease: 'Sine.easeInOut',
+            yoyo: true,
+            repeat: -1
         });
+
+        // --- MAIN MENU button (grey) -----------------------------------------
+        const menuFontSize = Math.round(Math.min(h * 0.045, 38));
+        const menuLabel = this.add.text(0, 0, s.menuText || 'MAIN MENU', {
+            fontFamily: font,
+            fontSize: `${menuFontSize}px`,
+            color: '#9a9a9a'
+        }).setOrigin(0.5);
+        const padX = menuFontSize * 0.9;
+        const padY = menuFontSize * 0.35;
+        const menuBg = this.add.rectangle(0, 0, menuLabel.width + padX * 2, menuLabel.height + padY * 2, 0x000000, 0.55)
+            .setStrokeStyle(2, 0x777777, 0.9);
+        const menuButton = keep(this.add.container(cx, Math.round(h * 0.895), [menuBg, menuLabel]).setDepth(4));
+        menuButton.setAlpha(this.showcaseReady ? 1 : 0);
+        menuBg.setInteractive({ useHandCursor: true });
+        menuBg.on('pointerover', () => { menuLabel.setColor('#dddddd'); menuBg.setStrokeStyle(2, 0xbbbbbb, 1); });
+        menuBg.on('pointerout', () => { menuLabel.setColor('#9a9a9a'); menuBg.setStrokeStyle(2, 0x777777, 0.9); });
+        menuBg.on('pointerup', () => { if (this.showcaseReady) this.returnToMainMenu(); });
+        this.menuButton = menuButton;
+    }
+
+    openListenLink() {
+        const url = this.showcase && this.showcase.listenUrl;
+        if (!url) {
+            console.warn('🎬 End card: no listenUrl set in CUTSCENE_CONFIGS.ending_golden_record.showcase');
+            return;
+        }
+        window.open(url, '_blank', 'noopener');
     }
 
     returnToMainMenu() {

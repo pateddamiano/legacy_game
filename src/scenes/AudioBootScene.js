@@ -15,25 +15,28 @@ class AudioBootScene extends Phaser.Scene {
     preload() {
         console.log('📦 AudioBootScene: Loading essential assets...');
         
-        // Load essential UI assets
+        // Only what the boot UI itself needs. Everything else is queued in create(),
+        // AFTER the progress bar exists - preload() runs on a bare black canvas, and on
+        // a phone the full spritesheet/environment download here took long enough to
+        // look like a hang right after "Launch Game".
         this.load.image('titleCard', 'assets/title/TitleCard.png');
         this.load.image('menuBackground', 'assets/title/MenuBackground.png');
-        
-        // Load character assets immediately - needed for GameScene
-        this.loadAllCharacterAssets();
-        
-        // Load environment assets
-        this.loadAllEnvironmentAssets();
-        
-        // Load weapon and pickup assets
-        this.loadAllGameplayAssets();
-        
+
         console.log('📦 AudioBootScene: Essential assets loading configured...');
     }
 
     create() {
         console.log('🎵 ===== AUDIO BOOT SCENE CREATED =====');
-        
+
+        // Tell the HTML startup overlay it can come down - the canvas has something to show now
+        if (typeof window !== 'undefined') window.dispatchEvent(new Event('legacy-boot-ready'));
+
+        // Queue the bulk assets now; setupMinimalLoading() / startAssetLoading() start the
+        // loader once their UI is up, so these download with a visible progress bar.
+        this.loadAllCharacterAssets();
+        this.loadAllEnvironmentAssets();
+        this.loadAllGameplayAssets();
+
         // Check for debug mode FIRST - skip everything if direct level load requested
         if (window.DIRECT_LEVEL_LOAD && (window.TEST_LEVEL_ID !== undefined)) {
             console.log('%c🧪 DEBUG MODE: Skipping menu, going directly to level', 'color: #00ff00; font-weight: bold;', window.TEST_LEVEL_ID);
@@ -593,9 +596,8 @@ class AudioBootScene extends Phaser.Scene {
         // Load ALL audio assets for client-side caching
         this.loadAllAudioAssets();
         
-        // Note: Character, environment, and gameplay assets already loaded in preload()
-        console.log('📦 Character, environment, and gameplay assets already loaded in preload()');
-        
+        // Character, environment and gameplay assets were queued in create() and start here too
+
         // Start the actual loading
         console.log('📦 Starting asset loading with visible progress...');
         mainLoader.start();

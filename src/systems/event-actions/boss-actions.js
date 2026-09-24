@@ -56,6 +56,20 @@ class BossActions {
         const boss = new Boss(this.scene, position.x, position.y, characterConfig, mergedConfig);
         boss.setPlayer(this.scene.player);
         
+        // Try-again after dying in this fight: come back at the health it had
+        // (CharacterManager.respawnAtPosition fills bossHealthCarry; used once)
+        const carry = this.eventManager.bossHealthCarry;
+        const carryKey = action.id || mergedConfig.type;
+        if (carry && carry[carryKey] !== undefined) {
+            const carried = carry[carryKey];
+            delete carry[carryKey];
+            if (carried > 0 && carried < boss.maxHealth) {
+                boss.health = carried;
+                boss.lastHealthPercent = carried / boss.maxHealth; // don't count it as damage taken
+                console.log(`👹 ${mergedConfig.name} returns with carried health ${carried}/${boss.maxHealth}`);
+            }
+        }
+        
         // Pause boss AI initially - he will be resumed when the fight actually starts
         // This prevents him from throwing weapons during dialogue
         boss.eventPaused = true;
@@ -132,7 +146,18 @@ class BossActions {
         
         // Resolve the new body against the world bounds now (see GameScene.settlePhysics)
         if (this.scene.settlePhysics) this.scene.settlePhysics();
-        
+
+        // Optional spawn-in effect, e.g. "spawnEffect": "negative_tornado". The boss stays
+        // hidden until the tornado finishes so he steps out of it like a character switch.
+        if (action.spawnEffect && boss.sprite && this.scene.effectSystem) {
+            boss.sprite.setVisible(false);
+            this.scene.effectSystem.spawnTornadoEffect(
+                boss.sprite.x, boss.sprite.y, boss.sprite.scaleX, boss.sprite.depth,
+                () => { if (boss.sprite && boss.sprite.active) boss.sprite.setVisible(true); },
+                action.spawnEffect
+            );
+        }
+
         // Advance to next action
         this.advanceAction();
     }
