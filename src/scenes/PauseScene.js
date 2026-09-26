@@ -41,19 +41,28 @@ class PauseScene extends Phaser.Scene {
     build() {
         const w = this.scale.width;
         const h = this.scale.height;
-        const unit = Math.min(w / 1200, h / 720); // 1 at the virtual 1200x720 size
         const font = (window.GAME_CONFIG && GAME_CONFIG.ui.fontFamily) || 'VT323';
 
         // Dim the game and swallow every touch that is not on a button
         this.add.rectangle(0, 0, w, h, 0x000000, 0.65).setOrigin(0).setInteractive();
 
-        this.add.text(w / 2, h * 0.30, 'PAUSED', {
-            fontFamily: font,
-            fontSize: `${Math.round(84 * unit)}px`,
-            fill: '#FFD700',
-            stroke: '#000000',
-            strokeThickness: Math.max(2, Math.round(6 * unit))
-        }).setOrigin(0.5);
+        // Phone held upright (handheld mode): the menu fills the console's top panel (the
+        // game screen), since the controls below stay live for picking a button with the
+        // stick + ATTACK (HandheldControlsScene)
+        if (window.DeviceManager && window.DeviceManager.isHandheldMode()) {
+            const size = LayoutManager.getScreenSize();
+            const panel = LayoutManager.getHandheldLayout(size.width, size.height).bezel;
+            const top = panel.y + 8;
+            const ph = panel.height - 16;
+            const unit = Math.min(w / 400, ph / 300);
+            this.add.text(w / 2, top + ph * 0.17, 'PAUSED', this.titleStyle(font, unit * 0.8)).setOrigin(0.5);
+            this.makeButton(w / 2, top + ph * 0.5, 'RESUME', unit, font, () => this.resumeGame());
+            this.makeButton(w / 2, top + ph * 0.8, 'MAIN MENU', unit, font, () => this.quitToMenu());
+            return;
+        }
+
+        const unit = Math.min(w / 1200, h / 720); // 1 at the virtual 1200x720 size
+        this.add.text(w / 2, h * 0.30, 'PAUSED', this.titleStyle(font, unit)).setOrigin(0.5);
 
         this.makeButton(w / 2, h * 0.52, 'RESUME', unit, font, () => this.resumeGame());
         this.makeButton(w / 2, h * 0.68, 'MAIN MENU', unit, font, () => this.quitToMenu());
@@ -63,6 +72,16 @@ class PauseScene extends Phaser.Scene {
             fontSize: `${Math.round(26 * unit)}px`,
             fill: '#bbbbbb'
         }).setOrigin(0.5);
+    }
+
+    titleStyle(font, unit) {
+        return {
+            fontFamily: font,
+            fontSize: `${Math.round(84 * unit)}px`,
+            fill: '#FFD700',
+            stroke: '#000000',
+            strokeThickness: Math.max(2, Math.round(6 * unit))
+        };
     }
 
     makeButton(x, y, label, unit, font, onClick) {

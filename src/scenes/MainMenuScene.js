@@ -59,11 +59,14 @@ class MainMenuScene extends Phaser.Scene {
         // Apply the same layout manager as GameScene to maintain consistent aspect ratio
         LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight);
         
-        // Handle window resizing - reapply layout to maintain aspect ratio
-        this.scale.on('resize', (gameSize) => {
+        // Handle window resizing - reapply layout to maintain aspect ratio. Removed on
+        // shutdown so each visit to the menu doesn't stack another listener.
+        const onResize = () => {
             console.log('📏 Resizing MainMenuScene...');
             LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight);
-        });
+        };
+        this.scale.on('resize', onResize);
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off('resize', onResize));
         
         // Check for debug mode - immediately redirect to test level
         if (window.DIRECT_LEVEL_LOAD && window.TEST_LEVEL_ID === 'test') {
@@ -477,22 +480,16 @@ class MainMenuScene extends Phaser.Scene {
             
             // Game title image
             console.log('🏠 MainMenuScene: Creating game title image...');
-            const titleImage = this.add.image(centerX, centerY - 150, 'titleCard').setOrigin(0.5);
-            
-            // Make title responsive - scale relative to virtual dimensions
-            const maxWidth = this.virtualWidth * 0.7; // 70% of virtual width
-            const maxHeight = this.virtualHeight * 0.4; // 40% of virtual height
-            const scaleX = maxWidth / titleImage.width;
-            const scaleY = maxHeight / titleImage.height;
-            const scale = Math.min(scaleX, scaleY, 2); // Allow scaling up to 2x
-            
-            titleImage.setScale(scale);
+            // Same spot and size as on the loading screen (LayoutManager.getTitleLayout):
+            // top-centre on desktop, a bigger logo on the left half on phones
+            const layout = LayoutManager.getTitleLayout(this.virtualWidth, this.virtualHeight);
+            LayoutManager.fitTitleCard(this.add.image(0, 0, 'titleCard'), layout.logo);
             console.log('🏠 MainMenuScene: ✅ Game title image created and scaled responsively');
             
             
             // Menu buttons (moved up since we removed subtitle)
             console.log('🏠 MainMenuScene: Creating menu buttons...');
-            this.createMenuButtons(centerX, centerY + 50);
+            this.createMenuButtons(layout.column.x, layout.column.y, layout.phone);
             
             console.log('🏠 MainMenuScene: ✅ Menu buttons created');
             
@@ -502,13 +499,16 @@ class MainMenuScene extends Phaser.Scene {
         }
     }
     
-    createMenuButtons(centerX, centerY) {
+    // phoneColumn: the buttons are centred on centerY (phone layout, beside the logo)
+    // instead of starting there (desktop, under the logo)
+    createMenuButtons(centerX, centerY, phoneColumn = false) {
         console.log('🏠 MainMenuScene: Starting createMenuButtons...');
         
         try {
+            const k = this.menuScale();
             // 8-bit style button configuration
             const buttonStyle = {
-                fontSize: GAME_CONFIG.ui.fontSize.button,
+                fontSize: this.menuFont(GAME_CONFIG.ui.fontSize.button),
                 fill: '#FFD700', // Golden yellow like title
                 fontFamily: GAME_CONFIG.ui.fontFamily,
                 fontWeight: 'bold',
@@ -525,7 +525,7 @@ class MainMenuScene extends Phaser.Scene {
             };
             
             const buttonHoverStyle = {
-                fontSize: GAME_CONFIG.ui.fontSize.buttonHover, // Slightly bigger on hover
+                fontSize: this.menuFont(GAME_CONFIG.ui.fontSize.buttonHover), // Slightly bigger on hover
                 fill: '#FF6B35', // Orange like title highlights
                 fontFamily: GAME_CONFIG.ui.fontFamily,
                 fontWeight: 'bold',
@@ -543,10 +543,14 @@ class MainMenuScene extends Phaser.Scene {
             
             console.log('🏠 MainMenuScene: 8-bit button styles defined');
         
-        // Standard button dimensions for all buttons
-        const buttonWidth = 300;
-        const buttonHeight = 60;
-        const buttonSpacing = 80;
+        // Standard button dimensions for all buttons (bigger on phones)
+        const buttonWidth = Math.round(300 * k);
+        const buttonHeight = Math.round(60 * k);
+        const buttonSpacing = Math.round(80 * k);
+        if (phoneColumn) {
+            const buttonCount = window.gameState.player.stats.totalGamesPlayed > 0 ? 4 : 3;
+            centerY -= (buttonCount - 1) * buttonSpacing / 2;
+        }
         
         // Start Game button with stylized background
         console.log('🏠 MainMenuScene: Creating START GAME button...');
@@ -658,6 +662,15 @@ class MainMenuScene extends Phaser.Scene {
     }
     
     
+    // Phones draw the 1200x720 menu at about half size: scale its text and buttons up
+    menuScale() {
+        return window.DeviceManager ? window.DeviceManager.getMenuScale() : 1;
+    }
+    
+    menuFont(size) {
+        return `${Math.round(parseFloat(size) * this.menuScale())}px`;
+    }
+    
     setupInput() {
         // Keyboard shortcuts
         this.input.keyboard.on('keydown-ENTER', () => {
@@ -682,6 +695,7 @@ class MainMenuScene extends Phaser.Scene {
                 0
             );
             fullscreenTrigger.setDepth(10000); // Above everything
+            fullscreenTrigger.handheldNavIgnore = true; // not a menu button (HandheldMenuNav)
             fullscreenTrigger.setInteractive({ useHandCursor: false });
             
             // One-time fullscreen request on first click/touch
@@ -788,16 +802,21 @@ class MainMenuScene extends Phaser.Scene {
             'Music: ++ (@foreverplusplus)\n\n' +
             'With special guest appearances by\n' +
             'Rozotadi (@rozotadi)\n' +
-            'Misfit (@notyur_ordinary)\n' +
+            'CallMeMisfit (@notyur_ordinary)\n' +
             'Brianna Emily (@briannaemily__)\n\n' +
             'Click anywhere to close', {
-            fontSize: GAME_CONFIG.ui.fontSize.label, // 32px: the longer list needs the room
+            fontSize: this.menuFont(GAME_CONFIG.ui.fontSize.label), // 32px: the longer list needs the room
             fill: '#ffffff',
             fontFamily: GAME_CONFIG.ui.fontFamily,
             align: 'center',
             lineSpacing: 8,
             wordWrap: { width: this.virtualWidth - 120 }
         }).setOrigin(0.5).setDepth(5001);
+        // Bigger phone text could run off the top and bottom: shrink it back to fit if so
+        const maxCreditsHeight = this.virtualHeight - 20;
+        if (creditsText.height > maxCreditsHeight) {
+            creditsText.setScale(maxCreditsHeight / creditsText.height);
+        }
         
         // Close on click
         overlay.on('pointerdown', () => {
@@ -815,6 +834,18 @@ class MainMenuScene extends Phaser.Scene {
         const created = [];
         const add = (obj, depthOffset = 1) => { obj.setDepth(DEPTH + depthOffset); created.push(obj); return obj; };
         const closeSettings = () => created.forEach(obj => obj.destroy());
+        const menuFont = (size) => this.menuFont(size);
+        // Desktop layout, or on phones a wider panel with bigger text and buttons
+        const phone = this.menuScale() > 1;
+        const L = phone ? {
+            panel: [1160, 700], titleY: -295, labelX: -540, valueX: 300,
+            rowY: [-175, -55, 70], closeY: 240, arrowOffset: 165,
+            arrow: [130, 104], toggle: [400, 104], close: [330, 104]
+        } : {
+            panel: [900, 640], titleY: -265, labelX: -400, valueX: 230,
+            rowY: [-150, -40, 70], closeY: 225, arrowOffset: 130,
+            arrow: [110, 90], toggle: [370, 90], close: [280, 90]
+        };
         
         // Darken screen (oversized: always covers everything the camera shows)
         const overlay = add(this.add.rectangle(cx, cy, this.virtualWidth * 2, this.virtualHeight * 2, 0x000000, 0.8), 0)
@@ -822,12 +853,12 @@ class MainMenuScene extends Phaser.Scene {
         
         // Settings panel. Interactive so a tap on empty panel space is swallowed here
         // instead of falling through to the overlay and closing the whole menu.
-        add(this.add.rectangle(cx, cy, 900, 640, 0x2C1810, 0.95))
+        add(this.add.rectangle(cx, cy, L.panel[0], L.panel[1], 0x2C1810, 0.95))
             .setStrokeStyle(4, 0xFFD700)
             .setInteractive();
         
-        add(this.add.text(cx, cy - 265, 'SETTINGS', {
-            fontSize: GAME_CONFIG.ui.fontSize.subtitle,
+        add(this.add.text(cx, cy + L.titleY, 'SETTINGS', {
+            fontSize: menuFont(GAME_CONFIG.ui.fontSize.subtitle),
             fill: '#FFD700',
             fontFamily,
             fontWeight: 'bold',
@@ -863,10 +894,10 @@ class MainMenuScene extends Phaser.Scene {
             return { bg, text };
         };
         
-        const labelStyle = { fontSize: GAME_CONFIG.ui.fontSize.body, fill: '#FFD700', fontFamily, fontWeight: 'bold' };
-        const valueStyle = { fontSize: GAME_CONFIG.ui.fontSize.heading, fill: '#FF6B35', fontFamily, fontWeight: 'bold' };
-        const labelX = cx - 400;   // row labels, left-aligned
-        const valueX = cx + 230;   // value between the two arrow buttons
+        const labelStyle = { fontSize: menuFont(GAME_CONFIG.ui.fontSize.body), fill: '#FFD700', fontFamily, fontWeight: 'bold' };
+        const valueStyle = { fontSize: menuFont(GAME_CONFIG.ui.fontSize.heading), fill: '#FF6B35', fontFamily, fontWeight: 'bold' };
+        const labelX = cx + L.labelX;   // row labels, left-aligned
+        const valueX = cx + L.valueX;   // value between the two arrow buttons
         
         // One "◀ 70% ▶" row. get/set work in 0-1.
         const volumeRow = (y, label, get, set) => {
@@ -878,30 +909,30 @@ class MainMenuScene extends Phaser.Scene {
                 set(v);
                 valueText.setText(`${Math.round(v * 100)}%`);
             };
-            makeButton(valueX - 130, y, 110, 90, '◀', GAME_CONFIG.ui.fontSize.title, () => step(-0.1));
-            makeButton(valueX + 130, y, 110, 90, '▶', GAME_CONFIG.ui.fontSize.title, () => step(0.1));
+            makeButton(valueX - L.arrowOffset, y, L.arrow[0], L.arrow[1], '◀', menuFont(GAME_CONFIG.ui.fontSize.title), () => step(-0.1));
+            makeButton(valueX + L.arrowOffset, y, L.arrow[0], L.arrow[1], '▶', menuFont(GAME_CONFIG.ui.fontSize.title), () => step(0.1));
         };
         
         // Music: the menu track that is playing now (window.menuMusic)
-        volumeRow(cy - 150, 'MUSIC',
+        volumeRow(cy + L.rowY[0], 'MUSIC',
             () => (window.menuMusic ? window.menuMusic.volume : 1),
             (v) => { if (window.menuMusic) window.menuMusic.setVolume(v); });
         
         // Sound effects: saved in GameSettings, applied to every effect in the game.
         // The click beep after each press previews the new level.
-        volumeRow(cy - 40, 'SOUND FX',
+        volumeRow(cy + L.rowY[1], 'SOUND FX',
             () => GameSettings.get('sfxVolume'),
             (v) => GameSettings.set('sfxVolume', v));
         
         // Reduce flashing & shake (photosensitivity / motion sensitivity)
-        add(this.add.text(labelX, cy + 70, 'REDUCE FLASHING\n& SCREEN SHAKE', { ...labelStyle, lineSpacing: -6 }).setOrigin(0, 0.5));
+        add(this.add.text(labelX, cy + L.rowY[2], 'REDUCE FLASHING\n& SCREEN SHAKE', { ...labelStyle, lineSpacing: -6 }).setOrigin(0, 0.5));
         const toggleLabel = () => (GameSettings.reduceEffects() ? 'ON' : 'OFF');
-        const toggle = makeButton(valueX, cy + 70, 370, 90, toggleLabel(), GAME_CONFIG.ui.fontSize.button, () => {
+        const toggle = makeButton(valueX, cy + L.rowY[2], L.toggle[0], L.toggle[1], toggleLabel(), menuFont(GAME_CONFIG.ui.fontSize.button), () => {
             GameSettings.set('reduceEffects', !GameSettings.reduceEffects());
             toggle.text.setText(toggleLabel());
         });
         
-        makeButton(cx, cy + 225, 280, 90, 'CLOSE', GAME_CONFIG.ui.fontSize.button, closeSettings);
+        makeButton(cx, cy + L.closeY, L.close[0], L.close[1], 'CLOSE', menuFont(GAME_CONFIG.ui.fontSize.button), closeSettings);
         
         // Tapping outside the panel also closes it
         overlay.on('pointerdown', () => {
@@ -910,29 +941,11 @@ class MainMenuScene extends Phaser.Scene {
         });
     }
     
+    // Keeps the menu fitted to the screen as the phone is turned. (Portrait is played as a
+    // handheld console now - LayoutManager puts the menu in its screen - so there is no
+    // "rotate your device" prompt any more.)
     checkOrientation() {
         if (!window.DeviceManager) return;
-        
-        // Create orientation warning overlay (hidden by default)
-        this.orientationOverlay = this.add.container(0, 0).setDepth(9999).setVisible(false);
-        
-        // Black background covering everything
-        // We use a large size to ensure coverage regardless of scale
-        const bg = this.add.rectangle(0, 0, 5000, 5000, 0x000000).setOrigin(0.5);
-        
-        const text = this.add.text(0, 0, 'PLEASE ROTATE DEVICE\nTO LANDSCAPE', {
-            fontSize: '48px',
-            fill: '#FFD700',
-            fontFamily: 'VT323',
-            align: 'center'
-        }).setOrigin(0.5);
-        
-        const icon = this.add.text(0, -100, '📱➡️📱', {
-            fontSize: '64px',
-            align: 'center'
-        }).setOrigin(0.5);
-        
-        this.orientationOverlay.add([bg, text, icon]);
         
         let viewportSettleTimer = null;
         const scheduleViewportSettle = () => {
@@ -940,36 +953,17 @@ class MainMenuScene extends Phaser.Scene {
                 clearTimeout(viewportSettleTimer);
             }
             viewportSettleTimer = setTimeout(() => {
-                LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight);
+                if (menuAlive()) LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight);
             }, 200);
         };
         
-        // Function to update overlay position and visibility
+        // These run from resize events and short setTimeouts; one can land after the menu
+        // has shut down (no camera), so check the menu is still up first.
+        const menuAlive = () => !!(this.sys && this.sys.isActive() && this.cameras && this.cameras.main);
+        
         const updateOrientationCheck = () => {
-            if (window.DeviceManager) {
-                window.DeviceManager.checkOrientation();
-            }
-            
-            // Always hide overlay on non-mobile
-            if (!window.DeviceManager || !window.DeviceManager.isMobile) {
-                this.orientationOverlay.setVisible(false);
-                return;
-            }
-            
-            const shouldShow = window.DeviceManager.shouldShowRotatePrompt();
-            if (shouldShow) {
-                this.wasPortrait = true;
-                const centerX = this.cameras.main.midPoint.x;
-                const centerY = this.cameras.main.midPoint.y;
-                this.orientationOverlay.setPosition(centerX, centerY);
-                this.orientationOverlay.setVisible(true);
-                // Pause game inputs if possible
-            } else {
-                this.wasPortrait = false;
-                this.orientationOverlay.setVisible(false);
-                // Ensure layout re-applies after overlay hides
-                setTimeout(() => LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight), 0);
-            }
+            if (!menuAlive()) return;
+            window.DeviceManager.checkOrientation();
         };
         
         // Check initially
@@ -980,6 +974,7 @@ class MainMenuScene extends Phaser.Scene {
         
         // Additional listeners for native resize/orientation events (some mobile browsers skip Phaser resize)
         const reapplyLayout = () => {
+            if (!menuAlive()) return;
             if (this.scale?.refresh) {
                 this.scale.refresh();
             }
@@ -1010,6 +1005,7 @@ class MainMenuScene extends Phaser.Scene {
         
         // Clean up listeners when scene shuts down
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            this.scale.off('resize', updateOrientationCheck);
             window.removeEventListener('resize', this.orientationResizeHandler);
             window.removeEventListener('orientationchange', this.orientationChangeHandler);
             if (window.visualViewport && this.visualViewportHandler) {

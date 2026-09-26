@@ -35,7 +35,7 @@
         { "type": "dialogue", "dialogue": { "speaker": "Negative Tireek", "text": "Let's see which one of us is stronger." } },
         { "type": "healPlayers" },
         { "type": "showBossHealthBar", "bossId": "boss_negative_tireek" },
-        { "type": "playerAura", "effect": "bluefire", "hue": 190 },
+        { "type": "playerAura", "effect": "goldfire" },
         { "type": "resume", "targets": ["player", "enemies"] },
         { "type": "waitForBossDefeated", "bossId": "boss_negative_tireek" },
         { "type": "pause", "targets": ["player", "enemies"] },

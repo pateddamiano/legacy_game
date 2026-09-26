@@ -31,6 +31,12 @@ const FullscreenManager = {
      * Call this from scene input handlers (pointerdown, etc.)
      */
     requestFullscreenOnInteraction(pointer) {
+        // A press made by the handheld menu controls (HandheldMenuNav) is not a real tap,
+        // and browsers only allow fullscreen from inside one
+        if (pointer && pointer.handheldNav) {
+            return;
+        }
+        
         // Only request once
         if (this.hasRequestedFullscreen) {
             return;

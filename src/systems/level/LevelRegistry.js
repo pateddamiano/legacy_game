@@ -50,7 +50,7 @@ class LevelRegistry {
                 scene.load.off('loaderror', onError);
             };
             
-            scene.load.json(this.indexKey, 'src/config/levels/index.json');
+            scene.load.json(this.indexKey, LevelRegistry.freshUrl('src/config/levels/index.json'));
             scene.load.once('filecomplete-json-' + this.indexKey, onDone);
             scene.load.on('loaderror', onError);
             if (!scene.load.isLoading()) scene.load.start();
@@ -162,7 +162,7 @@ class LevelRegistry {
                     scene.load.off('loaderror', onError);
                 };
                 
-                scene.load.json(jsonKey, path);
+                scene.load.json(jsonKey, LevelRegistry.freshUrl(path));
                 scene.load.once('filecomplete-json-' + jsonKey, onDone);
                 scene.load.on('loaderror', onError);
                 if (!scene.load.isLoading()) scene.load.start();
@@ -171,6 +171,15 @@ class LevelRegistry {
         });
     }
 }
+
+// Level files are plain JSON with no version in their URL, and a static server (python
+// http.server) sends no cache headers - so browsers kept reusing an old copy for hours
+// after a level was edited (a new level event simply never happened). Stamp each page
+// load so every session fetches the current files; they are small and load once.
+LevelRegistry.LOAD_STAMP = Date.now();
+LevelRegistry.freshUrl = function (url) {
+    return url + (url.includes('?') ? '&' : '?') + 't=' + LevelRegistry.LOAD_STAMP;
+};
 
 // Export globally
 if (typeof window !== 'undefined') {

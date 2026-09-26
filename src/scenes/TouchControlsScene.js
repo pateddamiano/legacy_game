@@ -9,9 +9,10 @@ class TouchControlsScene extends Phaser.Scene {
         this.configureCamera();
         
         // Recalculate camera on resize so overlay always spans the full screen
-        this.scale.on('resize', () => {
-            this.configureCamera();
-        });
+        // (removed on shutdown so a stopped scene doesn't touch its missing camera)
+        const onResize = () => this.configureCamera();
+        this.scale.on('resize', onResize);
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off('resize', onResize));
     }
     
     configureCamera() {

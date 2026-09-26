@@ -84,7 +84,7 @@ const TRYSTON_CONFIG = new CharacterConfig(
         idle: 'assets/characters/tryston/spritesheets/Tryston_Idle.png'
     },
     {
-        run: { frames: 8, frameRate: 12, repeat: -1 },
+        run: { frames: 7, frameRate: 12, repeat: -1 },    // Tryston_Run.png has 7 frames
         jab: { frames: 4, frameRate: 20, repeat: 0 },     // Very fast: 24 FPS
         cross: { frames: 4, frameRate: 20, repeat: 0 },   // Very fast: 24 FPS  
         kick: { frames: 5, frameRate: 16, repeat: 0 },    // Fast: 20 FPS

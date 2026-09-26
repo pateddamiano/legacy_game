@@ -55,10 +55,10 @@ class AudioBootScene extends Phaser.Scene {
         // Apply layout manager for consistent aspect ratio across all scenes
         LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight);
         
-        // Handle window resizing
-        this.scale.on('resize', (gameSize) => {
-            LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight);
-        });
+        // Handle window resizing (removed on shutdown, like the other scenes)
+        const onResize = () => LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight);
+        this.scale.on('resize', onResize);
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off('resize', onResize));
         
         // Create animated tiled background
         this.createAnimatedBackground();
@@ -169,8 +169,10 @@ class AudioBootScene extends Phaser.Scene {
     createAnimatedBackground() {
         console.log('🎨 Creating animated tiled background...');
         
-        const screenWidth = this.cameras.main.width;
-        const screenHeight = this.cameras.main.height;
+        // Cover the virtual 1200x720 area like MainMenuScene does. cameras.main.width is the
+        // on-screen viewport size (~650px on a phone), which left the right side uncovered.
+        const screenWidth = this.virtualWidth;
+        const screenHeight = this.virtualHeight;
         const originalTileSize = 768; // Original size of your background tile
         const scaleFactor = 0.3; // Make tiles much smaller (30% of original size)
         const tileSize = originalTileSize * scaleFactor;
@@ -369,8 +371,7 @@ class AudioBootScene extends Phaser.Scene {
         this.load.image('parallax_background', 'assets/level_1_pieces/Background.png');
         console.log('🌍 Loading parallax background: assets/level_1_pieces/Background.png');
 
-        this.load.image('parallax_background_level2', 'assets/level_2_pieces/level2_background_subway.png');
-        console.log('🌍 Loading level 2 parallax background: assets/level_2_pieces/level2_background_subway.png');
+        // (level2_background_subway.png - an unused 18912x2394 image, ~173 MB decoded - is no longer loaded)
 
         // Load level 2 moving subway car
         this.load.image('subwaycar', 'assets/level_2_pieces/subwaycar.png');
@@ -497,20 +498,22 @@ class AudioBootScene extends Phaser.Scene {
     }
 
     createBootUI(centerX, centerY) {
-        // Game title logo (your custom title card)
-        this.titleLogo = this.add.image(centerX, centerY - 100, 'titleCard').setOrigin(0.5);
-        
-        // Scale the logo to fit nicely
-        const logoMaxWidth = this.cameras.main.width * 0.8;
-        const logoMaxHeight = this.cameras.main.height * 0.4;
-        const logoScaleX = logoMaxWidth / this.titleLogo.width;
-        const logoScaleY = logoMaxHeight / this.titleLogo.height;
-        const logoScale = Math.min(logoScaleX, logoScaleY, 1.5);
-        this.titleLogo.setScale(logoScale);
+        // Game title logo, in the same spot and size as on the main menu so it doesn't jump
+        // when the menu takes over: top-centre on desktop, bigger on the left on phones
+        // (LayoutManager.getTitleLayout). The loading text, bar and % go in the column.
+        const layout = LayoutManager.getTitleLayout(this.virtualWidth, this.virtualHeight);
+        this.titleLogo = LayoutManager.fitTitleCard(this.add.image(0, 0, 'titleCard'), layout.logo);
+        const k = window.DeviceManager ? window.DeviceManager.getMenuScale() : 1;
+        const font = (size) => `${Math.round(parseFloat(size) * k)}px`;
+        const columnX = layout.column.x;
+        // Desktop: under the logo as before. Phone: centred beside the logo.
+        const loadingY = layout.phone ? layout.column.y - 90 : centerY + 100;
+        const barY = layout.phone ? layout.column.y : centerY + 150;
+        const percentY = layout.phone ? layout.column.y + 80 : centerY + 205;
 
         // Loading text
-        this.loadingText = this.add.text(centerX, centerY + 100, 'LOADING...', {
-            fontSize: GAME_CONFIG.ui.fontSize.heading,
+        this.loadingText = this.add.text(columnX, loadingY, 'LOADING...', {
+            fontSize: font(GAME_CONFIG.ui.fontSize.heading),
             fill: '#FFD700',
             fontFamily: GAME_CONFIG.ui.fontFamily,
             fontWeight: 'bold',
@@ -526,12 +529,16 @@ class AudioBootScene extends Phaser.Scene {
             }
         }).setOrigin(0.5);
 
-        // Create 8-bit style loading bar with pixel squares
-        this.createPixelLoadingBar(centerX, centerY + 150);
+        // Create 8-bit style loading bar with pixel squares (22px squares, bigger on
+        // phones but never wider than the column beside the logo)
+        const spacing = Math.round(2 * k);
+        const maxBarWidth = layout.phone ? 500 : 800;
+        const squareSize = Math.min(Math.round(22 * k), Math.floor((maxBarWidth - 19 * spacing) / 20));
+        this.createPixelLoadingBar(columnX, barY, squareSize, spacing);
 
         // Percentage text
-        this.percentText = this.add.text(centerX, centerY + 190, '0%', {
-            fontSize: GAME_CONFIG.ui.fontSize.label,
+        this.percentText = this.add.text(columnX, percentY, '0%', {
+            fontSize: font(GAME_CONFIG.ui.fontSize.button),
             fill: '#ffffff',
             fontFamily: GAME_CONFIG.ui.fontFamily,
             fontWeight: 'bold',
@@ -552,16 +559,14 @@ class AudioBootScene extends Phaser.Scene {
         this.startAssetLoading();
     }
 
-    createPixelLoadingBar(centerX, centerY) {
+    createPixelLoadingBar(centerX, centerY, squareSize = 22, spacing = 2) {
         // Create 8-bit style loading bar with individual pixel squares
         this.pixelSquares = [];
         this.totalSquares = 20; // Number of squares in the loading bar
-        const squareSize = 16; // Size of each square
-        const spacing = 2; // Space between squares
         const totalWidth = (this.totalSquares * squareSize) + ((this.totalSquares - 1) * spacing);
         
-        // Starting X position to center the bar
-        const startX = centerX - (totalWidth / 2);
+        // Starting X position to center the bar (x is each square's centre)
+        const startX = centerX - (totalWidth / 2) + squareSize / 2;
         
         // Create background squares (dark)
         for (let i = 0; i < this.totalSquares; i++) {

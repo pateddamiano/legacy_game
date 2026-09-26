@@ -48,6 +48,7 @@ const ENEMY_CONFIG = {
     // 💪 ENEMY STATS (base values - can be overridden per enemy type)
     health: 10,                  // strength of enemy (higher = tankier enemies)
     speed: 180,                  // enemy movement speed (player is 420, so this is ~19% player speed)
+    speedMultiplier: 0.85,       // difficulty knob: scales EVERY regular enemy's speed (1 = original; lower = more time to react). Bosses are exempt.
     verticalMoveSpeed: 2,       // speed for up/down movement (beat 'em up style)
     
     // 🧠 AI BEHAVIOR
@@ -62,11 +63,16 @@ const ENEMY_CONFIG = {
     cleanupDistance: 1200,      // distance at which enemies are removed (increased to be larger than spawn distance ~820px)
     cleanupDistanceBehind: 1000, // More aggressive cleanup for enemies behind player (when player is moving forward)
     cleanupGracePeriod: 3000,   // Grace period after spawn before cleanup can occur (ms) - prevents immediate cleanup
+    leftBehindTime: 1000,       // ms an enemy the player ran past may stay fully off the LEFT edge before it's removed (frees its slot for a spawn ahead)
+    outrunLeftBehindTime: 250,  // same, while the player is running past EVERY enemy (none left ahead) - they drop off almost at once
     damageFlashTime: 200,       // duration of damage flash effect (ms) - increased for better visibility
     deathFlashTime: 300,        // duration of death flash effect (ms) - visible red flash before disappearing
     
     // 🏃 CATCH-UP BEHAVIOR
-    catchUpSpeedMultiplier: 2.0, // Speed multiplier when enemy is behind player and player is moving forward
+    catchUpSpeedMultiplier: 1.5, // Speed multiplier when enemy is behind player and player is moving forward.
+                                 // Kept well under the player's run speed so enemies that were run
+                                 // past fall off the left edge (and get replaced ahead) instead of
+                                 // trailing along it - at 2.0 they hovered right at the screen edge.
     catchUpDistance: 500,       // Distance threshold for catch-up behavior (enemy behind player by this much)
     
     // 📏 SCALING & SIZE (further increased by 1.25x)
@@ -272,7 +278,7 @@ class Enemy {
         
         this.health = Math.round(baseHealth * multipliers.health);
         this.maxHealth = this.health;
-        this.speed = baseSpeed * multipliers.speed;
+        this.speed = baseSpeed * multipliers.speed * (ENEMY_CONFIG.speedMultiplier || 1);
         this.attackRange = ENEMY_CONFIG.attackRange;
         this.attackCooldown = typeConfig.attackCooldown || ENEMY_CONFIG.attackCooldown;
         this.lastAttackTime = 0;
@@ -505,6 +511,20 @@ class Enemy {
         if (this.isFrozenByWind) {
             return; // Enemy is frozen, don't process AI
         }
+        
+        // Tutorial dummy (TutorialActions): stands idle and never attacks, but unlike an
+        // event-paused enemy it still runs the knockback and wind timers above, so punches,
+        // records and the switch's wind visibly shove it around
+        if (this.tutorialDummy) {
+            if (!this.isKnockedBack && this.sprite.body) this.sprite.setVelocity(0, 0);
+            const target = this.scene.player || this.player;
+            if (target) this.sprite.setFlipX(this.sprite.x > target.x);
+            const idleKey = `${this.variationName}_idle`;
+            if (!this.sprite.anims.isPlaying || this.sprite.anims.currentAnim?.key !== idleKey) {
+                this.playAnimIfExists(idleKey);
+            }
+            return;
+        }
 
         // AI behavior based on state
         switch (this.state) {
@@ -593,7 +613,10 @@ class Enemy {
         const playerFacingRight = !this.player.flipX;
         
         // Apply catch-up speed multiplier when enemy is behind player and player is moving/heading right
-        if (isBehindPlayer && horizontalDistance > ENEMY_CONFIG.catchUpDistance && (playerMovingRight || playerFacingRight)) {
+        // No catch-up while the player is running past every enemy (see
+        // EnemySpawnManager.isPlayerOutrunning): let them fall off the edge fast instead
+        const outrunning = this.scene.enemySpawnManager && this.scene.enemySpawnManager.playerOutrunning;
+        if (!outrunning && isBehindPlayer && horizontalDistance > ENEMY_CONFIG.catchUpDistance && (playerMovingRight || playerFacingRight)) {
             moveSpeed *= ENEMY_CONFIG.catchUpSpeedMultiplier;
             // console.log(`🏃 Enemy ${this.characterConfig.name} catching up! Speed: ${moveSpeed.toFixed(0)} (${horizontalDistance.toFixed(0)}px behind)`);
         }
@@ -917,6 +940,8 @@ class Enemy {
         }
         
         this.health -= damage;
+        // Tutorial dummies flinch and get knocked back but can't be killed until released
+        if (this.tutorialDummy && this.health < 1) this.health = 1;
         //console.log(`Enemy ${this.characterConfig.name} takes ${damage} damage (${this.health}/${this.maxHealth} HP)`);
         
         // Apply knockback if source is provided
@@ -972,6 +997,12 @@ class Enemy {
             }
             
             this.setState(ENEMY_STATES.DEAD);
+            this.scene.events.emit('enemy:defeated', this); // e.g. waitForEnemyDefeats
+
+            // Chance to drop a health pickup right here when the player is hurt
+            if (this.scene.itemPickupManager && this.scene.itemPickupManager.onEnemyKilled) {
+                this.scene.itemPickupManager.onEnemyKilled(this);
+            }
 
             // Death juice: shove back from the hit and squash-and-stretch (after setState, which zeroes velocity)
             if (this.scene.effectSystem) this.scene.effectSystem.onEnemyDeath(this, knockbackSource);

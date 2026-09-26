@@ -36,9 +36,9 @@
         { "type": "pause", "targets": ["player", "enemies"] },
         { "type": "camera", "stopFollow": true },
         { "type": "spawnExtra", "name": "misfit", "position": { "x": 490, "y": 390 }, "id": "extra_misfit", "matchPlayer": false, "multiplier": 1.0 },
-        { "type": "dialogue", "dialogue": { "speaker": "Misfit", "text": "Yo... I saw The Critic run this way!" } },
-        { "type": "dialogue", "dialogue": { "speaker": "Misfit", "text": "He must be hiding out on the platform..." } },
-        { "type": "dialogue", "dialogue": { "speaker": "Misfit", "text": "Stay sharp." } },
+        { "type": "dialogue", "dialogue": { "speaker": "CallMeMisfit", "text": "Yo... I saw The Critic run this way!" } },
+        { "type": "dialogue", "dialogue": { "speaker": "CallMeMisfit", "text": "He must be hiding out on the platform..." } },
+        { "type": "dialogue", "dialogue": { "speaker": "CallMeMisfit", "text": "Stay sharp." } },
         { "type": "destroyExtra", "target": "extra_misfit" },
         { "type": "camera", "follow": "player" },
         { "type": "resume", "targets": ["player", "enemies"] }

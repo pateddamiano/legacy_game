@@ -11,14 +11,16 @@ const ITEM_TYPES = {
     HEALTH: {
         name: 'Health Cross',
         healAmount: 30,
-        spawnInterval: 3000,
+        spawnInterval: 3000,        // (unused: health is dropped by defeated enemies, see healthDrop below)
+        dropOnly: true,             // never spawns by itself off-screen - only dropped by enemies
         maxOnScreen: 3,
         despawnTime: 20000,
         size: 32,
+        depth: 1500,                // Top layer: characters/enemies are layered by their y (400-650), so this stays in front of them all
         glowColor: 0x00ff00,        // Green glow
-        magnetRange: 80,
+        magnetRange: 170,           // "sticky": the cross starts flying to the player from this far away (was 80)
         magnetSpeed: 300,
-        collisionRadius: 60,        // Increased from 40 for easier pickup, especially near edges
+        collisionRadius: 100,       // and is collected outright inside this radius (was 60)
         bobHeight: 8,
         bobSpeed: 2000,
         spawnWhenPlayerHealthFull: false,
@@ -83,6 +85,17 @@ const ITEM_PICKUP_CONFIG = {
     particleEffectDuration: 500,
     pickupFlashDuration: 200,
     pickupFlashScale: 1.5,
+    
+    // 💚 HEALTH DROPS (dropped by enemies the player defeats)
+    healthDrop: {
+        chance: 0.6,              // chance a defeated enemy drops one while the player is hurt (0.6 = 60%)
+        lowHealthFraction: 0.6,   // "hurt" = either character is at or below this fraction of max health
+        popHeight: 110,           // how high (px) the item is thrown up before it falls
+        popTime: 260,             // ms going up
+        fallTime: 750,           // ms falling and bouncing back to the ground
+        scatter: 45,              // sideways drift (px, random direction) so it isn't hidden behind the enemy
+        settleTime: 150,         // ms after landing before it can be picked up / magnetised
+    }
 };
 
 // ========================================
@@ -90,12 +103,15 @@ const ITEM_PICKUP_CONFIG = {
 // ========================================
 
 class ItemPickup {
-    constructor(scene, x, y, itemType) {
+    // options.drop = { groundY, ...ITEM_PICKUP_CONFIG.healthDrop }: pop up out of (x, y), then fall
+    // and bounce down to groundY, instead of just appearing and bobbing in place
+    constructor(scene, x, y, itemType, options = {}) {
         this.scene = scene;
         this.itemType = ITEM_TYPES[itemType];
         this.typeName = itemType;
         this.active = true;
         this.magnetActive = false;
+        this.dropping = false;   // true while thrown into the air; can't be collected until it lands
         
         // Create the main pickup graphic or sprite
         this.createPickupVisual(x, y);
@@ -103,8 +119,12 @@ class ItemPickup {
         // Add glow effect
         this.createGlowEffect();
         
-        // Start floating animation
-        this.startBobAnimation();
+        // Start floating animation - or the pop-and-bounce, which starts it once landed
+        if (options.drop) {
+            this.startDrop(x, y, options.drop);
+        } else {
+            this.startBobAnimation();
+        }
         
         // Set despawn timer
         this.startDespawnTimer();
@@ -115,7 +135,9 @@ class ItemPickup {
     createPickupVisual(x, y) {
         // Create container for all visual elements
         this.container = this.scene.add.container(x, y);
-        this.container.setDepth(400); // Above characters but below UI
+        // Characters and enemies are depth-sorted by their y (roughly 400-650), so the old fixed 400
+        // put items BEHIND everyone standing near them. Types can ask for a higher layer.
+        this.container.setDepth(this.itemType.depth || 400);
         
         if (this.itemType.renderType === 'graphics') {
             // Use graphics rendering (for health cross)
@@ -154,6 +176,52 @@ class ItemPickup {
         });
     }
     
+    // Throw the item up, drift it sideways, then let it fall and bounce onto groundY
+    startDrop(x, y, drop) {
+        this.dropping = true;
+        const dir = Math.random() < 0.5 ? -1 : 1;
+        const landX = x + dir * (drop.scatter * (0.5 + Math.random() * 0.5));
+        
+        this.container.setScale(0.4);
+        this.scene.tweens.add({ targets: this.container, scale: 1, duration: drop.popTime, ease: 'Back.easeOut' });
+        
+        // Up (x drifts the whole way across; y is handled in two stages)
+        this.dropTween = this.scene.tweens.add({
+            targets: this.container,
+            x: landX,
+            duration: drop.popTime + drop.fallTime,
+            ease: 'Sine.easeOut'
+        });
+        this.popTween = this.scene.tweens.add({
+            targets: this.container,
+            y: y - drop.popHeight,
+            duration: drop.popTime,
+            ease: 'Quad.easeOut',
+            onComplete: () => {
+                if (!this.active || !this.container) return;
+                // Down: Bounce.easeOut gives the "drops and bounces a few times" motion
+                this.fallTween = this.scene.tweens.add({
+                    targets: this.container,
+                    y: drop.groundY,
+                    duration: drop.fallTime,
+                    ease: 'Bounce.easeOut',
+                    onComplete: () => {
+                        if (!this.active || !this.container) return;
+                        this.scene.time.delayedCall(drop.settleTime, () => {
+                            if (!this.active || !this.container) return;
+                            this.dropping = false;
+                            this.startBobAnimation();
+                        });
+                    }
+                });
+            }
+        });
+    }
+    
+    canCollect() {
+        return this.active && !this.dropping && !!this.container;
+    }
+    
     startBobAnimation() {
         // Floating bob animation with item-specific settings
         this.bobTween = this.scene.tweens.add({
@@ -174,7 +242,7 @@ class ItemPickup {
     }
     
     update(player) {
-        if (!this.active || !this.container) return;
+        if (!this.active || !this.container || this.dropping) return;
         
         // Check for magnetic attraction
         const distance = Phaser.Math.Distance.Between(
@@ -244,6 +312,11 @@ class ItemPickup {
                     this.scene.audioManager.playHealthPickup();
                 }
                 
+                // Whoop + gold wave + sparkling pluses on the player
+                if (this.scene.effectSystem && this.scene.effectSystem.onHealthPickup) {
+                    this.scene.effectSystem.onHealthPickup();
+                }
+                
                 const tireekHealth = this.scene.characterManager.characters.tireek.health;
                 const trystonHealth = this.scene.characterManager.characters.tryston.health;
                 // console.log(`💚 Both characters healed! Tireek: ${tireekHealth}/100, Tryston: ${trystonHealth}/100`);
@@ -251,17 +324,118 @@ class ItemPickup {
                 console.warn('⚠️ CharacterManager not found, cannot heal player!');
             }
         } else if (this.typeName === 'MICROPHONE') {
-            // Award points
-            this.scene.playerScore += this.itemType.points;
-            this.scene.uiManager.updateScoreDisplay(this.scene.playerScore);
+            // Award the points now, so they count even if the level ends mid-flight; the
+            // counter itself updates when the flying microphone reaches it. Worth more
+            // during a hit combo (ComboSystem: x1-x5).
+            const multiplier = this.scene.comboSystem ? this.scene.comboSystem.multiplier : 1;
+            const points = this.itemType.points * multiplier;
+            this.scene.playerScore += points;
             
             // Play microphone pickup sound
             if (this.scene.audioManager) {
                 this.scene.audioManager.playMicrophonePickup();
             }
             
-            console.log(`🎤 Player earned ${this.itemType.points} points! Total: ${this.scene.playerScore}`);
+            if (!this.flyToScoreCounter(points)) {
+                this.scene.uiManager.updateScoreDisplay(this.scene.playerScore);
+            }
+            
+            console.log(`🎤 Player earned ${points} points (x${multiplier} combo)! Total: ${this.scene.playerScore}`);
         }
+    }
+    
+    // The collected microphone floats up the screen, then swoops into the golden microphone
+    // counter in the HUD, which swells when it lands. It is drawn in the HUD scene (so it is
+    // above everything) starting exactly where the pickup was on screen. Returns false if
+    // it can't be set up, and the caller just updates the counter straight away.
+    flyToScoreCounter(points) {
+        const scene = this.scene;
+        const ui = scene.uiManager;
+        const uiScene = scene.uiScene || (ui && ui.uiScene);
+        const icon = ui && ui.scoreMicrophone;
+        const cam = scene.cameras && scene.cameras.main;
+        if (!uiScene || !uiScene.sys || !uiScene.sys.isActive() || !icon || !icon.active || !cam || !this.container) return false;
+        
+        // World -> HUD scene pixels (same letterbox viewport; HUD camera is zoom 1, scroll 0)
+        const zoom = cam.zoom || 1;
+        const x0 = (this.container.x - cam.worldView.x) * zoom;
+        const y0 = (this.container.y - cam.worldView.y) * zoom;
+        const startScale = (this.sprite ? this.sprite.scaleX : 1) * zoom;
+        
+        // Where the counter's microphone icon is, and how big it is on screen
+        const m = icon.getWorldTransformMatrix();
+        const target = m.transformPoint((0.5 - icon.originX) * icon.width, (0.5 - icon.originY) * icon.height);
+        const endScale = Math.hypot(m.a, m.b);
+        
+        // Pending points are not on the counter yet: it shows playerScore minus what is still flying
+        scene.pendingMicPoints = (scene.pendingMicPoints || 0) + points;
+        
+        // Worth more than one (a combo multiplier): pop the amount up where it was grabbed
+        if (points > 1) {
+            const bonus = uiScene.add.text(x0, y0 - 30 * zoom, `+${points}`, {
+                fontFamily: GAME_CONFIG.ui.fontFamily,
+                fontSize: `${Math.round(44 * zoom)}px`,
+                color: '#FFD700',
+                stroke: '#000000',
+                strokeThickness: Math.max(3, Math.round(5 * zoom))
+            }).setOrigin(0.5).setDepth(5001);
+            uiScene.tweens.add({
+                targets: bonus, y: bonus.y - 60 * zoom, alpha: 0, duration: 900, ease: 'Quad.easeOut',
+                onComplete: () => bonus.destroy()
+            });
+        }
+        
+        const glow = uiScene.add.circle(x0, y0, 34 * zoom, 0xffd700, 0.35).setDepth(4999);
+        const fly = uiScene.add.sprite(x0, y0, this.itemType.spriteKey).setDepth(5000).setScale(startScale);
+        const cleanup = () => { glow.destroy(); fly.destroy(); };
+        
+        const riseTo = Math.max(28 * zoom, y0 - 150 * zoom);   // float up the screen first...
+        const sway = (Math.random() < 0.5 ? -1 : 1) * 14 * zoom;
+        const path = { t: 0 };
+        let lastGlint = 0;
+        
+        uiScene.tweens.add({
+            targets: [fly, glow],
+            y: riseTo, x: x0 + sway,
+            duration: 380, ease: 'Sine.easeOut',
+            onUpdate: () => fly.setScale(startScale * (1 + 0.3 * (1 - (fly.y - riseTo) / Math.max(1, y0 - riseTo)))),
+            onComplete: () => {
+                // ...then swoop along a curve into the counter
+                const sx = fly.x, sy = fly.y, from = fly.scaleX;
+                const cx = sx + (target.x - sx) * 0.3;              // control point: up and toward the counter
+                const cy = Math.min(sy, target.y) - 40 * zoom;
+                uiScene.tweens.add({
+                    targets: path, t: 1, duration: 520, ease: 'Cubic.easeIn',
+                    onUpdate: (tw, o) => {
+                        const t = o.t, u = 1 - t;
+                        const px = u * u * sx + 2 * u * t * cx + t * t * target.x;
+                        const py = u * u * sy + 2 * u * t * cy + t * t * target.y;
+                        fly.setPosition(px, py);
+                        glow.setPosition(px, py);
+                        fly.setScale(from + (endScale - from) * t);
+                        fly.setAngle(360 * t);
+                        // a trail of little gold glints
+                        const now = uiScene.time.now;
+                        if (now - lastGlint > 40) {
+                            lastGlint = now;
+                            const star = uiScene.add.star(px, py, 4, 2 * zoom, 7 * zoom, 0xffe066).setDepth(4998);
+                            uiScene.tweens.add({ targets: star, alpha: 0, scale: 0.2, duration: 300, onComplete: () => star.destroy() });
+                        }
+                    },
+                    onComplete: () => {
+                        cleanup();
+                        scene.pendingMicPoints = Math.max(0, (scene.pendingMicPoints || 0) - points);
+                        if (ui && ui.onMicrophoneArrived) {
+                            ui.onMicrophoneArrived(scene.playerScore - scene.pendingMicPoints);
+                        }
+                    }
+                });
+            }
+        });
+        
+        // The pickup itself is replaced by the flying copy
+        this.container.setVisible(false);
+        return true;
     }
     
     createPickupEffect() {
@@ -309,6 +483,7 @@ class ItemPickup {
         if (this.glowTween) {
             this.glowTween.destroy();
         }
+        [this.dropTween, this.popTween, this.fallTween].forEach(t => { if (t) t.destroy(); });
         
         // Remove from scene
         if (this.container) {
@@ -328,6 +503,7 @@ class ItemPickupManager {
         this.scene = scene;
         this.pickups = [];
         this.spawnTimers = {};
+        scene.pendingMicPoints = 0; // points collected but still flying to the counter
         
         // Initialize spawn timers for each item type
         Object.keys(ITEM_TYPES).forEach(itemType => {
@@ -340,6 +516,7 @@ class ItemPickupManager {
     update(time, delta, player) {
         // Update spawn timers for each item type
         Object.entries(ITEM_TYPES).forEach(([itemType, config]) => {
+            if (config.dropOnly) return; // dropped by enemies, never spawned off-screen
             this.spawnTimers[itemType] += delta;
             
             if (this.spawnTimers[itemType] >= config.spawnInterval) {
@@ -361,7 +538,7 @@ class ItemPickupManager {
                     player.x, player.y
                 );
                 
-                if (distance <= pickup.itemType.collisionRadius) {
+                if (pickup.canCollect() && distance <= pickup.itemType.collisionRadius) {
                     pickup.collect(player);
                 }
             } else {
@@ -369,6 +546,41 @@ class ItemPickupManager {
                 this.pickups.splice(index, 1);
             }
         });
+    }
+    
+    // "Hurt" = either character is at or below healthDrop.lowHealthFraction of their max health
+    isPlayerLowOnHealth() {
+        const cm = this.scene.characterManager;
+        if (!cm || !cm.characters) return false;
+        const cfg = ITEM_PICKUP_CONFIG.healthDrop;
+        return ['tireek', 'tryston'].some(name => {
+            const c = cm.characters[name];
+            return c && c.maxHealth > 0 && (c.health / c.maxHealth) <= cfg.lowHealthFraction;
+        });
+    }
+    
+    // Called when the player defeats an enemy: while hurt, most kills drop a health cross
+    // (bosses have their own scripted flow and never drop one)
+    onEnemyKilled(enemy) {
+        if (!enemy || enemy.isBoss || !enemy.sprite) return;
+        const cfg = ITEM_PICKUP_CONFIG.healthDrop;
+        if (!this.isPlayerLowOnHealth()) return;
+        if (Math.random() >= cfg.chance) return;
+        
+        const max = ITEM_TYPES.HEALTH.maxOnScreen;
+        if (this.pickups.filter(p => p.typeName === 'HEALTH' && p.active).length >= max) return;
+        
+        // Land where the enemy fell, on the street (same y-space the player walks in)
+        const env = this.scene.environmentManager;
+        const streetTop = env ? env.streetTopLimit : WORLD_CONFIG.streetTopLimit;
+        const streetBottom = env ? env.streetBottomLimit : WORLD_CONFIG.streetBottomLimit;
+        const groundY = Math.max(streetTop, Math.min(streetBottom, enemy.sprite.y));
+        
+        const pickup = new ItemPickup(this.scene, enemy.sprite.x, groundY - 30, 'HEALTH', {
+            drop: Object.assign({}, cfg, { groundY })
+        });
+        this.pickups.push(pickup);
+        console.log(`💚 ${enemy.characterConfig ? enemy.characterConfig.name : 'Enemy'} dropped a health cross at (${Math.round(enemy.sprite.x)}, ${Math.round(groundY)})`);
     }
     
     shouldSpawnItem(itemType, player) {

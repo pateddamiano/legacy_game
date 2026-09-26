@@ -65,8 +65,9 @@
     },
     {
       "id": "level_3_exit_to_alley",
-      "trigger": { "type": "position", "value": 6700, "tolerance": 50, "once": true },
+      "trigger": { "type": "end_zone", "distance": 700, "once": true },
       "actions": [
+        { "type": "waitForEnemyDefeats", "count": 1 },
         { "type": "pause", "targets": ["player", "enemies"] },
         { "type": "camera", "stopFollow": true },
         { "type": "stopEnemySpawning", "clearEnemies": true },

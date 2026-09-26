@@ -108,6 +108,7 @@ class CombatManager {
                                 
                                 enemy.takeDamage(10, this.player); // Deal 10 damage per hit, pass player for knockback
                                 enemy.hitByCurrentAttack = true; // Mark as hit by this attack
+                                this.scene.events.emit('player:punchHit', enemy); // combo, tutorial
                                 if (this.scene.effectSystem) this.scene.effectSystem.onEnemyHit(enemy); // hit-stop / boss shake
                                 console.log(`Player hit enemy with ${this.animationManager.currentState}! (Vertical dist: ${Math.round(verticalDistance)})`);
                             }
@@ -202,6 +203,7 @@ class CombatManager {
     playerTakeDamage(damage, onCharacterDown = null, onSwitchCharacter = null) {
         const activeCharName = this.characterManager.getActiveCharacterName();
         const newHealth = this.characterManager.takeDamage(activeCharName, damage);
+        this.scene.events.emit('player:hurt', damage); // ends the combo
 
         if (this.scene.effectSystem) this.scene.effectSystem.onPlayerHurt(); // camera shake in boss fights
 

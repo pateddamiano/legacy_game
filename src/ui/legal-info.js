@@ -26,7 +26,7 @@
         Music: ++ (@foreverplusplus)</p>
         <p>With special guest appearances by<br>
         Rozotadi (@rozotadi)<br>
-        Misfit (@notyur_ordinary)<br>
+        CallMeMisfit (@notyur_ordinary)<br>
         Brianna Emily (@briannaemily__)</p>
 
         <h3>Copyright</h3>
@@ -129,12 +129,12 @@
             border-radius: 10px;
             padding: 22px 26px;
             font-family: 'VT323', monospace;
-            font-size: 21px;
+            font-size: 23px;
             line-height: 1.3;
             text-align: left;
         }
-        #legal-info-panel h2 { margin: 0 44px 8px 0; color: #FFD700; font-size: 34px; }
-        #legal-info-panel h3 { margin: 18px 0 4px; color: #FF6B35; font-size: 26px; }
+        #legal-info-panel h2 { margin: 0 44px 8px 0; color: #FFD700; font-size: 36px; }
+        #legal-info-panel h3 { margin: 18px 0 4px; color: #FF6B35; font-size: 28px; }
         #legal-info-panel p { margin: 0 0 10px; }
         #legal-info-panel ul { margin: 0 0 10px; padding-left: 22px; }
         #legal-info-panel a { color: #FFD700; }
@@ -153,6 +153,16 @@
             cursor: pointer;
         }
         #legal-info-close:focus-visible { outline: 2px solid #FF6B35; outline-offset: 2px; }
+
+        /* Phones (touch screen with a short side under 600px, same as DeviceManager.isPhone):
+           bigger text, and bigger buttons to tap */
+        @media (pointer: coarse) and (max-height: 599px), (pointer: coarse) and (max-width: 599px) {
+            #legal-info-btn { width: 50px; height: 50px; font-size: 32px; }
+            #legal-info-panel { width: min(760px, 100%); font-size: 26px; padding: 18px 22px; }
+            #legal-info-panel h2 { font-size: 38px; margin-right: 56px; }
+            #legal-info-panel h3 { font-size: 31px; }
+            #legal-info-close { width: 50px; height: 50px; font-size: 30px; }
+        }
     `;
 
     let button = null;

@@ -144,6 +144,10 @@ class EnemySpawnManager {
             }
         }
         
+        // Running past everyone? Read by Enemy.moveTowardPlayer (no catch-up boost) and
+        // updateLeftBehind (shorter linger) so the passed enemies drop off fast
+        this.playerOutrunning = this.isPlayerOutrunning();
+        
         // Update all enemies
         this.enemies.forEach((enemy, index) => {
             enemy.update(time, delta);
@@ -214,17 +218,23 @@ class EnemySpawnManager {
                 const cameraLeft = this.scene.cameras.main.scrollX;
                 const isOffscreenLeft = enemy.sprite.x < (cameraLeft - 400); // 400px offscreen
                 
+                // Left behind: the player ran past it and it has dropped fully off the left
+                // edge. Removed after a moment so its slot spawns a fresh enemy AHEAD.
+                // Before, run-past enemies trailed along the screen edge holding every slot,
+                // nothing new spawned in front, and the level could be run straight through.
+                const isLeftBehind = this.updateLeftBehind(enemy, time);
+                
                 // Only cleanup if not in grace period (unless offscreen left)
                 // Dead enemies are always cleaned up, live enemies need to pass distance check AND not be in grace period
                 const shouldCleanup = enemy.state === ENEMY_STATES.DEAD ? false : // Don't cleanup dead enemies here - they handle their own cleanup
-                                     (!isInGracePeriod && (distanceToPlayer > cleanupThreshold || isOffscreenLeft));
+                                     (isLeftBehind || (!isInGracePeriod && (distanceToPlayer > cleanupThreshold || isOffscreenLeft)));
                 
                 if (shouldCleanup) {
                     if (enemy.sprite) {
                         enemy.destroy();
                     }
                     this.enemies.splice(index, 1);
-                    console.log(`🧹 Cleaned up enemy (distance: ${Math.round(distanceToPlayer)}, behind: ${isBehindPlayer}, offscreen: ${isOffscreenLeft}, grace: ${isInGracePeriod})`);
+                    console.log(`🧹 Cleaned up enemy (distance: ${Math.round(distanceToPlayer)}, behind: ${isBehindPlayer}, offscreen: ${isOffscreenLeft}, leftBehind: ${isLeftBehind}, grace: ${isInGracePeriod})`);
                 }
             } else if (!enemy.sprite) {
                 // Remove enemies with destroyed sprites (but not dead enemies - they handle their own cleanup)
@@ -238,6 +248,49 @@ class EnemySpawnManager {
     // ========================================
     // ENEMY SPAWNING
     // ========================================
+    
+    // True once a regular enemy has been fully off the LEFT edge of the view for
+    // ENEMY_CONFIG.leftBehindTime while the camera is free to scroll (locked-camera fights
+    // spawn from the left on purpose and keep their enemies). Enemies that came on screen
+    // and were run past count from the moment they leave; ones that spawned off the left
+    // and never made it on screen get the normal spawn grace period first.
+    updateLeftBehind(enemy, time) {
+        if (this.eventCameraLocked || !enemy.sprite) {
+            enemy.leftBehindSince = null;
+            return false;
+        }
+        const view = this.scene.cameras.main.worldView;
+        const halfWidth = (enemy.sprite.displayWidth || 0) / 2;
+        const onScreen = enemy.sprite.x + halfWidth > view.left && enemy.sprite.x - halfWidth < view.right;
+        if (onScreen) {
+            enemy.hasBeenOnScreen = true;
+            enemy.leftBehindSince = null;
+            return false;
+        }
+        const offLeft = enemy.sprite.x + halfWidth < view.left;
+        if (!offLeft) {
+            enemy.leftBehindSince = null;
+            return false;
+        }
+        if (enemy.leftBehindSince == null) enemy.leftBehindSince = time;
+        const linger = this.playerOutrunning ? ENEMY_CONFIG.outrunLeftBehindTime : ENEMY_CONFIG.leftBehindTime;
+        const allowed = enemy.hasBeenOnScreen ? linger : ENEMY_CONFIG.cleanupGracePeriod;
+        return time - enemy.leftBehindSince >= allowed;
+    }
+    
+    // True while the player runs forward with no living regular enemy ahead of them -
+    // i.e. they have run past everything. Bosses and event-controlled enemies don't
+    // count, and a locked-camera fight never counts.
+    isPlayerOutrunning() {
+        if (this.eventCameraLocked || !this.player || !this.player.body) return false;
+        if (this.player.body.velocity.x <= 50) return false;
+        return !this.enemies.some(enemy =>
+            enemy && enemy.sprite && enemy.sprite.active &&
+            enemy.state !== ENEMY_STATES.DEAD &&
+            !enemy.isBoss && enemy.eventId === undefined &&
+            enemy.sprite.x > this.player.x
+        );
+    }
     
     spawnEnemy() {
         // Don't spawn enemies if disabled
@@ -269,9 +322,12 @@ class EnemySpawnManager {
             this._spawnDebugLogged = false;
         }
         
-        // Get camera and player bounds for spawning
-        const cameraX = this.scene.cameras.main.scrollX;
-        const cameraWidth = this.scene.cameras.main.width;
+        // Get camera and player bounds for spawning. worldView is the part of the level the
+        // camera shows; cameras.main.width is the on-screen size (about half that on a
+        // phone), which put "offscreen" right-side spawns in plain view.
+        const view = this.scene.cameras.main.worldView;
+        const cameraX = view.x;
+        const cameraWidth = view.width;
         const playerX = this.player.x;
         
         // Determine if player is in first segment (near level start)
@@ -297,8 +353,10 @@ class EnemySpawnManager {
             // During locked camera fights, always allow either side (ignore world bounds)
             spawnOnLeft = Math.random() < 0.5;
         } else {
-            // Normal roaming: slight left bias when not near start
-            spawnOnLeft = !isPlayerInFirstSegment && Math.random() < 0.3;
+            // Normal roaming: some spawns from behind when not near start - but never while
+            // the player is running forward, so there's always something to fight ahead
+            const runningForward = this.player.body && this.player.body.velocity.x > 50;
+            spawnOnLeft = !isPlayerInFirstSegment && !runningForward && Math.random() < 0.3;
         }
         
         // Pick an offscreen X, not clamped to world bounds (so we can spawn out-of-world)

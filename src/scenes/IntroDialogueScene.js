@@ -52,10 +52,10 @@ class IntroDialogueScene extends Phaser.Scene {
         // Apply layout manager to maintain consistent aspect ratio with game
         LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight);
         
-        // Handle window resizing
-        this.scale.on('resize', (gameSize) => {
-            LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight);
-        });
+        // Handle window resizing (removed on shutdown, like the other scenes)
+        const onResize = () => LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight);
+        this.scale.on('resize', onResize);
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off('resize', onResize));
 
         const centerX = this.virtualWidth / 2;
         const centerY = this.virtualHeight / 2;
@@ -147,7 +147,7 @@ class IntroDialogueScene extends Phaser.Scene {
             promptText,
             {
                 fontFamily: GAME_CONFIG.ui.fontFamily,
-                fontSize: GAME_CONFIG.ui.fontSize.label,
+                fontSize: this.storyFont(GAME_CONFIG.ui.fontSize.label),
                 color: '#888888'
             }
         ).setOrigin(0.5).setDepth(11);
@@ -222,7 +222,7 @@ class IntroDialogueScene extends Phaser.Scene {
             '',
             {
                 fontFamily: GAME_CONFIG.ui.fontFamily,
-                fontSize: GAME_CONFIG.ui.fontSize.body,
+                fontSize: this.storyFont(GAME_CONFIG.ui.fontSize.body),
                 color: '#FFD700',
                 fontStyle: 'bold'
             }
@@ -236,12 +236,42 @@ class IntroDialogueScene extends Phaser.Scene {
             '',
             {
                 fontFamily: GAME_CONFIG.ui.fontFamily,
-                fontSize: GAME_CONFIG.ui.fontSize.body,
+                fontSize: this.storyFont(GAME_CONFIG.ui.fontSize.body),
                 color: '#FFFFFF',
-                wordWrap: { width: 650 }
+                wordWrap: { width: Math.round(650 * this.storyTextScale()) }
             }
         );
         this.messageText.setDepth(11);
+    }
+
+    // Phones draw the 1200x720 scene at about half size, so the dialogue text is scaled
+    // up there. It already starts large (body size), so it takes half the in-game dialogue's boost.
+    // The box widens with the text and grows upward from its desktop bottom edge to fit.
+    storyTextScale() {
+        const scale = window.DeviceManager ? window.DeviceManager.getTextScale() : 1;
+        return 1 + (scale - 1) / 2;
+    }
+
+    storyFont(size) {
+        return `${Math.round(parseFloat(size) * this.storyTextScale())}px`;
+    }
+
+    fitDialogueBox(text) {
+        const k = this.storyTextScale();
+        const width = Math.round(700 * k);
+        const bottom = this.virtualHeight / 2 + 330;
+        const left = this.virtualWidth / 2 - width / 2;
+
+        // Measure with the full line (the typewriter starts empty)
+        this.messageText.setText(text);
+        const height = Math.max(200, Math.ceil(10 + this.speakerText.height + this.messageText.height + 20));
+        this.messageText.setText('');
+
+        const top = bottom - height;
+        this.dialogueBox.setPosition(this.virtualWidth / 2, top + height / 2);
+        this.dialogueBox.setSize(width, height);
+        this.speakerText.setPosition(left + 20, top + 10);
+        this.messageText.setPosition(left + 20, top + 10 + this.speakerText.height);
     }
 
     showNextLine() {
@@ -256,8 +286,8 @@ class IntroDialogueScene extends Phaser.Scene {
         // Update speaker
         this.speakerText.setText(line.speaker);
 
-        // Type out the text
-        this.messageText.setText('');
+        // Type out the text (fitDialogueBox leaves it empty)
+        this.fitDialogueBox(line.text);
         this.isTyping = true;
         this.typeText(line.text);
 

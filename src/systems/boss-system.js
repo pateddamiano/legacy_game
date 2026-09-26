@@ -64,6 +64,9 @@ const BOSS_TYPE_CONFIGS = {
         throwWeaponRange: 1000,        // Range at which boss will throw weapons
         noThrowRange: 400,             // Player closer than this: no throws, so they can close in
         throwWeaponType: 'rating',     // Will randomly select rating_0 through rating_4
+        throwAmmo: 3,                  // throws per volley, counted down over its head...
+        throwRechargeTime: 3000,       // ...then this long with no throws: the attack window
+        dodgeText: 'DODGE THE BAD RATINGS!',
         
         // Edge-standing behavior
         standOnEdges: true,            // Enable edge-standing behavior
@@ -95,6 +98,9 @@ const BOSS_TYPE_CONFIGS = {
         noThrowRange: 400,             // Player closer than this: no throws, so they can close in
         throwWeaponType: 'vinyl_boss',
         throwAnimation: 'cross',       // played while throwing (they have no dedicated throw anim)
+        throwAmmo: 5,                  // throws per volley, counted down over their head...
+        throwRechargeTime: 3000,       // ...then this long with no throws: the attack window
+        dodgeText: 'DODGE THE FLAMING RECORDS!',
 
         // Edge-standing: keep clear of the world edge (their bodies are ~450px wide)
         standOnEdges: true,
@@ -127,6 +133,9 @@ const BOSS_TYPE_CONFIGS = {
         noThrowRange: 400,             // Player closer than this: no throws, so they can close in
         throwWeaponType: 'vinyl_boss',
         throwAnimation: 'cross',       // played while throwing (they have no dedicated throw anim)
+        throwAmmo: 5,                  // throws per volley, counted down over their head...
+        throwRechargeTime: 3000,       // ...then this long with no throws: the attack window
+        dodgeText: 'DODGE THE FLAMING RECORDS!',
 
         // Edge-standing: keep clear of the world edge (their bodies are ~450px wide)
         standOnEdges: true,
@@ -154,6 +163,9 @@ class Boss extends Enemy {
         if (!mergedConfig.name || !mergedConfig.health || mergedConfig.jumpOnDamageThreshold === undefined) {
             console.warn(`👹 [BOSS_INIT] Boss config for '${bossType}' may be missing required fields!`);
         }
+        
+        // Bosses keep their tuned speed: undo the global enemy speed multiplier
+        this.speed = this.speed / (ENEMY_CONFIG.speedMultiplier || 1);
         
         // Boss-specific properties
         this.isBoss = true;
@@ -208,6 +220,27 @@ class Boss extends Enemy {
         // Inside this horizontal distance the boss stops throwing (it used to be only the
         // ~140px melee range, so closing the distance meant eating throw after throw)
         this.noThrowRange = mergedConfig.noThrowRange || 400;
+        // Ammo: throwAmmo throws per volley (shown over the boss's head), then no throws
+        // for throwRechargeTime - a guaranteed window to go and attack. Refills after that
+        // window, or on landing a jump once the window has passed. 0 = unlimited (old way).
+        this.throwAmmoMax = mergedConfig.throwAmmo || 0;
+        this.throwAmmo = this.throwAmmoMax;
+        this.throwRechargeTime = mergedConfig.throwRechargeTime || 3000;
+        this.ammoEmptyAt = 0;
+        this.dodgeText = mergedConfig.dodgeText || null;
+        this.ammoLabel = null;
+        // The dodge line only shows on the first volley and after a volley that ran all
+        // the way down to 0 - not after one a jump reloaded early
+        this.announceNextVolley = true;
+        // The fight opens with the dodge line on screen and no throws for this long, so
+        // there's time to read it
+        this.fightStartedAt = 0;
+        this.openingHold = mergedConfig.openingHold !== undefined ? mergedConfig.openingHold : 2200;
+        this.holdThrowsUntil = 0;
+        // Out of ammo, the boss doesn't punch until the player has landed this many hits
+        // (or the window ends): a free moment to get stuck in
+        this.graceHitsAllowed = mergedConfig.graceHits !== undefined ? mergedConfig.graceHits : 2;
+        this.graceHits = 0;
 
         // Edge-standing behavior
         this.standOnEdges = mergedConfig.standOnEdges || false;
@@ -304,6 +337,9 @@ class Boss extends Enemy {
         // Early returns for invalid states
         if (!this.player || this.state === BOSS_STATES.DEAD) return;
         if (!this.sprite || !this.sprite.active) return;
+        
+        this.syncBoundsRectangle();
+        this.updateAmmo(time);
         
         // Check for defeat in update loop (in case health reached 0 outside of takeDamage)
         if (this.health <= 0 && this.state !== BOSS_STATES.DYING && this.state !== BOSS_STATES.DEAD) {
@@ -430,7 +466,7 @@ class Boss extends Enemy {
 
         // Check for melee attack (when close)
         const meleeAttackRange = this.attackRange || 140;
-        if (distanceToPlayer <= meleeAttackRange && time - this.lastAttackTime > this.attackCooldown) {
+        if (distanceToPlayer <= meleeAttackRange && time - this.lastAttackTime > this.attackCooldown && !this.inGraceWindow()) {
             if (this.state !== BOSS_STATES.ATTACKING && this.state !== BOSS_STATES.JUMPING && this.state !== BOSS_STATES.THROWING) {
                 // Ensure facing direction is correct BEFORE entering attack state
                 // This prevents the boss from flipping when player gets close
@@ -546,6 +582,7 @@ class Boss extends Enemy {
         }
         
         const healthBefore = this.health;
+        if (this.throwAmmoMax && this.throwAmmo <= 0) this.graceHits++;
         
         console.log(`👹 [BOSS_DAMAGE] Boss ${this.bossName} taking ${damage} damage. Health: ${healthBefore} -> ${healthBefore - damage}`);
         
@@ -949,6 +986,7 @@ class Boss extends Enemy {
                     
                     // Reset throw cooldown so boss can throw immediately after landing
                     this.lastThrowTime = 0;
+                    this.onJumpLanded(); // refills the ammo once the attack window has passed
                     
                     // Don't unlock player here - unlock happens when flash completes
                     // Player is unlocked in showNotGoodAnimation after flash duration
@@ -1011,6 +1049,7 @@ class Boss extends Enemy {
                                         // Reset throw cooldown so boss can throw immediately after landing
                                         // (when he's farthest from player - best advantage)
                                         this.lastThrowTime = 0;
+                                        this.onJumpLanded(); // refills the ammo once the attack window has passed
                                         
                                         // Don't unlock player here - unlock happens when flash completes
                                         // Player is unlocked in showNotGoodAnimation after flash duration
@@ -1049,6 +1088,7 @@ class Boss extends Enemy {
                                 
                                 // Reset throw cooldown so boss can throw immediately after landing
                                 this.lastThrowTime = 0;
+                                this.onJumpLanded(); // refills the ammo once the attack window has passed
                                 
                                 // Don't unlock player here - unlock happens when flash completes
                                 // Player is unlocked in showNotGoodAnimation after flash duration
@@ -1068,6 +1108,22 @@ class Boss extends Enemy {
         // This is called during jump state for any additional updates
     }
 
+    // Collide with the world's left/right edges only. Boss bodies are big (the Negatives'
+    // is ~450px tall, centred on the sprite), so with the world's 720px bottom edge the
+    // body hit bottom with the boss at y~503 while the player walks down to the lane's
+    // bottom (655 in the alley). Records fly at the boss's height and only hit within
+    // 40px, so the bottom of the lane was a safe spot. Vertical range is the street lane,
+    // clamped in updateVerticalMovement(). Rebuilt each frame from the world bounds so an
+    // arena lock that moves the side edges still applies.
+    syncBoundsRectangle() {
+        const body = this.sprite && this.sprite.body;
+        if (!body || typeof body.setBoundsRectangle !== 'function') return;
+        const wb = this.scene.physics.world.bounds;
+        if (!this._boundsRect) this._boundsRect = new Phaser.Geom.Rectangle();
+        this._boundsRect.setTo(wb.x, wb.y - 2000, wb.width, wb.height + 4000);
+        if (body.customBoundsRectangle !== this._boundsRect) body.setBoundsRectangle(this._boundsRect);
+    }
+    
     updateVerticalMovement() {
         if (!this.player || !this.sprite) return;
         
@@ -1107,6 +1163,16 @@ class Boss extends Enemy {
             return;
         }
         
+        // Out of ammo: the attack window (updateAmmo refills it)
+        if (this.throwAmmoMax > 0 && this.throwAmmo <= 0) {
+            return;
+        }
+        
+        // Opening of the fight: the dodge line is still up
+        if (time < this.holdThrowsUntil) {
+            return;
+        }
+        
         // Check if player is in range
         const distanceToPlayer = Math.abs(this.sprite.x - this.player.x);
         if (distanceToPlayer > this.throwWeaponRange) {
@@ -1141,6 +1207,7 @@ class Boss extends Enemy {
 
         this.lastThrowTime = this.scene.time.now;
         this.setState(BOSS_STATES.THROWING);
+        this.spendAmmo();
 
         // Determine throw direction based on target player
         const direction = this.sprite.x < targetPlayer.x ? 1 : -1;
@@ -1178,6 +1245,119 @@ class Boss extends Enemy {
         });
     }
     
+    // ========================================
+    // THROW AMMO (see throwAmmo in BOSS_TYPE_CONFIGS)
+    // ========================================
+    // Called every frame: refill once the attack window has passed, keep the count over
+    // the boss's head
+    updateAmmo(time) {
+        if (!this.throwAmmoMax) return;
+        if (!this.ammoLabel) this.refreshAmmoLabel(); // show the full count from the start
+        // First frame of the actual fight (intro dialogue over): announce it, hold fire
+        if (!this.fightStartedAt && !this.eventPaused && this.state !== BOSS_STATES.DYING && this.state !== BOSS_STATES.DEAD) {
+            this.fightStartedAt = time;
+            this.holdThrowsUntil = time + this.openingHold;
+            if (this.dodgeText) {
+                this.showCallout(this.dodgeText, '#FF6B35');
+                this.announceNextVolley = false; // don't repeat it on the first throw
+            }
+        }
+        if (this.throwAmmo <= 0 && time - this.ammoEmptyAt >= this.throwRechargeTime) {
+            this.refillAmmo();
+        }
+        this.positionAmmoLabel();
+    }
+
+    spendAmmo() {
+        if (!this.throwAmmoMax) return;
+        // First throw of the fight, or of the volley after one that ran dry: tell the
+        // player what's coming (not every volley - it came up far too often)
+        if (this.throwAmmo === this.throwAmmoMax && this.announceNextVolley && this.dodgeText) {
+            this.showCallout(this.dodgeText, '#FF6B35');
+            this.announceNextVolley = false;
+        }
+        this.throwAmmo = Math.max(0, this.throwAmmo - 1);
+        if (this.throwAmmo === 0) {
+            this.ammoEmptyAt = this.scene.time.now;
+            this.announceNextVolley = true;
+            this.graceHits = 0;
+            // After the last one leaves the hand: the window is open
+            this.scene.time.delayedCall(600, () => {
+                if (this.throwAmmo === 0 && this.state !== BOSS_STATES.DYING && this.state !== BOSS_STATES.DEAD) {
+                    this.showCallout('ATTACK NOW!', '#7CFC7C');
+                }
+            });
+        }
+        this.refreshAmmoLabel(true);
+    }
+
+    // Out of ammo and the player hasn't had their free hits yet: no punching
+    inGraceWindow() {
+        return !!this.throwAmmoMax && this.throwAmmo <= 0 && this.graceHits < this.graceHitsAllowed;
+    }
+
+    refillAmmo() {
+        this.throwAmmo = this.throwAmmoMax;
+        this.graceHits = 0;
+        this.refreshAmmoLabel(true);
+    }
+
+    // A jump reloads - but never cuts the attack window short
+    onJumpLanded() {
+        if (!this.throwAmmoMax) return;
+        if (this.throwAmmo > 0 || this.scene.time.now - this.ammoEmptyAt >= this.throwRechargeTime) {
+            this.refillAmmo();
+        }
+    }
+
+    // Throws left, floating over the boss's head: gold while it can throw, grey at 0
+    refreshAmmoLabel(bump = false) {
+        if (!this.throwAmmoMax || !this.sprite) return;
+        if (!this.ammoLabel || !this.ammoLabel.active) {
+            this.ammoLabel = this.scene.add.text(0, 0, '', {
+                fontFamily: GAME_CONFIG.ui.fontFamily,
+                fontSize: '64px',
+                color: '#FFD700',
+                fontStyle: 'bold',
+                stroke: '#000000',
+                strokeThickness: 7
+            }).setOrigin(0.5, 1).setDepth(9998);
+        }
+        const empty = this.throwAmmo <= 0;
+        this.ammoLabel.setText(`${this.throwAmmo}`);
+        this.ammoLabel.setColor(empty ? '#8A8A8A' : '#FFD700');
+        this.positionAmmoLabel();
+        if (bump) {
+            this.scene.tweens.killTweensOf(this.ammoLabel);
+            this.ammoLabel.setScale(1);
+            this.scene.tweens.add({ targets: this.ammoLabel, scale: 1.4, duration: 110, yoyo: true, ease: 'Quad.easeOut' });
+        }
+    }
+
+    positionAmmoLabel() {
+        const label = this.ammoLabel;
+        if (!label || !label.active || !this.sprite) return;
+        // Only while the fight is on (not during its intro/outro dialogue or death)
+        const fighting = !this.eventPaused && this.state !== BOSS_STATES.DYING && this.state !== BOSS_STATES.DEAD;
+        label.setVisible(fighting);
+        // Above the head: the frames have a lot of empty space over the character
+        label.setPosition(this.sprite.x, this.sprite.y - this.sprite.displayHeight * 0.3);
+    }
+
+    destroyAmmoLabel() {
+        if (this.ammoLabel) {
+            this.scene.tweens.killTweensOf(this.ammoLabel);
+            this.ammoLabel.destroy();
+            this.ammoLabel = null;
+        }
+    }
+
+    // Big instruction across the screen ("DODGE THE BAD RATINGS!", "ATTACK NOW!")
+    showCallout(text, color) {
+        const ui = this.scene.uiManager;
+        if (ui && ui.showCallout) ui.showCallout(text, color);
+    }
+
     createBossProjectile(x, y, direction, weaponType = 'vinyl') {
         // Create a projectile using WeaponManager's projectile system
         // This is a simplified version - may need to extend WeaponManager
@@ -1233,6 +1413,7 @@ class Boss extends Enemy {
         
         // Set to dying state
         this.setState(BOSS_STATES.DYING);
+        this.destroyAmmoLabel();
         
         // Trigger callback if set
         if (this.onBossDefeated) {
@@ -1260,6 +1441,8 @@ class Boss extends Enemy {
     }
     
     destroy() {
+        this.destroyAmmoLabel();
+        
         // Clean up pre-jump punch check timer
         if (this.preJumpPunchCheckTimer) {
             this.preJumpPunchCheckTimer.destroy();

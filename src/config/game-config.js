@@ -105,7 +105,17 @@ const GAME_CONFIG = {
             tiny: '24px',         // Tiny labels, debug text
             micro: '22px',        // Character names, health bars, debug text
             mini: '20px'          // Very small debug text
-        }
+        },
+        // Phones draw the whole 1200x720 game at about half size, so story text (dialogue
+        // boxes, cutscenes) is multiplied by this there. See DeviceManager.getTextScale().
+        phoneTextScale: 1.5,
+        // The HUD (health bars, record/weapon icon, lives, golden microphone count) is
+        // scaled by phoneHudScale on phones; the record icon and golden microphone get
+        // phoneHudIconScale on top of that. See DeviceManager.getHudScale().
+        phoneHudScale: 1.3,
+        phoneHudIconScale: 1.2,
+        // Main menu buttons, settings and credits text, and the loading bar on phones
+        phoneMenuScale: 1.3
     }
 };
 

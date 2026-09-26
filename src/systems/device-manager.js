@@ -84,7 +84,68 @@ const DeviceManager = {
      * This is typically when we want to show a "Please rotate" message.
      */
     shouldShowRotatePrompt() {
-        return this.isMobile && this.isPortrait;
+        return false; // portrait is played in handheld mode now (see isHandheldMode)
+    },
+
+    /**
+     * True when a phone/tablet is held upright: the game runs as a handheld console, with
+     * the game screen at the top and the touch controls below it
+     * (LayoutManager.getHandheldLayout, src/ui/handheld-shell.js).
+     */
+    isHandheldMode() {
+        // ?handheld=true tries it on a desktop browser too (make the window tall and narrow)
+        if (this._handheldForced === undefined) {
+            this._handheldForced = new URLSearchParams(window.location.search).get('handheld') === 'true';
+        }
+        if (!this.isMobile && !this._handheldForced) return false;
+        this.checkOrientation();
+        return this.isPortrait;
+    },
+    
+    /**
+     * True on a phone-sized touch device (not a tablet): the short side of the screen is
+     * small enough that the scaled-down game text gets hard to read.
+     */
+    isPhone() {
+        const shortSide = Math.min(window.innerWidth, window.innerHeight);
+        return this.isMobile && shortSide < 600;
+    },
+
+    /**
+     * Multiplier for story text (dialogue, cutscenes): GAME_CONFIG.ui.phoneTextScale on
+     * phones, 1 everywhere else.
+     */
+    getTextScale() {
+        return this.isPhone() ? (GAME_CONFIG.ui.phoneTextScale || 1) : 1;
+    },
+
+    /**
+     * Multiplier for the HUD: GAME_CONFIG.ui.phoneHudScale on phones, 1 elsewhere.
+     */
+    getHudScale() {
+        return this.isPhone() ? (GAME_CONFIG.ui.phoneHudScale || 1) : 1;
+    },
+
+    /**
+     * Extra multiplier (on top of getHudScale) for the record icon and golden microphone.
+     */
+    getHudIconScale() {
+        return this.isPhone() ? (GAME_CONFIG.ui.phoneHudIconScale || 1) : 1;
+    },
+
+    /**
+     * Multiplier for menus (main menu, settings, credits, loading screen):
+     * GAME_CONFIG.ui.phoneMenuScale on phones, 1 elsewhere.
+     */
+    getMenuScale() {
+        return this.isPhone() ? (GAME_CONFIG.ui.phoneMenuScale || 1) : 1;
+    },
+
+    /**
+     * Scale a font size ('28px' or 28) by getTextScale(); returns a px string.
+     */
+    scaleFont(size) {
+        return `${Math.round(parseFloat(size) * this.getTextScale())}px`;
     },
     
     /**

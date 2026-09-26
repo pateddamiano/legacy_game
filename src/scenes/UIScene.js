@@ -7,6 +7,7 @@
 class UIScene extends Phaser.Scene {
     constructor() {
         super({ key: 'UIScene', active: false });
+        this.transparentCamera = true; // drawn over GameScene: must not paint its own background
     }
 
     create() {
@@ -78,8 +79,10 @@ class UIScene extends Phaser.Scene {
             'virtualHeight': this.virtualHeight
         });
         
-        // Handle window resizing
-        this.scale.on('resize', (gameSize) => {
+        // Handle window resizing. Removed on shutdown: left attached, rotating the phone
+        // after a run ended (UIScene stopped, no camera) threw on this.cameras.main.
+        const onResize = () => {
+            if (!this.cameras || !this.cameras.main) return;
             console.log('📏 Resizing UIScene...');
             const viewport = LayoutManager.applyToScene(this, this.virtualWidth, this.virtualHeight);
             this.viewportInfo = viewport;
@@ -94,7 +97,9 @@ class UIScene extends Phaser.Scene {
             
             // Notify UI elements to update their scale if needed
             this.events.emit('uiScaleChanged', this.uiScale, this.viewportInfo);
-        });
+        };
+        this.scale.on('resize', onResize);
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off('resize', onResize));
         
         // This scene is transparent and sits on top of GameScene
         // UIManager will add UI elements to this scene using virtual coordinates (1200x720)

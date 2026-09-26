@@ -266,7 +266,9 @@ class PlayerPhysicsManager {
         // Apply character-specific base scale multiplier
         const scale = baseScale * baseScaleMultiplier;
         
-        this.player.setScale(scale);
+        // Health pickup "whoop" (EffectSystem.onHealthPickup): a brief stretch on top of the perspective scale
+        const stretch = this.scene.effectSystem && this.scene.effectSystem.healStretch;
+        this.player.setScale(scale * (stretch ? stretch.x : 1), scale * (stretch ? stretch.y : 1));
         
         // Set depth/z-index - higher Y (lower on screen) should have higher depth (appear in front)
         this.player.setDepth(this.player.y);

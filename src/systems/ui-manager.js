@@ -90,6 +90,9 @@ class UIManager {
         // Create score display
         this.createScoreDisplay();
         
+        // Create the combo counter (under the score)
+        this.createComboDisplay();
+        
         // Create boss health bar (hidden by default)
         this.createBossHealthBar();
     }
@@ -316,13 +319,27 @@ class UIManager {
     // ========================================
     
     createLivesDisplay() {
-        // Position below health bar (FuturisticHealthBar is at y:60, height ~84px, so lives at y:160 for spacing)
+        // Position below health bar (FuturisticHealthBar is at y:60, height ~84px, so lives at y:160 for spacing).
+        // On phones the health bar and this box are both bigger (hudScale), so drop it to match.
+        this.hudScale = window.DeviceManager ? window.DeviceManager.getHudScale() : 1;
         const livesX = 70;
-        const livesY = 160; // Moved down from 120 to avoid overlap
-        const boxWidth = 120;
+        const livesY = 60 + 84 * this.hudScale + 16;
         const boxHeight = 40;
+        const boxPadding = 10;
         const plusSize = 32; // Increased from 24 to 32
         const plusSpacing = 32; // Adjusted spacing for bigger symbols
+        
+        // "LIVES:" label on the left of the box, the three + symbols after it.
+        // Made first so the box can be sized around it (added to the container below).
+        const livesLabel = this.uiScene.add.text(boxPadding, boxHeight / 2, 'LIVES:', {
+            fontSize: GAME_CONFIG.ui.fontSize.tiny,
+            fontFamily: GAME_CONFIG.ui.fontFamily,
+            fontWeight: 'bold',
+            fill: '#FFFFFF'
+        });
+        livesLabel.setOrigin(0, 0.5);
+        const plusStartX = boxPadding + livesLabel.width + 8 + plusSize * 0.3; // first + centre
+        const boxWidth = Math.ceil(plusStartX + 2 * plusSpacing + plusSize * 0.3 + boxPadding);
         
         // Create container for lives display
         this.livesConfig = { x: livesX, y: livesY };
@@ -337,7 +354,7 @@ class UIManager {
         // Outer border (bezel effect)
         const bezelGraphics = this.uiScene.add.graphics();
         bezelGraphics.fillStyle(0x000000, 0.6); // Dark outer border
-        bezelGraphics.fillRoundedRect(0, 0, boxWidth, boxHeight, 4);
+        bezelGraphics.fillRect(0, 0, boxWidth, boxHeight); // (was a 4px rounded rect: curves are re-tessellated every frame)
         bezelGraphics.setDepth(0);
         this.livesContainer.add(bezelGraphics);
         
@@ -352,12 +369,8 @@ class UIManager {
         this.livesBox.setOrigin(0.5, 0.5);
         this.livesBox.setDepth(1);
         this.livesContainer.add(this.livesBox);
+        this.livesContainer.add(livesLabel);
         
-        // Calculate centered position for plus symbols
-        // We have 3 symbols with spacing between their centers
-        // Total span from first to last center: 2 * spacing (2 gaps between 3 symbols)
-        const totalSpan = 2 * plusSpacing; // Distance from first to last symbol center
-        const plusStartX = (boxWidth - totalSpan) / 2; // Center the group horizontally
         const plusY = boxHeight / 2; // Center vertically in box
         
         // Create 3 plus symbols with drop shadows
@@ -416,7 +429,7 @@ class UIManager {
         const screenX = this.livesConfig.x * scale;
         const screenY = this.livesConfig.y * scale;
         
-        this.livesContainer.setScale(scale);
+        this.livesContainer.setScale(scale * (this.hudScale || 1));
         this.livesContainer.setPosition(screenX, screenY);
     }
     
@@ -476,102 +489,221 @@ class UIManager {
     // SCORE DISPLAY SYSTEM
     // ========================================
     
+    // Top-right HUD box: golden microphone count on top, the hit combo under it
+    // (ComboSystem). Anchored at its top-right corner, so scaling it up on phones keeps
+    // it tucked into the corner.
     createScoreDisplay() {
-        const virtualWidth = 1200;
-        const containerX = virtualWidth - 100;
-        const containerY = 100;
+        const W = UIManager.SCORE_BOX.width, H = UIManager.SCORE_BOX.height, pad = 12;
         
-        // Create container for score display elements
-        this.scoreConfig = { x: containerX, y: containerY };
-        this.scoreContainer = this.uiScene.add.container(containerX, containerY);
+        // Bigger on phones: the HUD scale plus the extra icon scale for the golden microphone
+        const hudScale = window.DeviceManager ? window.DeviceManager.getHudScale() : 1;
+        this.scoreScale = hudScale * (window.DeviceManager ? window.DeviceManager.getHudIconScale() : 1);
+        
+        this.scoreConfig = { x: 1200 - 12, y: 12 };
+        this.scoreContainer = this.uiScene.add.container(0, 0);
         this.scoreContainer.setDepth(2003);
         this.scoreContainer.setScrollFactor(0);
-        this.updateScoreTransform();
         
-        // Create the score text first (positioned to the left)
-        this.scoreText = this.uiScene.add.text(-10, 0, '0', {
+        // The box
+        // Baked once at 2x into a texture (sharp when the HUD is scaled up): drawn as Graphics it
+        // re-tessellated three rounded-rect outlines on every frame
+        const BS = 2, M = 2;   // bake scale, and margin so the outer half of the stroke fits
+        const boxKey = `hudScoreBox_${W}x${H}`;
+        if (!this.uiScene.textures.exists(boxKey)) {
+            const g = this.uiScene.make.graphics({ x: 0, y: 0, add: false });
+            g.fillStyle(0x000000, 0.55);
+            g.fillRoundedRect(M * BS, M * BS, W * BS, H * BS, 12 * BS);
+            g.lineStyle(2 * BS, 0xFFD700, 0.55);
+            g.strokeRoundedRect(M * BS, M * BS, W * BS, H * BS, 12 * BS);
+            g.lineStyle(1 * BS, 0xFFD700, 0.3);
+            g.lineBetween((pad + M) * BS, (56 + M) * BS, (W - pad + M) * BS, (56 + M) * BS); // between the two rows
+            g.generateTexture(boxKey, (W + 2 * M) * BS, (H + 2 * M) * BS);
+            g.destroy();
+        }
+        const box = this.uiScene.add.image(-W - M, -M, boxKey).setOrigin(0, 0).setScale(1 / BS);
+        
+        // Row 1: microphone on the left, count on the right
+        this.scoreMicrophone = this.uiScene.add.sprite(-W + pad, 30, 'goldenMicrophone');
+        this.scoreMicrophone.setScale(0.8); // 64x64 image to ~51x51
+        this.scoreMicrophone.setOrigin(0, 0.5);
+        this.scoreText = this.uiScene.add.text(-pad, 30, '0', {
             fontSize: GAME_CONFIG.ui.fontSize.golden_microphone_count,
             fill: '#FFD700',  // Golden color
             fontFamily: GAME_CONFIG.ui.fontFamily,
             fontWeight: 'bold',
             stroke: '#000000',
-            strokeThickness: 3, // Increased from 2
-            shadow: {
-                offsetX: 2,
-                offsetY: 2,
-                color: '#000000',
-                blur: 0,
-                stroke: false,
-                fill: true
-            }
+            strokeThickness: 3,
+            shadow: { offsetX: 2, offsetY: 2, color: '#000000', blur: 0, stroke: false, fill: true }
         });
         this.scoreText.setOrigin(1, 0.5); // Right-aligned, vertically centered
         
-        // Create the golden microphone sprite (positioned to the right of the text)
-        this.scoreMicrophone = this.uiScene.add.sprite(-100, 0, 'goldenMicrophone');
-        this.scoreMicrophone.setScale(0.8); // Increased from 0.5 (64x64 image to ~51x51)
-        this.scoreMicrophone.setOrigin(0, 0.5); // Left-aligned, vertically centered
-        
-        // Calculate bounding box of both elements to center the circle
-        // Microphone: at (-100, 0) with origin (0, 0.5), scale 0.8, original size 64x64
-        const micWidth = 64 * 0.8; // 51.2
-        const micHeight = 64 * 0.8; // 51.2
-        const micLeft = -100; // Left edge (origin is at left)
-        const micRight = micLeft + micWidth; // -48.8
-        const micTop = 0 - (micHeight / 2); // -25.6 (origin is at vertical center)
-        const micBottom = 0 + (micHeight / 2); // 25.6
-        
-        // Text: at (-10, 0) with origin (1, 0.5), so right edge is at -10
-        const textWidth = this.scoreText.width;
-        const textHeight = this.scoreText.height;
-        const textRight = -10; // Right edge (origin is at right)
-        const textLeft = textRight - textWidth;
-        const textTop = 0 - (textHeight / 2); // (origin is at vertical center)
-        const textBottom = 0 + (textHeight / 2);
-        
-        // Find the overall bounding box
-        const minX = Math.min(micLeft, textLeft);
-        const maxX = Math.max(micRight, textRight);
-        const minY = Math.min(micTop, textTop);
-        const maxY = Math.max(micBottom, textBottom);
-        
-        // Calculate center point
-        const centerX = (minX + maxX) / 2;
-        const centerY = (minY + maxY) / 2;
-        
-        // Calculate radius (distance from center to farthest corner, plus padding)
-        const width = maxX - minX;
-        const height = maxY - minY;
-        const diagonal = Math.sqrt(width * width + height * height);
-        const padding = 15; // Padding around the elements
-        const circleRadius = (diagonal / 2) + padding;
-        
-        // Create background circle to separate from background
-        this.scoreCircle = this.uiScene.add.graphics();
-        this.scoreCircle.fillStyle(0x000000, 0.50); // Black with low opacity
-        this.scoreCircle.fillCircle(centerX, centerY, circleRadius); // Centered on the elements
-        this.scoreCircle.setDepth(0); // Behind other elements
-        
-        // Add all elements to the container (circle first so it's behind)
-        this.scoreContainer.add([this.scoreCircle, this.scoreMicrophone, this.scoreText]);
+        this.scoreContainer.add([box, this.scoreMicrophone, this.scoreText]);
+        this.updateScoreTransform();
         
         console.log('🎤 Score display with golden microphone created');
     }
 
+    // ========================================
+    // COMBO COUNTER
+    // ========================================
+    // Row 2 of the score box: the fist (same art as the ATTACK button), the multiplier
+    // (x1-x5) and pips filling toward the next one. Dimmed at x1 when there's no combo;
+    // lights up on the first hit and flashes red when the player gets hit. Driven by
+    // ComboSystem.
+    createComboDisplay() {
+        if (!this.scoreContainer) return;
+        const W = UIManager.SCORE_BOX.width, pad = 12;
+        // Row container centred in the row, so its pulse scales from the middle
+        this.comboRow = this.uiScene.add.container(-W / 2, 79);
+        
+        const left = -W / 2 + pad;
+        let fist = null;
+        if (this.uiScene.textures.exists('fistIcon')) {
+            fist = this.uiScene.add.image(left, 0, 'fistIcon').setOrigin(0, 0.5);
+            fist.setScale(44 / fist.height);
+        }
+        this.comboText = this.uiScene.add.text(left + 52, 0, 'x1', {
+            fontSize: GAME_CONFIG.ui.fontSize.heading,
+            fill: '#FFD700',
+            fontFamily: GAME_CONFIG.ui.fontFamily,
+            fontWeight: 'bold',
+            stroke: '#000000',
+            strokeThickness: 4
+        }).setOrigin(0, 0.5);
+        
+        // Hits toward the next multiplier, right-aligned in the row
+        this.comboPips = [];
+        const pipCount = ComboSystem.HITS_PER_LEVEL;
+        const lastX = W / 2 - pad - 5;
+        for (let i = 0; i < pipCount; i++) {
+            const pip = this.uiScene.add.rectangle(lastX - (pipCount - 1 - i) * 15, 0, 10, 12, 0x444444, 1);
+            pip.setStrokeStyle(1, 0x000000, 0.8);
+            this.comboPips.push(pip);
+        }
+        
+        this.comboRow.add([...(fist ? [fist] : []), this.comboText, ...this.comboPips]);
+        this.scoreContainer.add(this.comboRow);
+        this.updateComboDisplay(0, 1);
+    }
+    
+    // hits: hits in the current combo (0 = no combo); multiplier: 1-5; levelUp: the
+    // multiplier just went up; broken: the player just got hit
+    updateComboDisplay(hits, multiplier, levelUp = false, broken = false) {
+        if (!this.comboRow || !this.comboRow.active) return;
+        const tweens = this.uiScene.tweens;
+        tweens.killTweensOf(this.comboRow);
+        this.comboRow.setScale(1);
+        
+        const maxed = multiplier >= ComboSystem.MAX_MULTIPLIER;
+        const filled = hits <= 0 ? 0 : (maxed ? this.comboPips.length : hits % ComboSystem.HITS_PER_LEVEL);
+        this.comboPips.forEach((pip, i) => pip.setFillStyle(i < filled ? 0xFFD700 : 0x444444, 1));
+        this.comboText.setText(`x${hits <= 0 ? 1 : multiplier}`);
+        
+        if (hits <= 0) {
+            // No combo: dimmed x1. Just broken: flash red first.
+            if (broken) {
+                this.comboRow.setAlpha(1);
+                this.comboText.setColor('#FF3B3B');
+                tweens.add({
+                    targets: this.comboRow, alpha: 0.4, duration: 450, delay: 300,
+                    onComplete: () => { if (this.comboText && this.comboText.active) this.comboText.setColor('#FFD700'); }
+                });
+            } else {
+                this.comboText.setColor('#FFD700');
+                this.comboRow.setAlpha(0.4);
+            }
+            return;
+        }
+        
+        this.comboRow.setAlpha(1);
+        this.comboText.setColor(levelUp ? '#FFFFFF' : '#FFD700');
+        if (levelUp) {
+            tweens.add({
+                targets: this.comboRow, scale: 1.25, duration: 120, yoyo: true, ease: 'Quad.easeOut',
+                onComplete: () => { if (this.comboText && this.comboText.active) this.comboText.setColor('#FFD700'); }
+            });
+        } else {
+            tweens.add({ targets: this.comboRow, scale: 1.06, duration: 80, yoyo: true });
+        }
+    }
+
+    // A big instruction across the upper-middle of the screen that pops in and fades out
+    // (boss fights: "DODGE THE BAD RATINGS!", "ATTACK NOW!"). The same line again within
+    // a second is ignored.
+    showCallout(text, color = '#FFD700') {
+        if (!text || !this.uiScene || !this.uiScene.sys || !this.uiScene.sys.isActive()) return;
+        const now = this.uiScene.time.now;
+        if (this._lastCallout && this._lastCallout.text === text && now - this._lastCallout.at < 1000) return;
+        this._lastCallout = { text, at: now };
+        
+        if (this.calloutText && this.calloutText.active) {
+            this.uiScene.tweens.killTweensOf(this.calloutText);
+            this.calloutText.destroy();
+        }
+        const scale = this.currentUiScale ?? 1;
+        const k = window.DeviceManager ? window.DeviceManager.getTextScale() : 1;
+        const callout = this.uiScene.add.text(600 * scale, 250 * scale, text, {
+            fontFamily: GAME_CONFIG.ui.fontFamily,
+            fontSize: `${Math.round(44 * scale * k)}px`,
+            color,
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: Math.max(3, Math.round(6 * scale)),
+            align: 'center'
+        }).setOrigin(0.5).setDepth(5000).setScale(0.4).setAlpha(0);
+        this.calloutText = callout;
+        this.uiScene.tweens.add({
+            targets: callout, scale: 1, alpha: 1, duration: 220, ease: 'Back.easeOut',
+            onComplete: () => {
+                this.uiScene.tweens.add({
+                    targets: callout, alpha: 0, y: callout.y - 20 * scale, delay: 1300, duration: 400,
+                    onComplete: () => { callout.destroy(); if (this.calloutText === callout) this.calloutText = null; }
+                });
+            }
+        });
+    }
+
+    // A flying golden microphone has just reached the counter: show the new number and make
+    // the microphone icon swell and settle, with a gold ring flashing out from it
+    onMicrophoneArrived(score) {
+        // The level may have been torn down while the microphone was in the air
+        if (!this.scoreText || !this.scoreText.active || !this.scoreContainer || !this.scoreContainer.active) return;
+        this.updateScoreDisplay(score);
+        
+        const mic = this.scoreMicrophone;
+        if (!mic || !mic.active || !this.uiScene) return;
+        const tweens = this.uiScene.tweens;
+        
+        // Swell up fast, then settle back with a little rebound
+        const base = 0.8;
+        tweens.killTweensOf(mic);
+        mic.setScale(base);
+        mic.setTint(0xfff2a8);
+        tweens.add({
+            targets: mic, scale: base * 1.6, duration: 110, ease: 'Quad.easeOut',
+            onComplete: () => {
+                mic.clearTint();
+                tweens.add({ targets: mic, scale: base, duration: 320, ease: 'Back.easeOut' });
+            }
+        });
+        // Gold ring expanding out of the icon
+        const m = mic.getWorldTransformMatrix();
+        const c = m.transformPoint((0.5 - mic.originX) * mic.width, (0.5 - mic.originY) * mic.height);
+        const scale = Math.hypot(m.a, m.b);
+        const ring = this.uiScene.add.circle(c.x, c.y, 28 * scale, 0xffd700, 0.55);
+        ring.setDepth(2004);
+        if (ring.setBlendMode) ring.setBlendMode(Phaser.BlendModes.ADD);
+        tweens.add({
+            targets: ring, scale: 2.4, alpha: 0, duration: 320, ease: 'Quad.easeOut',
+            onComplete: () => ring.destroy()
+        });
+    }
+    
     updateScoreTransform() {
         if (!this.scoreContainer || !this.scoreConfig) return;
         const scale = this.currentUiScale ?? 1;
-        const screenX = this.scoreConfig.x * scale;
-        const screenY = this.scoreConfig.y * scale;
-        
-        // Only update scale if no tween is actively animating it
-        const hasTween = this.uiScene.tweens.getTweensOf(this.scoreContainer).length > 0;
-        if (!hasTween) {
-            this.scoreContainer.setScale(scale);
-        }
-        
-        // Always update position (doesn't conflict with pulse animation)
-        this.scoreContainer.setPosition(screenX, screenY);
+        this.scoreContainer.setScale(scale * (this.scoreScale || 1));
+        this.scoreContainer.setPosition(this.scoreConfig.x * scale, this.scoreConfig.y * scale);
     }
 
     updateBossHealthBarTransform() {
@@ -591,23 +723,12 @@ class UIManager {
         // Update score text (no emoji needed since we have the actual microphone sprite)
         this.scoreText.setText(`${score}`);
         
-        // Create a brief pulse effect when score changes (pulse relative to current UI scale)
+        // Brief pulse of the number (not the whole box) when it changes
         if (score > 0) {
-            const baseScale = this.currentUiScale ?? 1;
-            const pulseScale = baseScale * 1.15; // 15% larger than current scale
-            
-            this.uiScene.tweens.add({
-                targets: this.scoreContainer,
-                scaleX: pulseScale,
-                scaleY: pulseScale,
-                duration: 150,
-                yoyo: true,
-                ease: 'Power2',
-                onComplete: () => {
-                    // Ensure we return to the correct base scale
-                    this.scoreContainer.setScale(baseScale);
-                }
-            });
+            const tweens = this.uiScene.tweens;
+            tweens.killTweensOf(this.scoreText);
+            this.scoreText.setScale(1);
+            tweens.add({ targets: this.scoreText, scale: 1.25, duration: 120, yoyo: true, ease: 'Quad.easeOut' });
         }
     }
     
@@ -999,6 +1120,7 @@ Legend:
         if (this.bossHealthBarContainer) {
             this.bossHealthBarContainer.destroy();
         }
+
         if (this.bossHealthBarGraphics) {
             this.bossHealthBarGraphics.destroy();
         }
@@ -1240,6 +1362,9 @@ Legend:
         this.gameOverCharIndex = 0;
     }
 }
+
+// Size of the top-right score + combo box (virtual px, before the phone HUD scale)
+UIManager.SCORE_BOX = { width: 200, height: 104 };
 
 // Make UIManager available globally
 window.UIManager = UIManager;
