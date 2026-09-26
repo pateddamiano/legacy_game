@@ -52,6 +52,7 @@ class EventManager {
         this.spawningActions = new SpawningActions(this);
         this.extrasActions = new ExtrasActions(this);
         this.specialActions = new SpecialActions(this);
+        this.tutorialActions = new TutorialActions(this);
         
         console.log('🎬 EventManager initialized');
     }
@@ -159,6 +160,12 @@ class EventManager {
             return;
         }
         
+        // Nor while a level is loading or changing: the player (and camera) can still be
+        // where the previous level ended, which would fire end-of-level triggers at once
+        if (this.scene.isLoading || (this.scene.levelTransitionManager && this.scene.levelTransitionManager.isTransitioning)) {
+            return;
+        }
+        
         // Check each event for trigger conditions
         this.events.forEach(event => {
             // Skip if already triggered and marked as once-only
@@ -199,10 +206,17 @@ class EventManager {
                 const progressTolerance = trigger.tolerance || 0.02; // Default 2% tolerance
                 return Math.abs(currentProgress - targetProgress) <= progressTolerance;
                 
+            case 'end_zone':
+                // Player has reached the last stretch of the level: within `distance`
+                // (default 700) of the world's right edge. Position only - no camera maths.
+                return playerX >= worldEnd - (trigger.distance || 700);
+                
             case 'camera_at_end':
-                // Trigger when camera reaches the end of the world
+                // Trigger when camera reaches the end of the world. worldView is the part
+                // of the level the camera shows; camera.width is its on-screen size (about
+                // half that on a phone), which kept this from ever firing there.
                 if (!camera) return false;
-                const cameraRightEdge = camera.scrollX + camera.width;
+                const cameraRightEdge = camera.worldView ? camera.worldView.right : camera.scrollX + camera.width;
                 const worldRightEdge = worldStart + worldWidth;
                 const cameraTolerance = trigger.tolerance || 10; // Default tolerance of 10px
                 return cameraRightEdge >= worldRightEdge - cameraTolerance;
@@ -333,6 +347,9 @@ class EventManager {
             case 'waitForEnemiesCleared':
                 this.spawningActions.executeWaitForEnemiesCleared(action);
                 break;
+            case 'waitForEnemyDefeats':
+                this.spawningActions.executeWaitForEnemyDefeats(action);
+                break;
             case 'waitForEnemyDestroy':
                 this.enemyActions.executeWaitForEnemyDestroy(action);
                 break;
@@ -398,6 +415,18 @@ class EventManager {
                 break;
             case 'playerAura':
                 this.specialActions.executePlayerAura(action);
+                break;
+            case 'tutorialStart':
+                this.tutorialActions.executeTutorialStart(action);
+                break;
+            case 'tutorialSpawn':
+                this.tutorialActions.executeTutorialSpawn(action);
+                break;
+            case 'tutorialStep':
+                this.tutorialActions.executeTutorialStep(action);
+                break;
+            case 'tutorialEnd':
+                this.tutorialActions.executeTutorialEnd(action);
                 break;
             default:
                 console.warn(`🎬 Unknown action type: ${action.type}`);

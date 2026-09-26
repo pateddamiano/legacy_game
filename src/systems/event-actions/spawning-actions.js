@@ -76,6 +76,41 @@ class SpawningActions {
         this.advanceAction();
     }
     
+    // Wait until the player has defeated `count` enemies (default 1) from now on, while
+    // play carries on as normal - or `timeout` ms (default 8000) pass, so it can never
+    // leave the player stuck with nobody to fight. Used to end level 3 once the player is
+    // in its last stretch and has knocked someone out, instead of at an exact spot.
+    executeWaitForEnemyDefeats(action) {
+        const needed = action.count || 1;
+        const event = this.eventManager.activeEvent;
+        let defeated = 0;
+        let finished = false;
+        let timer = null;
+        const done = () => {
+            this.scene.events.off('enemy:defeated', onDefeat);
+            this.scene.events.off('shutdown', done);
+            if (timer) timer.remove(false);
+        };
+        const finish = (reason) => {
+            if (finished) return;
+            finished = true;
+            done();
+            console.log(`🎬 waitForEnemyDefeats done (${reason})`);
+            // Only if this event is still the one running (not cleared by a death/restart)
+            if (this.eventManager.activeEvent === event) this.advanceAction();
+        };
+        const onDefeat = (enemy) => {
+            if (enemy && enemy.isBoss) return;
+            defeated++;
+            console.log(`🎬 waitForEnemyDefeats: ${defeated}/${needed}`);
+            if (defeated >= needed) finish('defeats');
+        };
+        console.log(`🎬 Waiting for ${needed} enemy defeat(s)...`);
+        this.scene.events.on('enemy:defeated', onDefeat);
+        this.scene.events.once('shutdown', done);
+        timer = this.scene.time.delayedCall(action.timeout || 8000, () => finish('timeout'));
+    }
+    
     executeWaitForEnemiesCleared(action) {
         console.log('🎬 Waiting for all enemies to be cleared...');
         

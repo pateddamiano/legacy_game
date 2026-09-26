@@ -402,7 +402,7 @@ class WeaponManager {
         const scale = this.currentUiScale ?? this.uiScene?.uiScale ?? 1;
         const posX = (this.weaponUiConfig?.x || 70) * scale;
         const posY = (this.weaponUiConfig?.y || 60) * scale;
-        this.weaponUIContainer.setScale(scale);
+        this.weaponUIContainer.setScale(scale * (this.weaponUiConfig?.scale || 1));
         this.weaponUIContainer.setPosition(posX, posY);
     }
     
@@ -419,9 +419,14 @@ class WeaponManager {
         
         const spacing = 40; // Space between health bar and weapon icon
         const radius = 45; // Increased from 35
-        const centerX = healthBarX + healthBarWidth + spacing + radius; // Add radius to center the circle
-        const centerY = healthBarY + (healthBarTotalHeight / 2) - 10; // Vertically centered with health bar
-        this.weaponUiConfig = { x: centerX, y: centerY };
+        // On phones the health bar grows by hudScale (from its top-left corner) and this
+        // icon by hudScale * iconScale, so space it out to match. Both are 1 on desktop.
+        const hudScale = window.DeviceManager ? window.DeviceManager.getHudScale() : 1;
+        const iconScale = hudScale * (window.DeviceManager ? window.DeviceManager.getHudIconScale() : 1);
+        const centerX = healthBarX + (healthBarWidth + spacing) * hudScale + radius * iconScale; // Add radius to center the circle
+        const centerY = healthBarY + ((healthBarTotalHeight / 2) - 10) * hudScale; // Vertically centered with health bar
+        // rightEdge (virtual units) lets the touch pause button stay clear of the icon
+        this.weaponUiConfig = { x: centerX, y: centerY, scale: iconScale, rightEdge: centerX + radius * iconScale };
         
         console.log('🎯 WEAPON_UI_DEBUG: UI Scene state:', {
             uiSceneExists: !!this.uiScene,
@@ -446,6 +451,11 @@ class WeaponManager {
         });
         
         this.positionWeaponUI();
+        // The HUD recharge icon is desktop-only (see updateWeaponUI). Decide now: it used to
+        // be created visible and only hidden on the first gameplay update, so on phones it
+        // flashed on screen while the level's intro was starting.
+        this._hudHiddenForTouch = this.isTouchLayout();
+        this.weaponUIContainer.setVisible(!this._hudHiddenForTouch);
 
         // Keep weaponUI as a group for backward compatibility, but elements are in container
         this.weaponUI = this.uiScene.add.group();
@@ -549,6 +559,26 @@ class WeaponManager {
         return currentTime >= cooldownEnd;
     }
     
+    // 0..1 through the current weapon's recharge; 1 = ready. Drives the throw button's ring.
+    getCooldownProgress(weaponKey = this.currentWeapon) {
+        const weapon = this.weapons[weaponKey];
+        if (!weapon || !weapon.cooldown) return 1;
+        const remaining = (this.weaponCooldowns[weaponKey] || 0) - this.scene.time.now;
+        if (remaining <= 0) return 1;
+        return Math.max(0, Math.min(1, 1 - remaining / weapon.cooldown));
+    }
+    
+    // Touch layout = phone/tablet, or touch controls toggled on. Checked at most once a
+    // second (DeviceManager logs on every call).
+    isTouchLayout() {
+        const now = Date.now();
+        if (this._touchLayoutAt === undefined || now - this._touchLayoutAt > 1000) {
+            this._touchLayoutAt = now;
+            this._touchLayout = !!(window.DeviceManager && window.DeviceManager.shouldShowTouchControls());
+        }
+        return this._touchLayout;
+    }
+    
     useWeapon(player, direction) {
         if (!this.canUseWeapon()) {
             console.log(`🎯 Weapon on cooldown`);
@@ -593,6 +623,14 @@ class WeaponManager {
     
     updateWeaponUI() {
         if (!this.weaponIcon || !this.cooldownOverlay || !this.cooldownProgress) return;
+        
+        // The recharge icon at the top of the screen is desktop-only: on touch layouts the
+        // THROW button greys out and shows the recharge around itself instead
+        const touchLayout = this.isTouchLayout();
+        if (this.weaponUIContainer && touchLayout !== this._hudHiddenForTouch) {
+            this.weaponUIContainer.setVisible(!touchLayout);
+            this._hudHiddenForTouch = touchLayout;
+        }
         
         const canUse = this.canUseWeapon();
         
@@ -713,6 +751,7 @@ class WeaponManager {
                         const knockbackSource = projectile.sprite || null;
                         enemy.takeDamage(damage, knockbackSource);
                         if (this.scene.effectSystem) this.scene.effectSystem.onEnemyHit(enemy); // hit-stop / boss shake
+                        this.scene.events.emit('player:recordHit', enemy); // combo, tutorial
                         
                         // Enhanced red flash effect for weapon hits
                         enemy.sprite.setTint(0xff0000); // Bright red tint

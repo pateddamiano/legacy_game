@@ -218,12 +218,12 @@ class GameScene extends Phaser.Scene {
             );
             this.touchControlsOverlay.create();
             
-            // Set visibility based on DeviceManager
-            if (window.DeviceManager) {
-                const shouldShow = window.DeviceManager.shouldShowTouchControls();
-                this.touchControlsOverlay.setVisible(shouldShow);
-                console.log(`📱 Touch controls overlay ${shouldShow ? 'shown' : 'hidden'}`);
-            }
+            // Start hidden: updateTouchControlsVisibility() shows them once the player
+            // actually has control (see there)
+            this.touchControlsWanted = !!(window.DeviceManager && window.DeviceManager.shouldShowTouchControls());
+            this.touchControlsControllableMs = 0;
+            this.touchControlsOverlay.setVisible(false);
+            console.log(`📱 Touch controls overlay ${this.touchControlsWanted ? 'enabled' : 'disabled'} for this device`);
         }
         
         // P / ESC open the pause menu (touch: the || button in the touch overlay)
@@ -280,6 +280,10 @@ class GameScene extends Phaser.Scene {
         // restart) - do not zero it here.
         
         this.uiManager.initializeUI();
+        
+        // Hit combo: multiplies golden microphone pickups (see ComboSystem)
+        if (this.comboSystem) this.comboSystem.destroy();
+        this.comboSystem = new ComboSystem(this);
         
         // DebugManager - checkpoint navigation is a developer feature even outside debug mode
         this.debugManager = new DebugManager(this);
@@ -549,11 +553,18 @@ class GameScene extends Phaser.Scene {
             this.worldManager.updateWorld(this.player.x);
         }
         
-        // Update animation state manager (only if initialized)
+        // Update animation state manager (only if initialized). Its attack lock runs on
+        // animation time: during a hit freeze (EffectSystem.hitStop sets the anims time
+        // scale to 0) the swing's frames stop, so its lock must too. On real time the lock
+        // ran out mid-freeze and the player went back to idle before the punch frame
+        // (the LAST frame of Tryston's jab and cross) ever showed - just standing there.
         if (this.animationManager) {
-            this.animationManager.update(delta);
+            const animTimeScale = (this.anims && typeof this.anims.globalTimeScale === 'number') ? this.anims.globalTimeScale : 1;
+            this.animationManager.update(delta * animTimeScale);
         }
 
+        this.updateTouchControlsVisibility(delta);
+        
         // Update touch controls overlay FIRST (sets button states)
         if (this.touchControlsOverlay) {
             this.touchControlsOverlay.update();
@@ -855,6 +866,8 @@ class GameScene extends Phaser.Scene {
                 console.log("Both characters healed to full health!");
             },
             onSwitchCharacter: (forceSwitch = false) => {
+                // Level 1 tutorial: not taught yet (forced switches are never blocked)
+                if (!forceSwitch && !this.inputManager.isActionAllowed('switch')) return false;
                 if (this.characterManager) {
                     const result = this.characterManager.switchCharacter(forceSwitch, this.animationManager, this.isJumping, this.eventCameraLocked || false);
                     
@@ -871,12 +884,15 @@ class GameScene extends Phaser.Scene {
                         if (this.playerPhysicsManager) this.playerPhysicsManager.disabled = false;
                         if (this.inputManager) this.inputManager.disabled = false;
                         
+                        this.events.emit('tutorial:switch');
                         return true; // Switch successful, skip other input
                     }
                 }
                 return false; // Switch failed or not attempted
             },
             onWeaponUse: () => {
+                // Level 1 tutorial: not taught yet
+                if (!this.inputManager.isActionAllowed('throw')) return;
                 // Check if weapon can be used (cooldown, etc.)
                 if (this.weaponManager.canUseWeapon()) {
                     // Play throwing animation
@@ -885,6 +901,7 @@ class GameScene extends Phaser.Scene {
                     // Fire the weapon projectile
                     const direction = this.player.flipX ? -1 : 1; // Get player facing direction
                     this.weaponManager.useWeapon(this.player, direction);
+                    this.events.emit('tutorial:throw');
                 }
             },
             onTouchControlsToggle: () => {
@@ -892,9 +909,9 @@ class GameScene extends Phaser.Scene {
                 if (window.DeviceManager) {
                     window.DeviceManager.toggleTouchControls();
                     if (this.touchControlsOverlay) {
-                        const shouldShow = window.DeviceManager.shouldShowTouchControls();
-                        this.touchControlsOverlay.setVisible(shouldShow);
-                        console.log(`📱 Touch controls toggled: ${shouldShow ? 'ON' : 'OFF'}`);
+                        this.touchControlsWanted = window.DeviceManager.shouldShowTouchControls();
+                        this.touchControlsControllableMs = 0;
+                        console.log(`📱 Touch controls toggled: ${this.touchControlsWanted ? 'ON' : 'OFF'}`);
                     }
                 }
             }
@@ -924,6 +941,7 @@ class GameScene extends Phaser.Scene {
                     this.playerPhysicsManager.startJump();
                     this.isJumping = this.playerPhysicsManager.getIsJumping();
                 }
+                this.events.emit('tutorial:jump');
             }
         }
     }
@@ -995,6 +1013,27 @@ class GameScene extends Phaser.Scene {
         // Keys and touches held when the menu opened never got their release events
         if (this.input.keyboard) this.input.keyboard.resetKeys();
         if (this.touchControlsOverlay) this.touchControlsOverlay.onGameResumed();
+    }
+    
+    // The touch controls (and pause button) only show while the player actually has
+    // control: not while a level loads, a dialogue is up or an event has frozen the player.
+    // They hide at once and come back only after control has held for a moment, so the
+    // gaps between setup steps and dialogue lines don't flash them on screen - before, they
+    // popped up for a split second between the level loading and Rozotadi's first line.
+    updateTouchControlsVisibility(delta) {
+        const overlay = this.touchControlsOverlay;
+        if (!overlay) return;
+        const events = this.eventManager;
+        const dialogueUp = this.dialogueManager && typeof this.dialogueManager.isDialogueActive === 'function' &&
+            this.dialogueManager.isDialogueActive();
+        const controllable = !this.isLoading &&
+            !(this.levelTransitionManager && this.levelTransitionManager.isTransitioning) &&
+            !dialogueUp &&
+            !(events && events.pausedEntities && events.pausedEntities.player);
+        
+        this.touchControlsControllableMs = controllable ? (this.touchControlsControllableMs || 0) + delta : 0;
+        const show = !!this.touchControlsWanted && this.touchControlsControllableMs >= 300;
+        if (show !== overlay.visible) overlay.setVisible(show);
     }
     
     quitToMenu() {

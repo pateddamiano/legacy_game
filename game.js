@@ -165,7 +165,11 @@ if (window.DEBUG_MODE) {
                 fullscreenTarget: 'game-container' // Enable fullscreen on the game container
             },
             parent: 'game-container',
-            backgroundColor: '#000000', // Black background for letterboxing
+            // Transparent so the page's backdrop (grey gradient + yellow pluses, see index.html)
+            // shows in the strips beside the game view. Each game scene fills its own view with
+            // opaque black (LayoutManager.applyToScene), so inside the view nothing changes.
+            transparent: true,
+            backgroundColor: '#000000',
             input: {
                 activePointers: 10, // Enable multi-touch (up to 10 simultaneous touches)
                 touch: true,
@@ -186,7 +190,8 @@ if (window.DEBUG_MODE) {
                 UIScene,
                 TouchControlsScene,
                 PauseScene,
-                GameScene
+                GameScene,
+                HandheldControlsScene // phone upright: the console controls outside gameplay
             ]
         };
         

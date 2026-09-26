@@ -34,7 +34,47 @@
         { "type": "dialogue", "dialogue": { "speaker": "Rozotadi", "text": "Go get that drive back!", "dimBackground": false } },
         { "type": "destroyExtra", "target": "extra_rozotadi" },
         { "type": "camera", "follow": "player" },
-        { "type": "resume", "targets": ["player", "enemies"] }
+        { "type": "resume", "targets": ["player", "enemies"] },
+        { "type": "triggerEvent", "eventId": "level_1_tutorial" }
+      ]
+    },
+    {
+      "id": "level_1_tutorial",
+      "actions": [
+        { "type": "tutorialStart", "text": "Heads up!" },
+        { "type": "showEmote", "target": "player", "text": "!", "duration": 2600 },
+        { "type": "tutorialSpawn", "enemies": [
+          { "type": "green_thug", "id": "tut_1", "x": 860, "y": 480 },
+          { "type": "black_thug", "id": "tut_2", "x": 1010, "y": 600 }
+        ] },
+        { "type": "tutorialStep", "step": "move",
+          "touchText": "Drag the stick to move around.",
+          "keyText": "Use the ARROW KEYS to move around." },
+        { "type": "tutorialStep", "step": "jump",
+          "touchText": "Tap this button to jump.",
+          "keyText": "Press SPACE to jump." },
+        { "type": "tutorialStep", "step": "throw",
+          "touchText": "Line up with an enemy and tap this button to throw a record.",
+          "keyText": "Line up with an enemy and press Q to throw a record.",
+          "rechargeText": "Hit! Records recharge after every throw - you can throw again once it's full.",
+          "retryTouchText": "Missed! Move up or down to line up with an enemy, then throw again.",
+          "retryKeyText": "Missed! Move up or down to line up with an enemy, then press Q again.",
+          "successText": "Direct hit!" },
+        { "type": "tutorialStep", "step": "punch",
+          "touchText": "Walk up to an enemy and tap this button to punch.",
+          "keyText": "Walk up to an enemy and press X to punch." },
+        { "type": "tutorialSpawn", "enemies": [
+          { "type": "green_thug", "id": "tut_3", "nearPlayer": -190 },
+          { "type": "black_thug", "id": "tut_4", "nearPlayer": 190 }
+        ] },
+        { "type": "tutorialStep", "step": "switch",
+          "touchText": "Tap this button to switch between Tireek and Tryston. The wind from the switch pushes enemies away!",
+          "keyText": "Press C to switch between Tireek and Tryston. The wind from the switch pushes enemies away!",
+          "successText": "Blown away!", "waitForTap": true },
+        { "type": "tutorialStep", "step": "info",
+          "touchText": "Whoever you're NOT playing as recharges their health. Switch out a hurt fighter to let them heal!",
+          "keyText": "Whoever you're NOT playing as recharges their health. Switch out a hurt fighter to let them heal!" },
+        { "type": "tutorialEnd", "text": "You're ready. Go find the album!" }
       ]
     },
     {
@@ -64,8 +104,8 @@
         { "type": "resume", "targets": ["player", "enemies"] },
         { "type": "camera", "stopFollow": true },
         { "type": "setPlayerBounds", "bounds": { "minX": 7850, "maxX": 9040, "minY": 410, "maxY": 650 } },
-        { "type": "startEnemySpawning", "config": { "maxEnemies": 10, "spawnInterval": 600 } },
-        { "type": "wait", "duration": 20000 },
+        { "type": "startEnemySpawning", "config": { "maxEnemies": 7, "spawnInterval": 600 } },
+        { "type": "wait", "duration": 12000 },
         { "type": "stopEnemySpawning", "clearEnemies": false },
         { "type": "waitForEnemiesCleared" },
         { "type": "pause", "targets": ["player", "enemies"] },

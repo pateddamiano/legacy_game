@@ -28,8 +28,6 @@ class DialogueManager {
         // Callbacks
         this.onDialogueComplete = null;
         
-        // Touch controls state tracking
-        this.touchControlsWereVisible = false;
         
         console.log('💬 DialogueManager initialized');
     }
@@ -68,7 +66,7 @@ class DialogueManager {
         
         // Dialogue box background (right side, just past 50%)
         // Use virtual coordinates instead of camera width to match other UI elements
-        const panelWidth = 520;
+        const panelWidth = this.phoneWidth(520);
         const panelHeight = 110;
         const panelX = Math.floor(virtualWidth * 0.72); // slightly right of center (864 in virtual coords)
         const panelY = Math.floor(virtualHeight * 0.50); // centered vertically (360 in virtual coords)
@@ -106,7 +104,7 @@ class DialogueManager {
             panelY - Math.floor(panelHeight / 2) + 10,
             '',
             {
-                fontSize: GAME_CONFIG.ui.fontSize.label,
+                fontSize: this.phoneFont(GAME_CONFIG.ui.fontSize.label),
                 fill: '#FFD700',
                 fontFamily: GAME_CONFIG.ui.fontFamily,
                 fontStyle: 'bold'
@@ -120,7 +118,7 @@ class DialogueManager {
             panelY - Math.floor(panelHeight / 2) + 38,
             '',
             {
-                fontSize: GAME_CONFIG.ui.fontSize.small,
+                fontSize: this.phoneFont(GAME_CONFIG.ui.fontSize.small),
                 fill: '#FFFFFF',
                 fontFamily: GAME_CONFIG.ui.fontFamily,
                 wordWrap: { width: panelWidth - 32 }
@@ -135,7 +133,7 @@ class DialogueManager {
             panelY + Math.floor(panelHeight / 2) - 18,
             promptText,
             {
-                fontSize: GAME_CONFIG.ui.fontSize.tiny,
+                fontSize: this.phoneFont(GAME_CONFIG.ui.fontSize.tiny),
                 fill: '#FFD700',
                 fontFamily: GAME_CONFIG.ui.fontFamily,
                 fontStyle: 'italic'
@@ -170,7 +168,26 @@ class DialogueManager {
             paused: true
         });
         
+        // The box is laid out through layoutBox() from here on, which keeps it on screen
+        this.layoutBox();
+        
         console.log('💬 Dialogue UI created');
+    }
+    
+    // Phones draw the 1200x720 game at about half size, so text sizes and box/wrap widths
+    // are scaled up there (DeviceManager.getTextScale() is 1 on desktop and tablets).
+    // Widths grow with the text so each line holds as many words as on desktop, capped
+    // to the screen.
+    textScale() {
+        return window.DeviceManager ? window.DeviceManager.getTextScale() : 1;
+    }
+    
+    phoneFont(size) {
+        return `${Math.round(parseFloat(size) * this.textScale())}px`;
+    }
+    
+    phoneWidth(width) {
+        return Math.min(Math.round(width * this.textScale()), DialogueManager.MAX_BOX_WIDTH);
     }
     
     // ========================================
@@ -184,11 +201,6 @@ class DialogueManager {
 
         console.log(`💬 Showing dialogue: "${dialogue.text}" (speaker: ${dialogue.speaker || 'narrator'})`);
 
-        // Hide touch controls during dialogue for cleaner presentation
-        if (this.scene.touchControlsOverlay) {
-            this.touchControlsWereVisible = this.scene.touchControlsOverlay.visible;
-            this.scene.touchControlsOverlay.setVisible(false);
-        }
 
         // HARD STOP: Disable input immediately and clear all input states to prevent skipping
         if (this.scene.inputManager) {
@@ -344,12 +356,6 @@ class DialogueManager {
     
     hideDialogue() {
         console.log('💬 Hiding dialogue');
-        
-        // Restore touch controls if they were visible before dialogue
-        if (this.scene.touchControlsOverlay && this.touchControlsWereVisible) {
-            this.scene.touchControlsOverlay.setVisible(true);
-            this.touchControlsWereVisible = false;
-        }
         
         // Note: Cinematic darkening is managed by EventManager, not here
         
@@ -702,10 +708,10 @@ class DialogueManager {
             console.warn('💬 Cannot set dialogue size - UI not created yet');
             return;
         }
-        if (width !== undefined) this.boxConfig.width = width;
+        if (width !== undefined) this.boxConfig.width = this.phoneWidth(width);
         if (height !== undefined) this.boxConfig.height = height;
         if (this.messageText && this.messageText.style && width !== undefined) {
-            this.messageText.style.wordWrapWidth = width - 32;
+            this.messageText.style.wordWrapWidth = this.boxConfig.width - 32;
         }
         this.layoutBox();
         console.log(`💬 Dialogue size set to: ${this.boxConfig.width}x${this.boxConfig.height}`);
@@ -718,10 +724,13 @@ class DialogueManager {
         const g = geom || this.boxConfig;
         const halfWidth = Math.floor(g.width / 2);
         const halfHeight = Math.floor(g.height / 2);
-        const left = g.x - halfWidth;
+        // Keep the whole box on screen horizontally (the phone-widened box would
+        // otherwise hang off the right edge from its default x of 864)
+        const x = Phaser.Math.Clamp(g.x, halfWidth + 8, 1200 - halfWidth - 8);
+        const left = x - halfWidth;
         const top = g.y - halfHeight;
         
-        this.dialogueBox.setPosition(g.x, g.y);
+        this.dialogueBox.setPosition(x, g.y);
         this.dialogueBox.setSize(g.width, g.height);
         
         if (this.speakerText) {
@@ -733,7 +742,7 @@ class DialogueManager {
             this.messageText.setPosition(left + 16, top + 10 + speakerHeight);
         }
         if (this.continuePrompt) {
-            this.continuePrompt.setPosition(g.x + halfWidth - 10, g.y + halfHeight - 18);
+            this.continuePrompt.setPosition(x + halfWidth - 10, g.y + halfHeight - 18 * this.textScale());
         }
     }
     
@@ -751,7 +760,7 @@ class DialogueManager {
         this.messageText.setText('');
         
         const speakerHeight = this.speakerText ? Math.max(this.speakerText.height, 28) : 28;
-        const promptRoom = 30; // bottom padding so the last line clears the [SPACE]/[TAP] prompt
+        const promptRoom = 30 * this.textScale(); // bottom padding so the last line clears the [SPACE]/[TAP] prompt
         const needed = Math.ceil(10 + speakerHeight + textHeight + promptRoom);
         
         const geom = Object.assign({}, this.boxConfig);
@@ -776,12 +785,12 @@ class DialogueManager {
         }
         
         if (speakerSize !== undefined) {
-            this.speakerText.setFontSize(speakerSize);
+            this.speakerText.setFontSize(this.phoneFont(speakerSize));
             console.log(`💬 Speaker text size set to: ${speakerSize}`);
         }
         
         if (messageSize !== undefined) {
-            this.messageText.setFontSize(messageSize);
+            this.messageText.setFontSize(this.phoneFont(messageSize));
             console.log(`💬 Message text size set to: ${messageSize}`);
         }
         this.layoutBox();
@@ -795,7 +804,7 @@ class DialogueManager {
         }
         
         if (this.messageText.style) {
-            this.messageText.style.wordWrapWidth = width;
+            this.messageText.style.wordWrapWidth = Math.min(Math.round(width * this.textScale()), this.boxConfig.width - 32);
             console.log(`💬 Word wrap width set to: ${width}`);
         }
     }
@@ -914,12 +923,14 @@ DialogueManager.DEFAULT_ACCENT = '#FFD700';
 DialogueManager.INPUT_GUARD_MS = 1200;
 // ms after skipping the typewriter before the next tap can dismiss the line
 DialogueManager.SKIP_GUARD_MS = 350;
+// Widest the box may get when phone scaling widens it (1200 minus a margin each side)
+DialogueManager.MAX_BOX_WIDTH = 1168;
 DialogueManager.SPEAKER_ACCENTS = [
     { match: /^negative\b/i, color: '#ff2a2a' },  // Negative Tireek / Negative Tryston
     { match: /^narrator$/i,   color: '#c4c4c4' },  // Narrator (also lines with no speaker)
     { match: /^(the )?critic$/i, color: '#FFF44F' }, // The Critic: lemon yellow, distinct from the default gold
     { match: /^rozotadi$/i,   color: '#3B82F6' },  // Rozotadi (level 1 tip-off): blue
-    { match: /^misfit$/i,     color: '#22C55E' }   // Misfit (level 2 tip-off): green
+    { match: /^(callme)?misfit$/i, color: '#22C55E' }   // CallMeMisfit (level 2 tip-off): green
 ];
 DialogueManager.accentForSpeaker = function (speaker) {
     // A line with no speaker is shown as NARRATOR, so style it the same way

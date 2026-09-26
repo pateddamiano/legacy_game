@@ -167,9 +167,14 @@ class FuturisticHealthBar {
         
         const screenX = this.config.x * uiScale;
         const screenY = this.config.y * uiScale;
+        // Bigger on phones, growing right/down from the same top-left corner
+        const hudScale = window.DeviceManager ? window.DeviceManager.getHudScale() : 1;
         
-        this.container.setScale(uiScale);
+        this.container.setScale(uiScale * hudScale);
         this.container.setPosition(screenX, screenY);
+        
+        // The shadows are positioned in absolute coordinates: refresh them for the new layout
+        if (this.cards && this.cards.tireek && this.cards.tireek.container) this.updateActiveState();
         
         this.logPositionDiagnostics('updateContainerTransform', viewportInfo, uiScale);
     }
@@ -242,6 +247,10 @@ class FuturisticHealthBar {
         
         // Calculate total card height (name area + health bar)
         const totalCardHeight = this.config.nameTextHeight + this.config.healthBarHeight;
+        
+        // Fresh card: forget what the redraw/visual-state caches last saw
+        card._drawKey = null;
+        card._visKey = null;
         
         // Create card container
         card.container = this.scene.add.container(offsetX, offsetY);
@@ -363,6 +372,23 @@ class FuturisticHealthBar {
         this.updateCardHealth(characterName);
     }
     
+    // The "+" glyph, rendered once from the same font and copied into a shared texture
+    getPatternPlusTexture(symbolSize) {
+        const key = `hudPatternPlus_${symbolSize}`;
+        if (this.scene.textures.exists(key)) return key;
+        const t = this.scene.make.text({
+            x: 0, y: 0, text: '+',
+            style: { fontSize: `${symbolSize}px`, fontFamily: GAME_CONFIG.ui.fontFamily, fontWeight: 'bold', fill: '#FFFFFF' },
+            add: false
+        });
+        const copy = document.createElement('canvas');
+        copy.width = t.canvas.width; copy.height = t.canvas.height;
+        copy.getContext('2d').drawImage(t.canvas, 0, 0);
+        this.scene.textures.addCanvas(key, copy);
+        t.destroy();
+        return key;
+    }
+    
     createHealthBarPattern(card, healthBarX, healthBarY) {
         // Create grid pattern of "+" symbols
         const horizontalSpacing = this.config.patternSpacing;
@@ -416,12 +442,9 @@ class FuturisticHealthBar {
                     symbolTop >= healthBarY - 5 && 
                     symbolBottom <= healthBarY + barHeight + 5) {
                     
-                    const symbol = this.scene.add.text(x, y, '+', {
-                        fontSize: `${symbolSize}px`,
-                        fontFamily: GAME_CONFIG.ui.fontFamily,
-                        fontWeight: 'bold',
-                        fill: '#FFFFFF'
-                    });
+                    // An Image sharing one texture (each Text object had its own canvas texture, so
+                    // ~16 of them meant ~16 separate draw calls)
+                    const symbol = this.scene.add.image(x, y, this.getPatternPlusTexture(symbolSize));
                     symbol.setOrigin(0.5, 0.5);
                     symbol.setAlpha(0.25); // Low opacity - use setAlpha() method instead of style property
                     symbol.setDepth(1.5); // Between health fill and text
@@ -452,7 +475,10 @@ class FuturisticHealthBar {
         const tireekHeal = tireekHealth - previousTireekHealth;
         const trystonHeal = trystonHealth - previousTrystonHealth;
         const healthDecreased = (tireekDamage > 0) || (trystonDamage > 0);
-        const healthIncreased = (tireekHeal > 0) || (trystonHeal > 0);
+        // A real heal is a whole point or more. The inactive character regenerates a fraction of a
+        // point EVERY FRAME; treating each of those as a heal started a flash tween and a 150ms
+        // timer per frame and re-rendered both health texts each time.
+        const healthIncreased = (tireekHeal >= 1) || (trystonHeal >= 1);
         // console.log(`💊 Health changes - Tireek: ${tireekHeal > 0 ? '+' : ''}${-tireekDamage} (heal:${tireekHeal}, dmg:${tireekDamage}), Tryston: ${trystonHeal > 0 ? '+' : ''}${-trystonDamage} (heal:${trystonHeal}, dmg:${trystonDamage})`);
         // console.log(`💊 healthDecreased: ${healthDecreased}, healthIncreased: ${healthIncreased}`);
         
@@ -468,10 +494,10 @@ class FuturisticHealthBar {
         
         // Show heal flash before updating health
         if (healthIncreased) {
-            if (tireekHeal > 0) {
+            if (tireekHeal >= 1) {
                 this.showHealFlash('tireek', tireekHeal, previousTireekHealth);
             }
-            if (trystonHeal > 0) {
+            if (trystonHeal >= 1) {
                 this.showHealFlash('tryston', trystonHeal, previousTrystonHealth);
             }
         }
@@ -637,12 +663,13 @@ class FuturisticHealthBar {
         card.shadow.clear();
         const shadowOpacity = isActive ? 0.3 : 0.15;
         card.shadow.fillStyle(0x000000, shadowOpacity);
-        card.shadow.fillRoundedRect(
+        // A plain rect: with 4px corners the difference is invisible, and a rounded rect makes
+        // Phaser recompute four curves (400 sin/cos points) on every frame
+        card.shadow.fillRect(
             absoluteX + offset,
             absoluteY + offset,
             width,
-            rectHeight,
-            cornerRadius
+            rectHeight
         );
     }
     
@@ -739,6 +766,12 @@ class FuturisticHealthBar {
             return;
         }
         
+        // Nothing to do if neither the active state nor the card's placement/scale changed
+        // (this used to redraw the shadow and border and reset tints on EVERY regeneration frame)
+        const visKey = `${isActive ? 1 : 0}|${this.isAnimating ? 1 : 0}|${card.container.x},${card.container.y}|${this.container ? this.container.scaleX + ',' + this.container.x + ',' + this.container.y : ''}`;
+        if (!this.isAnimating && card._visKey === visKey) return;
+        card._visKey = visKey;
+        
         // Update depth (active on top)
         card.container.setDepth(isActive ? this.config.activeDepth : this.config.inactiveDepth);
         
@@ -812,12 +845,19 @@ class FuturisticHealthBar {
             return;
         }
         
-        // Clear previous graphics
-        card.healthFill.clear();
-        
         // Calculate health percentage
         const healthPercent = Math.max(0, Math.min(1, charData.health / charData.maxHealth));
         const healthWidth = this.config.healthBarWidth * healthPercent;
+        
+        // Skip the redraw unless something you could see changed (whole pixels of bar, the
+        // percentage shown, which card is active). Regeneration nudges health by a fraction of a
+        // point every frame, and this used to clear/redraw the bar and re-render the text each time.
+        const drawKey = `${Math.round(healthWidth)}|${Math.round(healthPercent * 100)}|${characterName === this.activeCharacter ? 1 : 0}`;
+        if (card._drawKey === drawKey) return;
+        card._drawKey = drawKey;
+        
+        // Clear previous graphics
+        card.healthFill.clear();
         // console.log(`💊 updateCardHealth(${characterName}) - HealthPercent: ${(healthPercent * 100).toFixed(1)}%, HealthWidth: ${healthWidth.toFixed(1)}px`);
         
         // Health bar position (below name)
@@ -872,15 +912,12 @@ class FuturisticHealthBar {
             });
         }
         
-        // Update health text
+        // Update health text (setText only re-renders when the string changes)
         const healthPercentText = Math.round(healthPercent * 100);
         card.healthText.setText(`${healthPercentText}%`);
-        // console.log(`💊 updateCardHealth(${characterName}) - Set health text to: "${healthPercentText}%"`);
         
-        // Text color (white, same as name)
-        card.healthText.setStyle({ fill: '#FFFFFF' });
-        // Same opacity for both (dimming handled via tint)
-        card.healthText.setAlpha(1.0);
+        // (The text is created white and opaque and dimming is done with tint, so it used to be
+        // reset here with setStyle() - which re-renders the text into a GPU texture - every call)
         // console.log(`💊 updateCardHealth(${characterName}) - COMPLETE`);
     }
     

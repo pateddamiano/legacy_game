@@ -269,9 +269,13 @@ class SceneManager {
     
     // Exit to main menu from anywhere
     exitToMainMenu() {
-        // Stop all scenes except main menu
-        this.game.scene.getScenes().forEach(scene => {
-            if (scene.scene.key !== 'MainMenuScene') {
+        // Stop all scenes except main menu - paused and sleeping ones too. getScenes()
+        // alone only returns RUNNING scenes, which skipped GameScene while it sat paused
+        // under the ending cutscene: it kept drawing its faded-out (black) view over the menu.
+        this.game.scene.getScenes(false).forEach(scene => {
+            const sys = scene.sys;
+            const started = sys.isActive() || sys.isPaused() || sys.isSleeping();
+            if (started && scene.scene.key !== 'MainMenuScene') {
                 this.game.scene.stop(scene.scene.key);
             }
         });

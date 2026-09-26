@@ -266,6 +266,12 @@ class InputManager {
             else if (this.inputState.down) moveY = 1;
         }
         
+        // Level 1 tutorial: stand still until movement has been taught
+        if (!this.isActionAllowed('move')) {
+            moveX = 0;
+            moveY = 0;
+        }
+        
         // Handle horizontal movement (normal speed or slower for air kicks) - original logic
         let speed = this.movementConfig.walkSpeed; // Normal speed (420)
         if (isAirKick) {
@@ -320,8 +326,17 @@ class InputManager {
         return isMoving;
     }
     
+    // The level 1 tutorial (TutorialActions) sets scene.tutorialAllowedActions to the
+    // controls taught so far; anything else ('move', 'jump', 'punch', 'throw', 'switch')
+    // is ignored. null (normal play) allows everything.
+    isActionAllowed(action) {
+        const allowed = this.scene && this.scene.tutorialAllowedActions;
+        return !allowed || allowed.has(action);
+    }
+    
     handleJumping(player, animationManager) {
         if (!player || !player.body) return false;
+        if (!this.isActionAllowed('jump')) return false;
         
         // Check unified input controller first, then fallback to legacy inputState
         if (this.unifiedInput && this.unifiedInput.isActionPressed('jump')) {
@@ -343,8 +358,16 @@ class InputManager {
     
     handleAttackInput(player, animationManager, isJumping, audioManager) {
         // Check unified input controller first, then fallback to legacy inputState
+        if (!this.isActionAllowed('punch')) {
+            animationManager.clearQueue();
+            return false;
+        }
         const attackPressed = (this.unifiedInput && this.unifiedInput.isActionPressed('punch')) || this.inputState.attack;
-        if (!attackPressed) return false;
+        if (!attackPressed) {
+            // A punch buffered during the last swing is thrown the moment that swing ends
+            const swingOver = !isJumping && !animationManager.animationLocked && animationManager.currentState !== 'attack';
+            if (!swingOver || !animationManager.takeBufferedAttack()) return false;
+        }
         
         const charName = player.characterConfig.name;
 
@@ -373,8 +396,8 @@ class InputManager {
         } else {
             // Ground combo attack
             if (animationManager.currentState === 'attack') {
-                // Try to queue the attack if we're already attacking (the current swing
-                // keeps its hit flags - nothing new has started)
+                // Already swinging: buffer it to throw when this swing ends (the current
+                // swing keeps its hit flags - nothing new has started)
                 animationManager.queueAttack();
                 return false;
             } else {

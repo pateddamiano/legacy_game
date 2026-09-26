@@ -15,9 +15,10 @@ class AnimationStateManager {
         this.comboTimeout = 500; // ms to reset combo (longer window for easier chaining)
         this.animationLocked = false; // Prevents interruption during certain animations
         this.lockTimer = 0;
-        this.queuedAttacks = []; // Buffer for queued attacks (array for multiple)
-        this.bufferWindow = 150; // ms before animation ends to allow buffering
-        this.maxQueueSize = 2; // Maximum attacks that can be queued (allows up to 3-hit combo)
+        // A punch pressed while a swing is playing: thrown as the next combo step as soon
+        // as the swing ends (InputManager.handleAttackInput takes it). Just one - mashing
+        // gives jab, cross, kick in order rather than piling up swings.
+        this.bufferedAttack = false;
     }
 
     update(deltaTime) {
@@ -31,24 +32,11 @@ class AnimationStateManager {
 
         // Update animation lock timer. The lock ALWAYS expires when its timer runs out.
         //
-        // This used to return early whenever a queued attack was pending inside the
-        // buffer window - which also skipped the unlock check below. If a queued press
-        // landed on the frame the timer crossed zero, the timer went negative, the whole
-        // block (guarded by lockTimer > 0) never ran again, and the player stayed
-        // "attacking" forever: no movement, attacks only re-queued. The attack
-        // animation's 'animationcomplete' handler usually rescued it, but anything that
-        // cut the animation short (a character switch finishing and playing idle, a hit
-        // freeze) left the character frozen until the next switch built a fresh manager.
-        // Holding a touch button queued a press every frame, making it near-certain.
-        let nextAttack = null;
+        // This used to return early whenever a queued attack was pending near the end of
+        // the swing - which also skipped the unlock check below, and could leave the
+        // player stuck "attacking" forever. Nothing may skip the unlock.
         if (this.animationLocked || this.lockTimer > 0) {
             this.lockTimer -= deltaTime;
-            
-            // Queued attacks are consumed here (nothing executes them yet - see the note
-            // on queueAttack in InputManager.handleAttackInput)
-            if (this.queuedAttacks.length > 0 && this.lockTimer <= this.bufferWindow) {
-                nextAttack = this.executeQueuedAttack();
-            }
             
             if (this.lockTimer <= 0) {
                 this.lockTimer = 0;
@@ -58,38 +46,29 @@ class AnimationStateManager {
                 }
             }
         }
-        return nextAttack;
     }
 
-    executeQueuedAttack() {
-        if (this.queuedAttacks.length > 0) {
-            const attackType = this.queuedAttacks.shift(); // Remove first attack from queue
-            console.log(`Executing queued attack: ${attackType}, ${this.queuedAttacks.length} remaining in queue`);
-            return attackType;
-        }
-        return null;
-    }
-
+    // Remember a punch pressed mid-swing. It does NOT advance the combo here: that used
+    // to happen, and the queued swing was then never played - so a tap during a jab
+    // silently used up the cross and the next swing jumped to the kick (or reset to
+    // another jab), which looked like missing attacks.
     queueAttack() {
-        // Only queue if we haven't reached the maximum queue size
-        if (this.queuedAttacks.length >= this.maxQueueSize) {
-            console.log("Queue full! Cannot queue more attacks");
-            return false;
-        }
-
-        // Only queue if we're currently attacking
         if (this.currentState === 'attack' || this.currentState === 'airkick') {
-            const attackType = this.startCombo();
-            this.queuedAttacks.push(attackType);
-            console.log(`Queued attack: ${attackType}, queue size: ${this.queuedAttacks.length}/${this.maxQueueSize}`);
+            this.bufferedAttack = true;
             return true;
         }
         return false;
     }
 
+    // True (once) if a punch was buffered; clears it
+    takeBufferedAttack() {
+        const buffered = this.bufferedAttack;
+        this.bufferedAttack = false;
+        return buffered;
+    }
+
     clearQueue() {
-        this.queuedAttacks = [];
-        console.log("Attack queue cleared");
+        this.bufferedAttack = false;
     }
 
     canTransitionTo(newState) {
