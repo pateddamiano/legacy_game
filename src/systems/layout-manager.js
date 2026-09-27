@@ -268,11 +268,19 @@ const LayoutManager = {
         const oldScrollY = camera.scrollY;
         const oldBounds = camera.getBounds();
         
+        // A scene that set its own camera bounds (a level: the whole scrolling world, with the
+        // camera following the player) keeps them and its scroll - only the zoom and the
+        // viewport change. Resetting them here on every resize pinned the camera to the start
+        // of the level when the phone was turned, with the player off-screen.
+        const b = camera.getBounds();
+        const ownBounds = camera.useBounds &&
+            (b.x !== 0 || b.y !== 0 || b.width !== targetWidth || b.height !== targetHeight);
+
         // Apply the scale as zoom so that targetWidth x targetHeight fits in the viewport
         camera.setZoom(viewport.scale);
-        
+
         // Set camera bounds to match the virtual world size
-        camera.setBounds(0, 0, targetWidth, targetHeight);
+        if (!ownBounds) camera.setBounds(0, 0, targetWidth, targetHeight);
         
         // The canvas is transparent (game.js) so the page backdrop shows beside the game view:
         // fill THIS view with opaque black, as the canvas clear colour used to. Scenes that set
@@ -288,7 +296,7 @@ const LayoutManager = {
         // Center the camera on the middle of the virtual world
         // BUT skip this if camera is locked by event system (during pans, etc.)
         // to prevent interrupting camera animations on mobile resize events
-        if (!eventCameraLocked) {
+        if (!eventCameraLocked && !ownBounds) {
             camera.centerOn(targetWidth / 2, targetHeight / 2);
         }
         

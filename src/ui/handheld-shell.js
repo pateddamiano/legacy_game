@@ -147,7 +147,7 @@
             <div class="hh-bezel">
                 <div class="hh-led"></div>
                 <div class="hh-led-label">POWER</div>
-                <div class="hh-logo">LEGACY<span>+</span></div>
+                <div class="hh-logo">LEGACY<span>++</span></div>
             </div>
             <div class="hh-well hh-stick-well"></div>
             <div class="hh-well hh-buttons-well"></div>
