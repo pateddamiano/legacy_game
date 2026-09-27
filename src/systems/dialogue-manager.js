@@ -64,6 +64,16 @@ class DialogueManager {
             console.log(`💬 DIALOGUE_DEBUG: Applied calculated scale ${calculatedScale} to dialogue container`);
         }
         
+        // Follow the HUD scale when the screen changes size (phone turned): the box is drawn
+        // in 1200x720 virtual coordinates scaled to the game view, like the rest of the HUD.
+        // Without this it kept the scale it was created with - tiny after starting upright.
+        if (this.uiScene.events && this.uiScene !== this.scene) {
+            this.onUiScaleChanged = (newScale) => {
+                if (this.container && this.container.active && newScale) this.container.setScale(newScale);
+            };
+            this.uiScene.events.on('uiScaleChanged', this.onUiScaleChanged);
+        }
+        
         // Dialogue box background (right side, just past 50%)
         // Use virtual coordinates instead of camera width to match other UI elements
         const panelWidth = this.phoneWidth(520);
@@ -308,9 +318,13 @@ class DialogueManager {
             this.scene.audioManager.startTextTyping();
         }
         
-        this.typewriterTimer = this.scene.time.addEvent({
+        // A looping timer can fire several times in one frame to catch up after a long one
+        // (turning the phone does that), so a tick can run after the one that finished the
+        // line removed the timer - those extra ticks must do nothing
+        const timer = this.scene.time.addEvent({
             delay: this.typewriterSpeed,
             callback: () => {
+                if (this.typewriterTimer !== timer) return;
                 if (this.charIndex < this.fullText.length) {
                     this.displayedText += this.fullText[this.charIndex];
                     this.messageText.setText(this.displayedText);
@@ -320,13 +334,14 @@ class DialogueManager {
                     if (this.scene.audioManager) {
                         this.scene.audioManager.stopTextTyping();
                     }
-                    this.typewriterTimer.remove();
+                    timer.remove();
                     this.typewriterTimer = null;
                     this.showContinuePrompt();
                 }
             },
             loop: true
         });
+        this.typewriterTimer = timer;
     }
     
     skipTypewriter() {
@@ -899,6 +914,11 @@ class DialogueManager {
     destroy() {
         if (this.typewriterTimer) {
             this.typewriterTimer.remove();
+        }
+        
+        if (this.onUiScaleChanged && this.uiScene && this.uiScene.events) {
+            this.uiScene.events.off('uiScaleChanged', this.onUiScaleChanged);
+            this.onUiScaleChanged = null;
         }
         
         if (this.spaceKey) {
