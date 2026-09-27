@@ -789,7 +789,59 @@ class DialogueManager {
         if (geom.height !== this.boxConfig.height) {
             console.log(`💬 Dialogue box grown to fit text: ${this.boxConfig.height} -> ${geom.height}px (text ${Math.round(textHeight)}px)`);
         }
+        this.avoidCharacters(geom, margin);
         this.layoutBox(geom);
+    }
+    
+    // Keep the box off the characters' faces: if it would cover the head or upper body of
+    // the player or an extra in view (Rozotadi, Misfit - they stand right where the default
+    // box sits, and the phone-sized box is too wide to dodge sideways), move it up until it
+    // clears their heads, or as far up as the screen allows. Boxes that only reach the
+    // legs (boss arenas put theirs low on purpose) stay where they are.
+    avoidCharacters(geom, margin) {
+        const faces = this.characterFaceZones();
+        if (!faces.length) return;
+        const clampedX = Phaser.Math.Clamp(geom.x, geom.width / 2 + 8, 1200 - geom.width / 2 - 8);
+        const left = clampedX - geom.width / 2;
+        const right = clampedX + geom.width / 2;
+        const half = Math.floor(geom.height / 2);
+        const covered = faces.filter(f =>
+            f.right > left && f.left < right &&
+            f.bottom > geom.y - half && f.top < geom.y + half);
+        if (!covered.length) return;
+        const headTop = Math.min(...covered.map(f => f.top));
+        const y = Math.round(Math.max(headTop - 10 - half, margin + half));
+        if (y < geom.y) {
+            console.log(`💬 Dialogue box moved up to keep ${covered.map(f => f.name).join(', ')} in view: y ${geom.y} -> ${y}`);
+            geom.y = y;
+        }
+    }
+    
+    // Where the faces are, in the dialogue's 1200x720 view coordinates: roughly the middle
+    // of each sprite's width, from just under the frame top (frames have empty space above
+    // the head) to its middle
+    characterFaceZones() {
+        const scene = this.scene;
+        const cam = scene && scene.cameras && scene.cameras.main;
+        if (!cam || !cam.worldView) return [];
+        const sprites = [];
+        if (scene.player) sprites.push({ name: 'player', sprite: scene.player });
+        const extras = (scene.extrasManager && scene.extrasManager.extras) || [];
+        extras.forEach(e => { if (e && e.sprite) sprites.push({ name: e.name, sprite: e.sprite }); });
+        const view = cam.worldView;
+        const zones = [];
+        sprites.forEach(({ name, sprite }) => {
+            if (!sprite.active || !sprite.visible || typeof sprite.getBounds !== 'function') return;
+            const b = sprite.getBounds();
+            const x = b.x - view.x, y = b.y - view.y;
+            if (x + b.width < 0 || x > 1200 || y + b.height < 0 || y > 720) return; // off screen
+            zones.push({
+                name,
+                left: x + b.width * 0.3, right: x + b.width * 0.7,
+                top: y + b.height * 0.1, bottom: y + b.height * 0.55
+            });
+        });
+        return zones;
     }
     
     // Configure text sizes
