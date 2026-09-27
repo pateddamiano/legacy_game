@@ -46,6 +46,7 @@ class HandheldControlsScene extends Phaser.Scene {
         this.overlay.setVisible(false);
         this.nav = new HandheldMenuNav(this, this.overlay);
         this.sizeKey = '';
+        this.jumpIconTried = false;
     }
 
     configureCamera() {
@@ -64,6 +65,12 @@ class HandheldControlsScene extends Phaser.Scene {
         return !!(gs && gs.sys.isActive() && gs.touchControlsOverlay && gs.touchControlsOverlay.visible);
     }
 
+    // A running scene that fills the whole screen and wants no controls over it (the
+    // ending's end card) sets hidesHandheldControls
+    coveredByFullScreenScene() {
+        return this.game.scene.getScenes(true).some(s => s.hidesHandheldControls);
+    }
+
     update(time, delta) {
         if (!this.overlay) return;
         const jump = this.overlay.buttons.jump;
@@ -73,7 +80,7 @@ class HandheldControlsScene extends Phaser.Scene {
             jump.setDisabled(this.overlay.menuMode);
         }
         const show = !!(window.DeviceManager && window.DeviceManager.isHandheldMode()) &&
-            !this.gameplayControlsShowing();
+            !this.gameplayControlsShowing() && !this.coveredByFullScreenScene();
 
         if (show !== this.overlay.visible) {
             this.overlay.releaseAll();

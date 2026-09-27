@@ -52,6 +52,12 @@ class MainMenuScene extends Phaser.Scene {
             this.scene.stop('UIScene');
         }
 
+        // The console controls (phone upright) run the whole time; make sure they are
+        // back whichever way we got here
+        if (!this.scene.isActive('HandheldControlsScene') && this.scene.get('HandheldControlsScene')) {
+            this.scene.launch('HandheldControlsScene');
+        }
+
         // Use the same fixed virtual dimensions as the game world
         this.virtualWidth = 1200;
         this.virtualHeight = 720;

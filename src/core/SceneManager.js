@@ -275,7 +275,9 @@ class SceneManager {
         this.game.scene.getScenes(false).forEach(scene => {
             const sys = scene.sys;
             const started = sys.isActive() || sys.isPaused() || sys.isSleeping();
-            if (started && scene.scene.key !== 'MainMenuScene') {
+            // (HandheldControlsScene stays: the console controls run the whole time)
+            const keep = ['MainMenuScene', 'HandheldControlsScene'];
+            if (started && keep.indexOf(scene.scene.key) === -1) {
                 this.game.scene.stop(scene.scene.key);
             }
         });

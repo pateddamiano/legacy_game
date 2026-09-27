@@ -29,6 +29,7 @@ class CutsceneScene extends Phaser.Scene {
         this.isTyping = false;
         this.isFinishing = false;
         this.showcaseReady = false;
+        this.hidesHandheldControls = false;
 
         console.log(`🎬 CutsceneScene: Init with cutscene '${this.cutsceneId}'`);
         if (!this.config) {
@@ -235,6 +236,9 @@ class CutsceneScene extends Phaser.Scene {
     // 1200x720 letterbox, which clipped the glow into a box and crowded small screens.)
     createShowcaseScreen() {
         this.configureFullScreenCamera();
+        // Full screen, so no console controls over it when the phone is upright (see
+        // HandheldControlsScene) - the album and MAIN MENU are tapped directly
+        this.hidesHandheldControls = true;
 
         // Music: reuse GameScene's AudioManager (see create())
         const gameScene = this.scene.get('GameScene');
