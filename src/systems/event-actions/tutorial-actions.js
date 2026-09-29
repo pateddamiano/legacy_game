@@ -15,7 +15,9 @@
 //   tutorialEnd    - last message, then everything goes back to normal play: dummies turn
 //                    into regular enemies, spawning resumes, the camera follows again
 // GameScene.tutorialAllowedActions limits the controls to the ones taught so far (see
-// InputManager.isActionAllowed) - the player can't even walk until the move step.
+// InputManager.isActionAllowed) - the player can't even walk until the move step. The
+// ones that touch the thugs (TutorialActions.ONE_SHOT) only work during their own step,
+// until it's done once, so the player can't beat the dummies around the screen.
 
 class TutorialActions {
     constructor(eventManager) {
@@ -154,7 +156,8 @@ class TutorialActions {
         const step = action.step;
         const touch = this.overlay.isTouch();
 
-        scene.tutorialAllowedActions = new Set([...st.learned, step]);
+        const oneShot = TutorialActions.ONE_SHOT;
+        scene.tutorialAllowedActions = new Set([...st.learned].filter(a => !oneShot.has(a)).concat(step));
         this.overlay.setStep(step, touch ? action.touchText : action.keyText);
         console.log(`🎓 Tutorial step: ${step}`);
 
@@ -173,6 +176,7 @@ class TutorialActions {
             finished = true;
             this.clearListeners();
             st.learned.add(step);
+            if (TutorialActions.ONE_SHOT.has(step)) this.lock(step);
             return true;
         };
         // Tapping the box before doing it: count the lesson as done and move on
@@ -217,6 +221,7 @@ class TutorialActions {
                 this.listen('player:recordHit', () => {
                     if (hit) return;
                     hit = true;
+                    this.lock('throw'); // one hit is the lesson; no more throws while it recharges
                     rechargeShownAt = scene.time.now;
                     if (action.rechargeText) this.overlay.setText(action.rechargeText);
                 });
@@ -257,6 +262,12 @@ class TutorialActions {
             if (a.waitForTap) out.push(`✓ ${a.successText || 'Nice!'}\n\n${touch ? a.touchText : a.keyText}`);
         });
         return out;
+    }
+
+    // Turn one control off again for the rest of the tutorial
+    lock(action) {
+        const allowed = this.scene.tutorialAllowedActions;
+        if (allowed) allowed.delete(action);
     }
 
     listen(eventName, fn) {
@@ -333,6 +344,7 @@ class TutorialActions {
             if (!enemy || !enemy.sprite || !enemy.sprite.active) return;
             scene.tweens.killTweensOf(enemy.sprite);
             enemy.tutorialDummy = false;
+            enemy.health = enemy.maxHealth; // hits taken as a dummy don't count
             enemy.eventPaused = false;
             enemy._idleWhilePaused = false;
             delete enemy.eventId;
@@ -360,6 +372,9 @@ TutorialActions.TIMING = {
     afterSwitch: 1800,    // watch the wind push them away
     endHold: 3500         // the final "You're ready" line
 };
+
+// Controls that hit or shove the thugs: allowed only during their own step, until done once
+TutorialActions.ONE_SHOT = new Set(['throw', 'punch', 'switch']);
 
 if (typeof window !== 'undefined') {
     window.TutorialActions = TutorialActions;

@@ -17,6 +17,7 @@ class UnifiedInputController {
             characterSwitch: false,
             jump: false,
             recordThrow: false,
+            special: false,    // Fireball special (SpecialAttackSystem)
             uiConfirm: false,  // For dialogue/menus
             
             // Actions (held - continuous)
@@ -24,6 +25,7 @@ class UnifiedInputController {
             characterSwitchHeld: false,
             jumpHeld: false,
             recordThrowHeld: false,
+            specialHeld: false,
             uiConfirmHeld: false
         };
         
@@ -55,6 +57,7 @@ class UnifiedInputController {
         this.state.characterSwitch = false;
         this.state.jump = false;
         this.state.recordThrow = false;
+        this.state.special = false;
         this.state.uiConfirm = false;
     }
     
@@ -137,7 +140,7 @@ class UnifiedInputController {
     
     /**
      * Set action state from keyboard
-     * @param {string} action - Action name ('punch', 'jump', 'characterSwitch', 'recordThrow', 'uiConfirm')
+     * @param {string} action - Action name ('punch', 'jump', 'characterSwitch', 'recordThrow', 'special', 'uiConfirm')
      * @param {boolean} pressed - Whether the key is currently pressed
      */
     setActionFromKeyboard(action, pressed) {
@@ -225,11 +228,13 @@ class UnifiedInputController {
         this.state.characterSwitch = false;
         this.state.jump = false;
         this.state.recordThrow = false;
+        this.state.special = false;
         this.state.uiConfirm = false;
         this.state.punchHeld = false;
         this.state.characterSwitchHeld = false;
         this.state.jumpHeld = false;
         this.state.recordThrowHeld = false;
+        this.state.specialHeld = false;
         this.state.uiConfirmHeld = false;
         this.lastMovementSource = null;
         this.lastActionSource = {};

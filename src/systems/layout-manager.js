@@ -88,7 +88,8 @@ const LayoutManager = {
      *
      * Returns { screenW, screenH, bezel, screen, controls, scale (control size multiplier),
      *           stick: {x, y, radius, footprint}, buttons: {x, y, size, spacing, footprint},
-     *           pause: {x, y, size, labelY}, grille: {x, y, width, height} | null }
+     *           pause: {x, y, size, labelY}, special: {x, y, width, height},
+     *           grille: {x, y, width, height} | null }
      */
     getHandheldLayout(screenW, screenH, targetWidth = 1200, targetHeight = 720) {
         const tc = window.TOUCH_CONTROLS_CONFIG || {};
@@ -133,10 +134,12 @@ const LayoutManager = {
         const diamondFoot1 = size1 * spacingMul + size1 / 2 + 10; // + the button glow
         const pause1 = hh.pauseSize ?? 44;
         const labelH = 18, pauseGap = 18;
+        // The wide SPECIAL bar across the top of the controls (SpecialBarButton)
+        const specialH1 = 40, specialGap = 16;
 
         // Biggest scale that fits side by side, and stacked above the pause button
         const fitW = (screenW - side * 2 - middleGap) / (2 * stickFoot1 + 2 * diamondFoot1);
-        const fitH = (controls.height - labelH) / (2 * Math.max(stickFoot1, diamondFoot1) + pauseGap + pause1);
+        const fitH = (controls.height - labelH) / (2 * Math.max(stickFoot1, diamondFoot1) + pauseGap + pause1 + specialH1 + specialGap);
         const minTouch = tc.minTouchTarget || 44;
         const minScale = minTouch / size1;
         const scale = Math.max(minScale, Math.min(fitW, fitH, hh.maxScale ?? 1.25));
@@ -145,11 +148,18 @@ const LayoutManager = {
         const diamondFoot = diamondFoot1 * scale;
         const clusterR = Math.max(stickFoot, diamondFoot);
         const pauseSize = Math.max(pause1 * scale, 36);
+        const specialH = Math.max(36, Math.round(specialH1 * scale));
 
-        // The whole group (clusters + pause) in the controls area, low (a thumb's reach)
-        const groupH = clusterR * 2 + pauseGap + pauseSize + labelH;
+        // The whole group (special bar, clusters, pause) in the controls area, low (a thumb's reach)
+        const groupH = specialH + specialGap + clusterR * 2 + pauseGap + pauseSize + labelH;
         const groupTop = controls.y + Math.max(0, (controls.height - groupH) * (hh.controlsBias ?? 0.65));
-        const rowY = groupTop + clusterR;
+        const special = {
+            x: screenW / 2,
+            y: groupTop + specialH / 2,
+            width: Math.round(Math.min(screenW - side * 2, 420) * 0.78),
+            height: specialH
+        };
+        const rowY = groupTop + specialH + specialGap + clusterR;
 
         const stick = { x: side + stickFoot, y: rowY, radius: baseR * scale, footprint: stickFoot };
         const buttonSize = size1 * scale;
@@ -174,7 +184,7 @@ const LayoutManager = {
             if (w >= 50) grille = { x: screenW - side - w, y: areaBottom - 10 - h, width: w, height: h };
         }
 
-        const layout = { screenW, screenH, safe, bezel, screen, controls, scale, stick, buttons, pause, grille };
+        const layout = { screenW, screenH, safe, bezel, screen, controls, scale, stick, buttons, pause, special, grille };
         if (window.DEBUG_MODE) this.warnOnOverlap(layout);
         return layout;
     },

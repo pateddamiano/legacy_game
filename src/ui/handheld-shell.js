@@ -96,6 +96,7 @@
                 0 1px 0 rgba(255,255,255,0.07);
         }
         #handheld-shell .hh-pause-well { border-radius: 999px; transform: rotate(-22deg); }
+        #handheld-shell .hh-special-well { border-radius: 14px; }
         #handheld-shell .hh-label { font-size: 16px; transform: translateX(-50%); }
         #handheld-shell .hh-grille {
             position: absolute;
@@ -152,6 +153,7 @@
             <div class="hh-well hh-stick-well"></div>
             <div class="hh-well hh-buttons-well"></div>
             <div class="hh-well hh-pause-well"></div>
+            <div class="hh-well hh-special-well"></div>
             <div class="hh-label hh-pause-label">PAUSE</div>
             <div class="hh-grille"><i></i><i></i><i></i><i></i><i></i><i></i></div>`;
         // Behind the canvas (which Phaser appends later, or already has)
@@ -161,7 +163,8 @@
         parts = {
             bezel: q('.hh-bezel'), led: q('.hh-led'), ledLabel: q('.hh-led-label'), logo: q('.hh-logo'),
             stickWell: q('.hh-stick-well'), buttonsWell: q('.hh-buttons-well'),
-            pauseWell: q('.hh-pause-well'), pauseLabel: q('.hh-pause-label'), grille: q('.hh-grille')
+            pauseWell: q('.hh-pause-well'), pauseLabel: q('.hh-pause-label'), grille: q('.hh-grille'),
+            specialWell: q('.hh-special-well')
         };
         return true;
     }
@@ -200,6 +203,10 @@
         circle(parts.buttonsWell, L.buttons.x, L.buttons.y, L.buttons.footprint + 6);
         const p = L.pause;
         place(parts.pauseWell, p.x - p.size * 0.95, p.y - p.size * 0.62, p.size * 1.9, p.size * 1.24);
+        if (L.special && parts.specialWell) {
+            const sp = L.special;
+            place(parts.specialWell, sp.x - sp.width / 2 - 6, sp.y - sp.height / 2 - 6, sp.width + 12, sp.height + 12);
+        }
         parts.pauseLabel.style.left = `${Math.round(p.x)}px`;
         parts.pauseLabel.style.top = `${Math.round(p.labelY + 6)}px`;
 

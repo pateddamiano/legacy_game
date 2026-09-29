@@ -278,6 +278,11 @@ class AudioBootScene extends Phaser.Scene {
         this.load.audio('weaponRecordHit', 'assets/audio/sfx/weapon_record_hit.mp3');
         this.load.audio('ratingWeaponHit', 'assets/audio/sfx/rating_weapon_hit.mp3');
         
+        // Special attack (SpecialAttackSystem): each fighter's fireball, and the meter filling up
+        this.load.audio('specialFireballTireek', 'assets/audio/sfx/special_fireball_tireek.mp3');
+        this.load.audio('specialFireballTryston', 'assets/audio/sfx/special_fireball_tryston.mp3');
+        this.load.audio('specialCharged', 'assets/audio/sfx/special_charged.mp3');
+        
         // Item pickup sounds
         this.load.audio('healthPickup', 'assets/audio/sfx/item_health_item_pickup.mp3');
         this.load.audio('microphonePickup', 'assets/audio/sfx/item_golden_microphone_pickup.mp3');
@@ -293,6 +298,9 @@ class AudioBootScene extends Phaser.Scene {
         // Try again sounds
         this.load.audio('tryAgain', 'assets/audio/sfx/try_again.mp3');
         this.load.audio('tryAgainStart', 'assets/audio/sfx/try_again_start.mp3');
+        
+        // Pause menu button press (opening pause, RESUME, MAIN MENU)
+        this.load.audio('pauseButton', 'assets/audio/sfx/ui_pause_button.mp3');
         
         console.log('🎵 All audio assets configured for loading');
     }
@@ -434,6 +442,8 @@ class AudioBootScene extends Phaser.Scene {
             frameWidth: 64,
             frameHeight: 64
         });
+        // Fireballs for the special attack (SpecialAttackSystem)
+        if (typeof SpecialAttackSystem !== 'undefined') SpecialAttackSystem.loadAssets(this.load);
 
         // Boss rating weapon assets
         this.load.image('ratingWeapon0', 'assets/characters/critic/spritesheets/rating_weapons/0_1frame.png');

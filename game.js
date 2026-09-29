@@ -201,7 +201,8 @@ if (window.DEBUG_MODE) {
         
         gameInstance = new Phaser.Game(config);
         window.__legacyGameInstance = gameInstance; // for the frame-loop watchdog above
-        
+        silenceAudioOnPageExit(gameInstance);
+
         if (window.DeviceManager) {
             window.DeviceManager.initialize(gameInstance);
         }
@@ -217,6 +218,41 @@ if (window.DEBUG_MODE) {
         return gameInstance;
     }
     
+    // Closing or reloading the tab tears the audio down mid-waveform, which the speakers
+    // play as a loud pop. So on the way out, fade Phaser's master output to silence (a few ms,
+    // on the audio thread, so it lands even while the page unloads) and stop the context.
+    // If the page is only frozen into the back/forward cache, pageshow turns it back on.
+    function silenceAudioOnPageExit(game) {
+        const masterGain = () => {
+            const sm = game.sound;
+            return sm && sm.context && sm.masterMuteNode ? { ctx: sm.context, gain: sm.masterMuteNode.gain } : null;
+        };
+        const silence = () => {
+            const a = masterGain();
+            if (!a) return;
+            try {
+                const t = a.ctx.currentTime;
+                a.gain.cancelScheduledValues(t);
+                a.gain.setValueAtTime(a.gain.value, t);
+                a.gain.setTargetAtTime(0, t, 0.004);
+                setTimeout(() => { if (a.ctx.state === 'running') a.ctx.suspend().catch(() => {}); }, 40);
+            } catch (e) {}
+        };
+        window.addEventListener('beforeunload', silence);
+        window.addEventListener('pagehide', silence);
+        window.addEventListener('pageshow', (e) => {
+            if (!e.persisted) return;
+            const a = masterGain();
+            if (!a) return;
+            try {
+                const t = a.ctx.currentTime;
+                a.gain.cancelScheduledValues(t);
+                a.gain.setValueAtTime(game.sound.mute ? 0 : 1, t);
+                if (a.ctx.state !== 'running') a.ctx.resume().catch(() => {});
+            } catch (e) {}
+        });
+    }
+
     window.startLegacyGame = function startLegacyGame() {
         return bootPhaserGame();
     };

@@ -21,6 +21,7 @@ class InputManager {
             jump: false,
             attack: false,
             weapon: false,
+            special: false,
             switchCharacter: false,
             debug: false,
             clearEnemies: false,
@@ -73,6 +74,7 @@ class InputManager {
             attack: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.X),
             weapon: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q),
             switchCharacter: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.C),
+            special: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.V),
             debug: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
             clearEnemies: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K),
             heal: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.H),
@@ -115,6 +117,7 @@ class InputManager {
             this.inputState.jump = false;
             this.inputState.attack = false;
             this.inputState.weapon = false;
+            this.inputState.special = false;
             this.inputState.switchCharacter = false;
             this.inputState.debug = false;
             this.inputState.clearEnemies = false;
@@ -160,6 +163,7 @@ class InputManager {
             this.inputState.jump = this.keys.space ? Phaser.Input.Keyboard.JustDown(this.keys.space) : false;
             this.inputState.attack = this.keys.attack ? Phaser.Input.Keyboard.JustDown(this.keys.attack) : false;
             this.inputState.weapon = this.keys.weapon ? Phaser.Input.Keyboard.JustDown(this.keys.weapon) : false;
+            this.inputState.special = this.keys.special ? Phaser.Input.Keyboard.JustDown(this.keys.special) : false;
             this.inputState.switchCharacter = this.keys.switchCharacter ? Phaser.Input.Keyboard.JustDown(this.keys.switchCharacter) : false;
             this.inputState.debug = this.keys.debug ? Phaser.Input.Keyboard.JustDown(this.keys.debug) : false;
             this.inputState.clearEnemies = this.keys.clearEnemies ? Phaser.Input.Keyboard.JustDown(this.keys.clearEnemies) : false;
@@ -176,6 +180,7 @@ class InputManager {
                 this.unifiedInput.setActionFromKeyboard('jump', this.keys.space ? this.keys.space.isDown : false);
                 this.unifiedInput.setActionFromKeyboard('punch', this.keys.attack ? this.keys.attack.isDown : false);
                 this.unifiedInput.setActionFromKeyboard('recordThrow', this.keys.weapon ? this.keys.weapon.isDown : false);
+                this.unifiedInput.setActionFromKeyboard('special', this.keys.special ? this.keys.special.isDown : false);
                 this.unifiedInput.setActionFromKeyboard('characterSwitch', this.keys.switchCharacter ? this.keys.switchCharacter.isDown : false);
                 // uiConfirm is set when SPACE is pressed (for dialogue/menus)
                 this.unifiedInput.setActionFromKeyboard('uiConfirm', this.keys.space ? this.keys.space.isDown : false);
@@ -327,7 +332,7 @@ class InputManager {
     }
     
     // The level 1 tutorial (TutorialActions) sets scene.tutorialAllowedActions to the
-    // controls taught so far; anything else ('move', 'jump', 'punch', 'throw', 'switch')
+    // controls taught so far; anything else ('move', 'jump', 'punch', 'throw', 'switch', 'special')
     // is ignored. null (normal play) allows everything.
     isActionAllowed(action) {
         const allowed = this.scene && this.scene.tutorialAllowedActions;
@@ -444,6 +449,7 @@ class InputManager {
             onHeal,
             onSwitchCharacter,
             onWeaponUse,
+            onSpecialUse,
             onTouchControlsToggle
         } = callbacks;
         
@@ -480,6 +486,12 @@ class InputManager {
         const weaponPressed = (this.unifiedInput && this.unifiedInput.isActionPressed('recordThrow')) || this.inputState.weapon;
         if (weaponPressed && onWeaponUse) {
             onWeaponUse();
+        }
+        
+        // Fireball special (V / the SPECIAL touch button)
+        const specialPressed = (this.unifiedInput && this.unifiedInput.isActionPressed('special')) || this.inputState.special;
+        if (specialPressed && onSpecialUse) {
+            onSpecialUse();
         }
         
         // Handle touch controls toggle

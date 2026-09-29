@@ -371,24 +371,33 @@ class AudioManager {
     // ========================================
 
     setupFocusHandling() {
-        // Handle visibility change (tab switching, minimizing window, etc.)
-        document.addEventListener('visibilitychange', () => {
+        // Kept as fields so destroy() can remove these exact listeners
+        this.onVisibilityChange = () => {
             if (document.hidden) {
                 this.handleBlur();
             } else {
                 this.handleFocus();
             }
-        });
+        };
+        this.onWindowBlur = () => this.handleBlur();
+        this.onWindowFocus = () => this.handleFocus();
+
+        // Handle visibility change (tab switching, minimizing window, etc.)
+        document.addEventListener('visibilitychange', this.onVisibilityChange);
 
         // Handle window focus/blur events
-        window.addEventListener('blur', () => this.handleBlur());
-        window.addEventListener('focus', () => this.handleFocus());
+        window.addEventListener('blur', this.onWindowBlur);
+        window.addEventListener('focus', this.onWindowFocus);
 
 
         console.log('🎵 Focus handling initialized');
     }
 
     handleBlur() {
+        // Minimizing or switching apps fires both window blur and visibilitychange. Only the
+        // first counts: a second pass would see SFX already muted, take it for the player's own
+        // mute, and handleFocus would then never unmute them.
+        if (!this.isFocused) return;
         this.isFocused = false;
         this.lastFocusTime = Date.now();
         
@@ -399,20 +408,14 @@ class AudioManager {
             this.sfxMuted = true;
             this.sfxMutedByFocusLoss = true;
             
-            // Pause looping sound effects to prevent them from continuing
-            if (this.runningSoundEffect && this.runningSoundEffect.isPlaying) {
-                this.runningSoundEffect.pause();
-            }
-            if (this.ambianceSoundEffect && this.ambianceSoundEffect.isPlaying) {
-                this.ambianceSoundEffect.pause();
-            }
-            if (this.subwayPassingSound && this.subwayPassingSound.isPlaying) {
-                this.subwayPassingSound.pause();
-            }
-            if (this.textTypingSound && this.textTypingSound.isPlaying) {
-                this.textTypingSound.pause();
-            }
-            
+            // Pause the looping sound effects that are playing now, and remember exactly which,
+            // so handleFocus never revives a loop something else paused (e.g. the pause menu)
+            this.loopsPausedByFocusLoss = [
+                this.runningSoundEffect, this.ambianceSoundEffect,
+                this.subwayPassingSound, this.textTypingSound
+            ].filter(s => s && s.isPlaying);
+            this.loopsPausedByFocusLoss.forEach(s => s.pause());
+
             console.log('🎵 Game lost focus - muting sound effects');
         } else {
             // Already muted, just track that we didn't mute it
@@ -422,6 +425,8 @@ class AudioManager {
     }
 
     handleFocus() {
+        // Returning also fires both focus and visibilitychange; the second is a no-op
+        if (this.isFocused) return;
         const now = Date.now();
         const timeAway = now - this.lastFocusTime;
 
@@ -433,20 +438,10 @@ class AudioManager {
             this.sfxMuted = this.sfxMutedStateBeforeBlur;
             this.sfxMutedByFocusLoss = false;
             
-            // Resume looping sound effects if they were paused
-            if (this.runningSoundEffect && this.runningSoundEffect.isPaused) {
-                this.runningSoundEffect.resume();
-            }
-            if (this.ambianceSoundEffect && this.ambianceSoundEffect.isPaused) {
-                this.ambianceSoundEffect.resume();
-            }
-            if (this.subwayPassingSound && this.subwayPassingSound.isPaused) {
-                this.subwayPassingSound.resume();
-            }
-            if (this.textTypingSound && this.textTypingSound.isPaused) {
-                this.textTypingSound.resume();
-            }
-            
+            // Resume only the loops handleBlur paused (still paused - not stopped meanwhile)
+            (this.loopsPausedByFocusLoss || []).forEach(s => { if (s && s.isPaused) s.resume(); });
+            this.loopsPausedByFocusLoss = null;
+
             console.log('🎵 Game regained focus - unmuting sound effects');
         }
 
@@ -485,10 +480,9 @@ class AudioManager {
     // Cleanup method for scene destruction
     destroy() {
         // Remove event listeners
-        document.removeEventListener('visibilitychange', this.handleBlur);
-        document.removeEventListener('visibilitychange', this.handleFocus);
-        window.removeEventListener('blur', this.handleBlur);
-        window.removeEventListener('focus', this.handleFocus);
+        document.removeEventListener('visibilitychange', this.onVisibilityChange);
+        window.removeEventListener('blur', this.onWindowBlur);
+        window.removeEventListener('focus', this.onWindowFocus);
 
         if (this.currentBackgroundMusic) {
             this.currentBackgroundMusic.stop();
@@ -844,6 +838,21 @@ class AudioManager {
         } else {
             console.warn('🔊 Try again start sound not found in cache');
         }
+    }
+    
+    // Special attack: the fireball leaving the hand (Tireek's fire, Tryston's ice-blue magic)
+    playSpecialFireball(characterName) {
+        this.playSoundEffect(characterName === 'tryston' ? 'specialFireballTryston' : 'specialFireballTireek', 0.5);
+    }
+    
+    // Special attack meter just filled up
+    playSpecialCharged() {
+        this.playSoundEffect('specialCharged', 0.4);
+    }
+    
+    // Pause menu button press - opening the pause menu, RESUME and MAIN MENU
+    playPauseButtonSound() {
+        this.playSoundEffect('pauseButton', 0.4);
     }
     
     // Dialogue typing sound (looping during typing)
