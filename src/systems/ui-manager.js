@@ -93,6 +93,9 @@ class UIManager {
         // Create the combo counter (under the score)
         this.createComboDisplay();
         
+        // Create the special attack meter (under the combo)
+        this.createSpecialDisplay();
+        
         // Create boss health bar (hidden by default)
         this.createBossHealthBar();
     }
@@ -516,7 +519,8 @@ class UIManager {
             g.lineStyle(2 * BS, 0xFFD700, 0.55);
             g.strokeRoundedRect(M * BS, M * BS, W * BS, H * BS, 12 * BS);
             g.lineStyle(1 * BS, 0xFFD700, 0.3);
-            g.lineBetween((pad + M) * BS, (56 + M) * BS, (W - pad + M) * BS, (56 + M) * BS); // between the two rows
+            g.lineBetween((pad + M) * BS, (56 + M) * BS, (W - pad + M) * BS, (56 + M) * BS); // score | combo
+            g.lineBetween((pad + M) * BS, (102 + M) * BS, (W - pad + M) * BS, (102 + M) * BS); // combo | special
             g.generateTexture(boxKey, (W + 2 * M) * BS, (H + 2 * M) * BS);
             g.destroy();
         }
@@ -584,6 +588,100 @@ class UIManager {
         this.comboRow.add([...(fist ? [fist] : []), this.comboText, ...this.comboPips]);
         this.scoreContainer.add(this.comboRow);
         this.updateComboDisplay(0, 1);
+    }
+    
+    // ========================================
+    // SPECIAL ATTACK METER
+    // ========================================
+    // Row 3 of the score box: the current fighter's fireball, a bar that fills as the special
+    // charges (SpecialAttackSystem) and, on keyboard, the key that fires it. Dimmed while
+    // charging; full, the bar turns yellow and the row pulses. In landscape touch play the row
+    // itself is the button: full, it reads TAP, and tapping it throws the fireball. (Upright
+    // phones have a SPECIAL bar on the console instead - SpecialBarButton.)
+    createSpecialDisplay() {
+        if (!this.scoreContainer) return;
+        const W = UIManager.SCORE_BOX.width, pad = 12;
+        this.specialRow = this.uiScene.add.container(-W / 2, 123);
+        
+        const left = -W / 2 + pad;
+        const fb = SpecialAttackSystem.FIREBALLS.tireek;
+        this.specialIcon = this.uiScene.add.image(left + 18, 0, fb.key, 8);
+        this.specialIcon.setScale(1.3);
+        this.specialIcon.setVisible(this.uiScene.textures.exists(fb.key));
+        
+        // Bar: a dark track and a fill that grows to the right
+        const barX = left + 42, barW = W - 2 * pad - 42 - 26, barH = 14;
+        this.specialBar = { x: barX, w: barW, h: barH };
+        this.specialTrack = this.uiScene.add.rectangle(barX, 0, barW, barH, 0x222222, 1).setOrigin(0, 0.5);
+        this.specialTrack.setStrokeStyle(1, 0x000000, 0.8);
+        this.specialFill = this.uiScene.add.rectangle(barX, 0, 0, barH, SpecialAttackSystem.HUD_COLORS.tireek, 1).setOrigin(0, 0.5);
+        
+        // "TAP" on the full bar (landscape touch only)
+        this.specialTap = this.uiScene.add.text(barX + barW / 2, 0, 'TAP', {
+            fontSize: '15px',
+            fill: '#1A1200',
+            fontFamily: GAME_CONFIG.ui.fontFamily,
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setVisible(false);
+        
+        // The whole row is the tap target (only acts in landscape touch play, when full)
+        this.specialHit = this.uiScene.add.rectangle(0, 0, W, 40, 0x000000, 0).setInteractive({ useHandCursor: false });
+        this.specialHit.on('pointerdown', () => {
+            const gs = this.scene;
+            if (!this.isSpecialTapLayout() || !gs || !gs.specialAttack) return;
+            if (gs.scene && gs.scene.isPaused()) return;
+            gs.specialAttack.tryFire();
+        });
+        
+        // Key hint (keyboard only)
+        this.specialKey = this.uiScene.add.text(W / 2 - pad, 0, 'V', {
+            fontSize: GAME_CONFIG.ui.fontSize.micro,
+            fill: '#FFD700',
+            fontFamily: GAME_CONFIG.ui.fontFamily,
+            stroke: '#000000',
+            strokeThickness: 3
+        }).setOrigin(1, 0.5);
+        
+        this.specialRow.add([this.specialIcon, this.specialTrack, this.specialFill, this.specialTap, this.specialKey, this.specialHit]);
+        this.scoreContainer.add(this.specialRow);
+        this.specialReadyShown = null;
+        this.updateSpecialDisplay(0, false, fb.key);
+    }
+    
+    // Landscape touch play: the HUD's special row is the button
+    isSpecialTapLayout() {
+        const DM = window.DeviceManager;
+        if (!DM || !DM.shouldShowTouchControls || !DM.shouldShowTouchControls()) return false;
+        return !(DM.isHandheldMode && DM.isHandheldMode());
+    }
+    
+    // charge 0..1; ready: full; fireballKey: the current fighter's fireball texture
+    updateSpecialDisplay(charge, ready, fireballKey) {
+        if (!this.specialRow || !this.specialRow.active) return;
+        const char = fireballKey && fireballKey.split('_')[0];
+        const color = SpecialAttackSystem.HUD_COLORS[char] || SpecialAttackSystem.HUD_COLORS.tireek;
+        
+        if (fireballKey && this.uiScene.textures.exists(fireballKey)) {
+            if (this.specialIcon.texture.key !== fireballKey) this.specialIcon.setTexture(fireballKey, 8);
+            this.specialIcon.setVisible(true);
+        }
+        this.specialFill.setSize(Math.max(0.01, this.specialBar.w * Math.max(0, Math.min(1, charge))), this.specialBar.h);
+        this.specialFill.setFillStyle(ready ? 0xFFD700 : color, 1);
+        
+        const touch = !!(window.DeviceManager && window.DeviceManager.shouldShowTouchControls && window.DeviceManager.shouldShowTouchControls());
+        this.specialKey.setVisible(!touch);
+        this.specialTap.setVisible(!!ready && this.isSpecialTapLayout());
+        
+        if (ready === this.specialReadyShown) return;
+        this.specialReadyShown = ready;
+        const tweens = this.uiScene.tweens;
+        tweens.killTweensOf(this.specialRow);
+        this.specialRow.setScale(1);
+        this.specialRow.setAlpha(ready ? 1 : 0.6);
+        this.specialTrack.setStrokeStyle(ready ? 2 : 1, ready ? 0xFFF3B0 : 0x000000, 0.9);
+        if (ready) {
+            tweens.add({ targets: this.specialRow, scale: 1.08, duration: 380, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        }
     }
     
     // hits: hits in the current combo (0 = no combo); multiplier: 1-5; levelUp: the
@@ -1363,8 +1461,8 @@ Legend:
     }
 }
 
-// Size of the top-right score + combo box (virtual px, before the phone HUD scale)
-UIManager.SCORE_BOX = { width: 200, height: 104 };
+// Size of the top-right score + combo + special box (virtual px, before the phone HUD scale)
+UIManager.SCORE_BOX = { width: 200, height: 144 };
 
 // Make UIManager available globally
 window.UIManager = UIManager;

@@ -203,6 +203,8 @@ class PreloadScene extends Phaser.Scene {
             frameWidth: 64,
             frameHeight: 64
         });
+        // Fireballs for the special attack (SpecialAttackSystem)
+        if (typeof SpecialAttackSystem !== 'undefined') SpecialAttackSystem.loadAssets(this.load);
         
         // Load extras assets (static characters for events)
         if (typeof EXTRAS_REGISTRY !== 'undefined' && EXTRAS_REGISTRY) {

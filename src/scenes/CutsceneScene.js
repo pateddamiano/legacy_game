@@ -50,16 +50,6 @@ class CutsceneScene extends Phaser.Scene {
         if (showcaseImage && !this.textures.exists(showcaseImage.key)) {
             this.load.image(showcaseImage.key, showcaseImage.path);
         }
-
-        // Portraits are optional, and shared with IntroDialogueScene
-        if (this.config.portraits) {
-            if (!this.textures.exists('dialogueTireek')) {
-                this.load.image('dialogueTireek', 'assets/dialogue_objects/characters/tireek.png');
-            }
-            if (!this.textures.exists('dialogueTryston')) {
-                this.load.image('dialogueTryston', 'assets/dialogue_objects/characters/tryston.png');
-            }
-        }
     }
 
     create() {
@@ -107,10 +97,6 @@ class CutsceneScene extends Phaser.Scene {
             image.setScale(coverScale);
         } else if (bg) {
             console.warn(`🎬 CutsceneScene: Background texture missing for '${this.cutsceneId}'`);
-        }
-
-        if (this.config.portraits) {
-            this.createCharacterPortraits();
         }
 
         if (this.config.characters) {
@@ -165,22 +151,6 @@ class CutsceneScene extends Phaser.Scene {
         this.touchOverlay.setDepth(9);
         this.touchOverlay.setInteractive({ useHandCursor: false });
         this.touchOverlay.on('pointerdown', () => this.handleAdvance());
-    }
-
-    createCharacterPortraits() {
-        const centerX = this.virtualWidth / 2;
-        const screenHeight = this.virtualHeight;
-
-        const tireek = this.add.image(centerX - 300, screenHeight / 2 + 50, 'dialogueTireek');
-        tireek.setOrigin(0.5, 0.5);
-        tireek.setScale(Math.min(screenHeight * 0.7 / tireek.height, 450 / tireek.width));
-        tireek.setDepth(1);
-
-        const tryston = this.add.image(centerX + 300, screenHeight / 2 + 50, 'dialogueTryston');
-        tryston.setOrigin(0.5, 0.5);
-        tryston.setFlipX(true);
-        tryston.setScale(Math.min(screenHeight * 0.7 / tryston.height, 450 / tryston.width));
-        tryston.setDepth(1);
     }
 
     // In-world character models (the real idle sprites, not dialogue portraits).

@@ -202,7 +202,8 @@ class CharacterManager {
         // Only allow switching if not in middle of an action (unless forced)
         if (!forceSwitch && animationManager) {
             const lockAlmostExpired = animationManager.lockTimer && animationManager.lockTimer <= 200;
-            const isInAttackAnimation = animationManager.currentState === 'attack' || animationManager.currentState === 'airkick';
+            const isInAttackAnimation = animationManager.currentState === 'attack' || animationManager.currentState === 'airkick' ||
+                                        animationManager.currentState === 'special'; // fireball throw
             const shouldBlock = (animationManager.animationLocked && isInAttackAnimation && !lockAlmostExpired) ||
                                 (isJumping && isInAttackAnimation && !lockAlmostExpired);
 

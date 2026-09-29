@@ -41,7 +41,7 @@ class AnimationStateManager {
             if (this.lockTimer <= 0) {
                 this.lockTimer = 0;
                 this.animationLocked = false;
-                if (this.currentState === 'attack' || this.currentState === 'airkick') {
+                if (this.currentState === 'attack' || this.currentState === 'airkick' || this.currentState === 'special') {
                     this.currentState = 'idle';
                 }
             }

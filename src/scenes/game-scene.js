@@ -285,6 +285,10 @@ class GameScene extends Phaser.Scene {
         if (this.comboSystem) this.comboSystem.destroy();
         this.comboSystem = new ComboSystem(this);
         
+        // Fireball special: charges with the combo, fired with V / SPECIAL
+        if (this.specialAttack) this.specialAttack.destroy();
+        this.specialAttack = new SpecialAttackSystem(this);
+        
         // DebugManager - checkpoint navigation is a developer feature even outside debug mode
         this.debugManager = new DebugManager(this);
         if (this.isTestMode || window.DEBUG_MODE) {
@@ -636,6 +640,9 @@ class GameScene extends Phaser.Scene {
         // Update weapon system
         this.weaponManager.update();
         
+        // Special attack: charge meter and flying fireballs
+        if (this.specialAttack) this.specialAttack.update(delta);
+        
         // Update effect system (for moving effects like tornado)
         if (this.effectSystem) {
             this.effectSystem.update();
@@ -904,6 +911,9 @@ class GameScene extends Phaser.Scene {
                     this.events.emit('tutorial:throw');
                 }
             },
+            onSpecialUse: () => {
+                if (this.specialAttack) this.specialAttack.tryFire();
+            },
             onTouchControlsToggle: () => {
                 // Toggle touch controls (T key for testing)
                 if (window.DeviceManager) {
@@ -994,6 +1004,8 @@ class GameScene extends Phaser.Scene {
         // something else had stopped or paused on purpose
         this._soundsPausedByMenu = (this.sound.sounds || []).filter(s => s && s.isPlaying);
         this._soundsPausedByMenu.forEach(s => s.pause());
+        // After the silencing above, or the click would be paused along with everything else
+        if (this.audioManager) this.audioManager.playPauseButtonSound();
         
         this.scene.launch('PauseScene');
         this.scene.bringToTop('PauseScene');
@@ -1009,6 +1021,7 @@ class GameScene extends Phaser.Scene {
         
         (this._soundsPausedByMenu || []).forEach(s => { if (s && s.isPaused) s.resume(); });
         this._soundsPausedByMenu = null;
+        if (this.audioManager) this.audioManager.playPauseButtonSound();
         
         // Keys and touches held when the menu opened never got their release events
         if (this.input.keyboard) this.input.keyboard.resetKeys();
@@ -1040,6 +1053,8 @@ class GameScene extends Phaser.Scene {
         console.log('🏠 Quitting to main menu from pause');
         (this._soundsPausedByMenu || []).forEach(s => { if (s) s.stop(); });
         this._soundsPausedByMenu = null;
+        // One-shot, so it plays on through the switch to the menu
+        if (this.audioManager) this.audioManager.playPauseButtonSound();
         
         if (this.scene.isActive('TouchControlsScene') || this.scene.isPaused('TouchControlsScene')) {
             this.scene.stop('TouchControlsScene');

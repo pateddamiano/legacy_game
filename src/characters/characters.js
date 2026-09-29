@@ -55,7 +55,8 @@ const TIREEK_CONFIG = new CharacterConfig(
         kick: 'assets/characters/tireek/spritesheets/Tireek_Kick.png',
         jump: 'assets/characters/tireek/spritesheets/Tireek_Jump.png',
         airkick: 'assets/characters/tireek/spritesheets/Tireek_AirKick.png',
-        idle: 'assets/characters/tireek/spritesheets/Tireek_Idle.png'
+        idle: 'assets/characters/tireek/spritesheets/Tireek_Idle.png',
+        special: 'assets/characters/tireek/spritesheets/special/Tireek_special movement.png' // fireball throw (SpecialAttackSystem)
     },
     {
         run: { frames: 8, frameRate: 12, repeat: -1 },
@@ -64,7 +65,8 @@ const TIREEK_CONFIG = new CharacterConfig(
         kick: { frames: 5, frameRate: 16, repeat: 0 },    // Fast: 20 FPS
         jump: { frames: 1, frameRate: 12, repeat: 0 },
         airkick: { frames: 1, frameRate: 12, repeat: 0 },
-        idle: { frames: 5, frameRate: 12, repeat: -1 }    // Keep idle at normal speed
+        idle: { frames: 5, frameRate: 12, repeat: -1 },   // Keep idle at normal speed
+        special: { frames: 10, frameRate: 20, repeat: 0 } // fireball throw
     },
     {width: 128, height: 96},
     0.87,  // Base scale multiplier (1.0 = normal size, can be adjusted per character)
@@ -81,7 +83,8 @@ const TRYSTON_CONFIG = new CharacterConfig(
         kick: 'assets/characters/tryston/spritesheets/Tryston_Kick.png',
         jump: 'assets/characters/tryston/spritesheets/Tryston_Jump.png',
         airkick: 'assets/characters/tryston/spritesheets/Tryston_AirKick.png',
-        idle: 'assets/characters/tryston/spritesheets/Tryston_Idle.png'
+        idle: 'assets/characters/tryston/spritesheets/Tryston_Idle.png',
+        special: 'assets/characters/tryston/spritesheets/special/Tryston special movement 2.png' // fireball throw (SpecialAttackSystem)
     },
     {
         run: { frames: 7, frameRate: 12, repeat: -1 },    // Tryston_Run.png has 7 frames
@@ -90,7 +93,8 @@ const TRYSTON_CONFIG = new CharacterConfig(
         kick: { frames: 5, frameRate: 16, repeat: 0 },    // Fast: 20 FPS
         jump: { frames: 1, frameRate: 12, repeat: 0 },
         airkick: { frames: 1, frameRate: 12, repeat: 0 },
-        idle: { frames: 5, frameRate: 12, repeat: -1 }    // Keep idle at normal speed
+        idle: { frames: 5, frameRate: 12, repeat: -1 },   // Keep idle at normal speed
+        special: { frames: 10, frameRate: 20, repeat: 0 } // fireball throw
     },
     {width: 128, height: 96},
     0.85,  // Base scale multiplier (1.0 = normal size, can be adjusted per character)

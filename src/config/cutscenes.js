@@ -14,7 +14,6 @@
 //   background   - { key, path } image drawn to fill the 1200x720 virtual screen
 //   music        - optional music key to play for the duration of the cutscene
 //   musicVolume  - optional volume for that music (defaults to the audio config)
-//   portraits    - optional true to show the Tireek/Tryston dialogue portraits
 //   showcase     - optional end card (no dialogue): { image: {key, path}, y, height, bobDistance,
 //                  bobDuration, glowSize, title, subtitle }. Ends by returning to the main menu.
 //   characters   - optional [{ type: 'player'|'extra', name, x, feetY, scale, originY, flipX }]

@@ -3,7 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
-    <title>Phaser 3 Character Movement Game</title>
+    <title>Legacy: Soundtrack for Survival</title>
+    <meta name="description" content="Someone stole the album. Get it back. A free retro beat-'em-up scored with 8-bit versions of LEGACY (Deluxe) by ++. Plays in your browser, no download.">
+    <meta name="theme-color" content="#000000">
+    <!-- Link previews (Instagram, iMessage, X, Discord...). Most apps only fetch og:image from an
+         absolute URL, so these point at the live GitHub Pages site. -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://pateddamiano.github.io/legacy_game/">
+    <meta property="og:site_name" content="Legacy: Soundtrack for Survival">
+    <meta property="og:title" content="Legacy: Soundtrack for Survival">
+    <meta property="og:description" content="Someone stole the album. Get it back. A free retro beat-'em-up scored with 8-bit versions of LEGACY (Deluxe) by ++.">
+    <meta property="og:image" content="https://pateddamiano.github.io/legacy_game/assets/title/share-card.jpg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Tryston and Tireek on either side of the LEGACY: Soundtrack for Survival title">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Legacy: Soundtrack for Survival">
+    <meta name="twitter:description" content="Someone stole the album. Get it back. A free retro beat-'em-up scored with 8-bit versions of LEGACY (Deluxe) by ++.">
+    <meta name="twitter:image" content="https://pateddamiano.github.io/legacy_game/assets/title/share-card.jpg">
     <!-- Google Fonts - VT323 -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -232,7 +249,7 @@
     
     <div id="startup-overlay">
         <div class="startup-card">
-            <h1>Legacy: Soundcheck for Survival</h1>
+            <h1>Legacy: Soundtrack for Survival</h1>
             <p>Before we begin, a quick heads-up for the best experience.</p>
             
             <!-- Which way to hold the phone: first thing on the card, above the warning -->
@@ -289,10 +306,10 @@
     <script src="src/config/game-config.js?v=2.4.0"></script>
     <script src="src/core/settings.js?v=1.2.0"></script>
     <script src="src/ui/legal-info.js?v=1.2.0"></script>
-    <script src="src/ui/handheld-shell.js?v=1.2.0"></script>
+    <script src="src/ui/handheld-shell.js?v=1.3.0"></script>
     <script src="src/ui/tutorial-overlay.js?v=1.10.0"></script>
     <script src="src/utils/mobile-audio-unlock.js?v=1.0.0"></script>
-    <script src="src/config/cutscenes.js?v=1.3.0"></script>
+    <script src="src/config/cutscenes.js?v=1.4.0"></script>
     <script src="src/config/touch-controls-config.js?v=1.6.0"></script>
     <script src="src/config/remote-logging-config.js?v=1.2.0"></script>
     <script src="src/utils/remote-logger.js?v=1.1.0"></script>
@@ -304,20 +321,21 @@
             <script src="src/core/SceneManager.js?v=2.5.0"></script>
     
     <!-- Modular Game Scripts - Load in dependency order -->
-    <script src="src/characters/characters.js?v=5.10.0"></script>
-    <script src="src/systems/animation-manager.js?v=5.9.0"></script>
-    <script src="src/systems/audio-manager.js?v=6.8.0"></script>
+    <script src="src/characters/characters.js?v=5.11.0"></script>
+    <script src="src/systems/animation-manager.js?v=5.10.0"></script>
+    <script src="src/systems/audio-manager.js?v=6.12.0"></script>
     <script src="src/systems/futuristic-health-bar.js?v=1.2.0"></script>
-    <script src="src/systems/combo-system.js?v=1.1.0"></script>
-    <script src="src/systems/ui-manager.js?v=7.10.0"></script>
+    <script src="src/systems/combo-system.js?v=1.2.0"></script>
+    <script src="src/systems/special-attack-system.js?v=1.5.0"></script>
+    <script src="src/systems/ui-manager.js?v=7.12.0"></script>
     <script src="src/systems/environment-manager.js?v=6.4.0"></script>
     <script src="src/systems/world-manager.js?v=1.1.0"></script>
     <script src="src/systems/dialogue-manager.js?v=1.11.0"></script>
     <script src="src/systems/scene-element-manager.js?v=1.0.0"></script>
-    <script src="src/systems/unified-input-controller.js?v=1.1.0"></script>
-    <script src="src/systems/touch-controls-overlay.js?v=1.20.0"></script>
+    <script src="src/systems/unified-input-controller.js?v=1.2.0"></script>
+    <script src="src/systems/touch-controls-overlay.js?v=1.23.0"></script>
     <script src="src/systems/handheld-menu-nav.js?v=1.1.0"></script>
-    <script src="src/systems/input-manager.js?v=6.10.0"></script>
+    <script src="src/systems/input-manager.js?v=6.11.0"></script>
     <script src="src/systems/weapon-system.js?v=6.9.0"></script>
     <script src="src/systems/enemy-system.js?v=7.7.0"></script>
     <script src="src/systems/boss-system.js?v=1.10.0"></script>
@@ -336,20 +354,20 @@
     <script src="src/systems/event-actions/spawning-actions.js?v=1.3.0"></script>
     <script src="src/systems/event-actions/extras-actions.js?v=1.1.0"></script>
     <script src="src/systems/event-actions/special-actions.js?v=1.3.1"></script>
-    <script src="src/systems/event-actions/tutorial-actions.js?v=1.9.0"></script>
+    <script src="src/systems/event-actions/tutorial-actions.js?v=1.10.0"></script>
     <script src="src/systems/event-manager.js?v=2.8.0"></script>
     <script src="src/systems/item-pickup-system.js?v=6.13.0"></script>
     
     <!-- New Refactored Managers -->
-    <script src="src/systems/character-manager.js?v=1.3.0"></script>
+    <script src="src/systems/character-manager.js?v=1.4.0"></script>
     <script src="src/systems/combat-manager.js?v=1.3.0"></script>
     <script src="src/systems/player-physics-manager.js?v=1.3.0"></script>
-    <script src="src/systems/enemy-spawn-manager.js?v=1.4.0"></script>
+    <script src="src/systems/enemy-spawn-manager.js?v=1.6.0"></script>
     <script src="src/systems/animation-setup-manager.js?v=1.1.0"></script>
     <script src="src/systems/effect-system.js?v=1.11.0"></script>
     <script src="src/systems/debug-manager.js?v=1.0.0"></script>
     <script src="src/systems/level-transition-manager.js?v=2.1.0"></script>
-    <script src="src/systems/layout-manager.js?v=1.6.0"></script>
+    <script src="src/systems/layout-manager.js?v=1.7.0"></script>
     <script src="src/systems/device-manager.js?v=1.5.0"></script>
     <script src="src/systems/fullscreen-manager.js?v=1.1.0"></script>
     <script src="src/systems/checkpoint-manager.js?v=1.0.0"></script>
@@ -362,20 +380,20 @@
     <script src="src/systems/level/LevelLifecycle.js?v=1.3.0"></script>
     
     <!-- New Scene Files - Load before game.js -->
-    <script src="src/scenes/AudioBootScene.js?v=3.9.0"></script>
-    <script src="src/scenes/PreloadScene.js?v=1.0.0"></script>
+    <script src="src/scenes/AudioBootScene.js?v=3.12.0"></script>
+    <script src="src/scenes/PreloadScene.js?v=1.1.0"></script>
     <script src="src/scenes/MainMenuScene.js?v=4.10.0"></script>
-    <script src="src/scenes/IntroDialogueScene.js?v=2.6.0"></script>
-    <script src="src/scenes/CutsceneScene.js?v=1.4.0"></script>
+    <script src="src/scenes/IntroDialogueScene.js?v=2.7.0"></script>
+    <script src="src/scenes/CutsceneScene.js?v=1.5.0"></script>
     <script src="src/scenes/CharacterSelectScene.js?v=4.0.0"></script>
     <script src="src/scenes/UIScene.js?v=1.2.0"></script>
     <script src="src/scenes/TouchControlsScene.js?v=1.1.0"></script>
     <script src="src/scenes/PauseScene.js?v=1.2.0"></script>
     <script src="src/scenes/HandheldControlsScene.js?v=1.2.0"></script>
-    <script src="src/scenes/game-scene.js?v=9.8.0"></script>
+    <script src="src/scenes/game-scene.js?v=9.10.0"></script>
 
     <!-- Main Game Entry Point - Load last -->
-    <script src="game.js?v=7.6.0"></script>
+    <script src="game.js?v=7.7.0"></script>
     
     <script>
         (function () {

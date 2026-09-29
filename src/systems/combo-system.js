@@ -5,7 +5,8 @@
 //
 // Every hit the player lands (punch, kick, air kick or record - the 'player:punchHit' /
 // 'player:recordHit' signals from CombatManager and WeaponManager) builds the combo; any
-// damage to the player ('player:hurt', CombatManager.playerTakeDamage) ends it.
+// damage to the player ('player:hurt', CombatManager.playerTakeDamage) ends it. Hits during
+// the level 1 tutorial (while GameScene.tutorialAllowedActions is set) don't count.
 //
 // The multiplier goes up one step every HITS_PER_LEVEL hits, up to MAX_MULTIPLIER:
 // 0-4 hits x1, 5-9 x2, ... 20+ x5. Golden microphones picked up are worth their points
@@ -30,6 +31,7 @@ class ComboSystem {
     }
 
     addHit() {
+        if (this.scene.tutorialAllowedActions) return; // no combo off the level 1 tutorial's dummies
         const before = this.multiplier;
         this.hits++;
         const ui = this.scene.uiManager;

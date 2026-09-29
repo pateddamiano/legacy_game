@@ -108,19 +108,7 @@ class EnemySpawnManager {
         }
         
         // Don't spawn enemies while loading or while enemies are paused by event system
-        // Check if enemies are paused OR if there's an active event (which may have paused enemies)
-        const hasActiveEvent = this.scene.eventManager && this.scene.eventManager.activeEvent !== null;
-        const enemiesPausedByEvent = this.scene.eventManager && 
-                                     this.scene.eventManager.pausedEntities && 
-                                     this.scene.eventManager.pausedEntities.enemies.length > 0;
-        const playerPausedByEvent = this.scene.eventManager && 
-                                    this.scene.eventManager.pausedEntities && 
-                                    this.scene.eventManager.pausedEntities.player === true;
-        
-        // Block spawning if enemies are paused, or if there's an active event with player paused (indicating event control)
-        const shouldBlockSpawning = enemiesPausedByEvent || (hasActiveEvent && playerPausedByEvent);
-        
-        if (!this.isLoading && !shouldBlockSpawning) {
+        if (!this.isLoading && !this.isBlockedByEvent()) {
             // Update spawn timer
             this.enemySpawnTimer += delta;
             
@@ -292,7 +280,44 @@ class EnemySpawnManager {
         );
     }
     
-    spawnEnemy() {
+    // Check if enemies are paused OR if there's an active event (which may have paused enemies)
+    isBlockedByEvent() {
+        const eventManager = this.scene.eventManager;
+        const hasActiveEvent = eventManager && eventManager.activeEvent !== null;
+        const enemiesPausedByEvent = eventManager && 
+                                     eventManager.pausedEntities && 
+                                     eventManager.pausedEntities.enemies.length > 0;
+        const playerPausedByEvent = eventManager && 
+                                    eventManager.pausedEntities && 
+                                    eventManager.pausedEntities.player === true;
+        
+        // Block spawning if enemies are paused, or if there's an active event with player paused (indicating event control)
+        return enemiesPausedByEvent || (hasActiveEvent && playerPausedByEvent);
+    }
+    
+    // A few extra enemies at once, all from one side, lined up one behind another - sent in
+    // when the special charges so the fireball has a crowd to burn through. Allowed past
+    // maxEnemies by the wave's size. Skipped during loading, scripted events and boss
+    // fights. Returns how many were sent.
+    spawnWave(count, side, gapMs) {
+        if (!this.player || this.isLoading || this.maxEnemies === 0 || this.isTestMode) return 0;
+        const eventManager = this.scene.eventManager;
+        if ((eventManager && eventManager.activeEvent) || this.isBlockedByEvent()) return 0;
+        if (this.enemies.some(e => e && e.isBoss && e.state !== ENEMY_STATES.DEAD)) return 0;
+        
+        for (let i = 0; i < count; i++) {
+            // Each one further out, so they arrive in a line rather than on top of each other
+            this.scene.time.delayedCall(i * gapMs, () => {
+                this.spawnEnemy({ extraCap: count, side, extraDistance: i * 160, ignoreSpacing: true });
+            });
+        }
+        console.log(`👾 Special wave: ${count} enemies from the ${side}`);
+        return count;
+    }
+    
+    // options (all optional): extraCap - allowed over maxEnemies; side - 'left' / 'right';
+    // extraDistance - px further offscreen; ignoreSpacing - skip the gap from other enemies
+    spawnEnemy(options = {}) {
         // Don't spawn enemies if disabled
         if (this.maxEnemies === 0 || this.isTestMode) {
             return;
@@ -308,7 +333,7 @@ class EnemySpawnManager {
             enemy && enemy.state !== ENEMY_STATES.DEAD && enemy.sprite && enemy.sprite.active
         ).length;
         
-        if (activeEnemyCount >= this.maxEnemies) return;
+        if (activeEnemyCount >= this.maxEnemies + (options.extraCap || 0)) return;
         
         // Debug: Log allowed enemy types when spawning (only first few times to avoid spam)
         if (!this._spawnDebugLogged) {
@@ -349,7 +374,9 @@ class EnemySpawnManager {
         
         // Decide side to spawn from
         let spawnOnLeft = false;
-        if (isCameraLocked) {
+        if (options.side) {
+            spawnOnLeft = options.side === 'left';
+        } else if (isCameraLocked) {
             // During locked camera fights, always allow either side (ignore world bounds)
             spawnOnLeft = Math.random() < 0.5;
         } else {
@@ -360,7 +387,8 @@ class EnemySpawnManager {
         }
         
         // Pick an offscreen X, not clamped to world bounds (so we can spawn out-of-world)
-        let spawnX = spawnOnLeft ? (cameraLeft - offscreenMargin) : (cameraRight + offscreenMargin);
+        const spawnDistance = offscreenMargin + (options.extraDistance || 0);
+        let spawnX = spawnOnLeft ? (cameraLeft - spawnDistance) : (cameraRight + spawnDistance);
         
         // Check if spawn position is too close to player
         const minDistanceFromPlayer = 400; // Minimum safe distance
@@ -373,7 +401,7 @@ class EnemySpawnManager {
         
         // Check if spawn position collides with existing enemies
         const minDistanceFromEnemies = 300; // Minimum safe distance from other enemies
-        const tooCloseToEnemy = this.enemies.some(enemy => {
+        const tooCloseToEnemy = !options.ignoreSpacing && this.enemies.some(enemy => {
             if (!enemy.sprite) return false;
             const distanceToEnemy = Math.abs(spawnX - enemy.sprite.x);
             return distanceToEnemy < minDistanceFromEnemies;

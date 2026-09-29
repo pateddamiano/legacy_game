@@ -737,6 +737,149 @@ ActionButton.jumpSilhouette = function (scene) {
 // TOUCH CONTROLS OVERLAY
 // ========================================
 
+// ========================================
+// SPECIAL BAR (upright phone only)
+// ========================================
+// A wide, short console button across the top of the controls (LayoutManager
+// .getHandheldLayout().special). It fills with the fighter's colour as the special attack
+// charges; full, it turns yellow and reads SPECIAL! - press it to throw the fireball.
+// (In landscape the HUD's charge bar is tapped instead - UIManager.createSpecialDisplay.)
+class SpecialBarButton {
+    constructor(scene, config) {
+        this.scene = scene;
+        this.config = config || {};
+        this.container = null;
+        this.rect = null;          // { x, y, width, height } in screen px, from the layout
+        this.pressed = false;
+        this.pointerId = null;
+        this.disabled = false;
+        this.state = { pct: -1, ready: null, key: null, color: null };
+    }
+
+    create() {
+        const s = this.scene;
+        const depth = (typeof this.config.layerDepth === 'number') ? this.config.layerDepth : 5000;
+        this.container = s.add.container(0, 0).setDepth(depth).setScrollFactor(0).setVisible(false);
+        this.bg = s.add.graphics();
+        this.fill = s.add.graphics();
+        this.frame = s.add.graphics();
+        this.icon = s.add.image(0, 0, '__WHITE').setVisible(false);
+        this.label = s.add.text(0, 0, 'SPECIAL', {
+            fontFamily: GAME_CONFIG.ui.fontFamily, color: '#9A8A55', fontStyle: 'bold'
+        }).setOrigin(0.5);
+        this.hit = s.add.rectangle(0, 0, 10, 10, 0x000000, 0).setInteractive({ useHandCursor: false });
+        this.container.add([this.bg, this.fill, this.frame, this.icon, this.label, this.hit]);
+
+        this.hit.on('pointerdown', (pointer) => {
+            if (this.disabled || this.pointerId !== null) return;
+            this.pointerId = pointer.id;
+            this.pressed = true;
+            this.container.setScale(0.96);
+        });
+        const release = (pointer) => { if (this.pointerId === pointer.id) this.release(); };
+        s.input.on('pointerup', release);
+        s.input.on('pointercancel', release);
+    }
+
+    release() {
+        this.pointerId = null;
+        this.pressed = false;
+        if (this.container) this.container.setScale(1);
+    }
+
+    isPressed() {
+        return this.pressed;
+    }
+
+    // rect from the handheld layout, or null (landscape: no bar)
+    setLayout(rect) {
+        this.rect = rect || null;
+        if (!this.container || !this.rect) return;
+        const { x, y, width: w, height: h } = this.rect;
+        this.container.setPosition(x, y);
+        this.hit.setSize(w, h);
+        this.hit.setPosition(0, 0);
+        this.label.setFontSize(Math.round(h * 0.5));
+        this.label.setPosition(h * 0.35, 0);
+        this.icon.setPosition(-w / 2 + h * 0.62, 0);
+        this.state.pct = -1; this.state.ready = null; // redraw at the new size
+        this.draw();
+    }
+
+    // charge 0..1; ready: full; key: the fighter's fireball texture; color: their bar colour
+    setCharge(charge, ready, key, color) {
+        const pct = Math.floor(Math.max(0, Math.min(1, charge)) * 100);
+        const st = this.state;
+        if (key && key !== st.key && this.scene.textures.exists(key)) {
+            st.key = key;
+            this.icon.setTexture(key, 8).setVisible(true);
+            if (this.rect) this.icon.setScale((this.rect.height * 0.8) / 32); // the ball is ~32px of its 96px frame
+        }
+        if (pct === st.pct && ready === st.ready && color === st.color) return;
+        const readyChanged = ready !== st.ready;
+        st.pct = pct; st.ready = ready; st.color = color;
+        this.draw();
+        if (readyChanged) this.setPulse(ready);
+    }
+
+    draw() {
+        if (!this.rect) return;
+        const { width: w, height: h } = this.rect;
+        const st = this.state;
+        const ready = !!st.ready;
+        const r = Math.round(h * 0.3);
+        const inset = Math.max(3, Math.round(h * 0.12));
+
+        this.bg.clear();
+        this.bg.fillStyle(0x151515, 0.9);
+        this.bg.fillRoundedRect(-w / 2, -h / 2, w, h, r);
+
+        // Charge fill (the whole face when ready)
+        this.fill.clear();
+        const innerW = w - inset * 2, innerH = h - inset * 2;
+        const fw = ready ? innerW : innerW * Math.max(0, st.pct) / 100;
+        if (fw >= 2) {
+            this.fill.fillStyle(ready ? 0xFFD700 : (st.color || 0xCCAA00), ready ? 1 : 0.55);
+            this.fill.fillRoundedRect(-w / 2 + inset, -innerH / 2, fw, innerH, Math.min(r - inset / 2, fw / 2, innerH / 2));
+        }
+
+        this.frame.clear();
+        this.frame.lineStyle(3, ready ? 0xFFF3B0 : (this.config.strokeColor ?? 0xCCAA00), ready ? 1 : 0.7);
+        this.frame.strokeRoundedRect(-w / 2, -h / 2, w, h, r);
+
+        this.label.setText(ready ? 'SPECIAL!' : 'SPECIAL');
+        this.label.setColor(ready ? '#1A1200' : '#9A8A55');
+        this.icon.setAlpha(ready ? 1 : 0.55);
+    }
+
+    // Full: the frame breathes so the eye finds it
+    setPulse(on) {
+        const tweens = this.scene.tweens;
+        tweens.killTweensOf(this.frame);
+        this.frame.setAlpha(1);
+        if (on) tweens.add({ targets: this.frame, alpha: 0.35, duration: 450, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    }
+
+    // Menu controls (HandheldControlsScene): greyed out and untouchable
+    setDisabled(disabled) {
+        this.disabled = disabled;
+        if (!this.container) return;
+        this.container.setAlpha(disabled ? 0.4 : 1);
+        if (disabled) this.release();
+    }
+
+    setShown(shown) {
+        if (!this.container) return;
+        this.container.setVisible(!!shown && !!this.rect);
+        if (!shown) this.release();
+    }
+
+    destroy() {
+        if (this.container) this.container.destroy();
+        this.container = null;
+    }
+}
+
 class TouchControlsOverlay {
     constructor(scene, uiScene, unifiedInputController, renderScene = null) {
         this.scene = scene; // Game scene (for input events)
@@ -754,6 +897,9 @@ class TouchControlsOverlay {
             characterSwitch: null,
             recordThrow: null
         };
+        
+        // The wide SPECIAL bar above the controls (upright phone only)
+        this.specialBar = null;
         
         // Pause button (top centre of the screen; taps call GameScene.requestPause)
         this.pauseButton = null;
@@ -964,6 +1110,10 @@ class TouchControlsOverlay {
             this.buttons.recordThrow.setBaseScale(responsiveScale);
         }
         
+        // SPECIAL bar (placed and shown by relayout, upright phone only)
+        this.specialBar = new SpecialBarButton(this.renderScene, this.config.buttons);
+        this.specialBar.create();
+        
         this.createPauseButton(metrics, responsiveScale);
         this.createHalos();
         
@@ -1029,6 +1179,7 @@ class TouchControlsOverlay {
         } else {
             this.layoutLandscape();
         }
+        if (this.specialBar) this.specialBar.setShown(this.visible && this.handheld);
         if (this.pauseButton && this.pauseButton.container) {
             this.pauseButton.container.setAlpha(this.getPauseAlpha());
         }
@@ -1049,6 +1200,7 @@ class TouchControlsOverlay {
         const centerY = this.joystick.container.y;
         this.placeButtons(centerX, centerY, spacing, () => scale);
         this.repositionPauseButton(scale);
+        if (this.specialBar) this.specialBar.setLayout(null); // landscape: the HUD bar is tapped instead
     }
     
     layoutHandheld() {
@@ -1060,6 +1212,7 @@ class TouchControlsOverlay {
         
         const b = layout.buttons;
         this.placeButtons(b.x, b.y, b.spacing, (button) => b.size / button.size);
+        if (this.specialBar) this.specialBar.setLayout(layout.special);
         
         if (this.pauseButton && this.pauseButton.container) {
             this.pauseButton.baseScale = layout.pause.size / this.pauseButton.size;
@@ -1072,6 +1225,7 @@ class TouchControlsOverlay {
     // presses them, so every other button is greyed out
     setMenuMode(on) {
         this.menuMode = on;
+        if (this.specialBar) this.specialBar.setDisabled(on);
         ['jump', 'characterSwitch', 'recordThrow'].forEach(key => {
             if (this.buttons[key]) this.buttons[key].setDisabled(on);
         });
@@ -1234,6 +1388,7 @@ class TouchControlsOverlay {
                 button.onTouchEnd({ id: button.activePointerId });
             }
         });
+        if (this.specialBar) this.specialBar.release();
         if (this.unifiedInput) {
             this.unifiedInput.reset();
             this.unifiedInput.setTouchActive(false);
@@ -1270,6 +1425,13 @@ class TouchControlsOverlay {
             const wm = this.scene && this.scene.weaponManager;
             this.buttons.recordThrow.setCooldown(wm && wm.getCooldownProgress ? wm.getCooldownProgress() : 1);
         }
+        const special = this.scene && this.scene.specialAttack;
+        if (this.specialBar && special) {
+            const fb = special.currentFireball();
+            const color = SpecialAttackSystem.HUD_COLORS[fb.key.split('_')[0]];
+            this.specialBar.setCharge(special.charge, special.ready, fb.key, color);
+            this.unifiedInput.setActionFromTouch('special', this.handheld && this.specialBar.isPressed());
+        }
         
         // Update touch active state
         const hasActiveInput = (this.joystick && this.joystick.isActive()) || this.hasActiveButtons();
@@ -1280,7 +1442,8 @@ class TouchControlsOverlay {
         return (this.buttons.punch && this.buttons.punch.isButtonPressed()) ||
                (this.buttons.jump && this.buttons.jump.isButtonPressed()) ||
                (this.buttons.characterSwitch && this.buttons.characterSwitch.isButtonPressed()) ||
-               (this.buttons.recordThrow && this.buttons.recordThrow.isButtonPressed());
+               (this.buttons.recordThrow && this.buttons.recordThrow.isButtonPressed()) ||
+               (this.specialBar && this.specialBar.isPressed());
     }
     
     setVisible(visible) {
@@ -1295,6 +1458,7 @@ class TouchControlsOverlay {
                 button.setVisible(visible);
             }
         });
+        if (this.specialBar) this.specialBar.setShown(visible && this.handheld);
         
         if (this.pauseButton && this.pauseButton.container) {
             this.pauseButton.container.setVisible(visible);
@@ -1327,6 +1491,7 @@ class TouchControlsOverlay {
             }
         });
         this.buttons = {};
+        if (this.specialBar) { this.specialBar.destroy(); this.specialBar = null; }
         
         if (this.pauseButton && this.pauseButton.container) {
             this.pauseButton.container.destroy();

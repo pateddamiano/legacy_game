@@ -22,12 +22,8 @@ class IntroDialogueScene extends Phaser.Scene {
     preload() {
         console.log('💬 IntroDialogueScene: Loading dialogue assets...');
         
-        // Load character portraits
-        this.load.image('dialogueTireek', 'assets/dialogue_objects/characters/tireek.png');
-        this.load.image('dialogueTryston', 'assets/dialogue_objects/characters/tryston.png');
-        
-        // Load music studio background
-        this.load.image('musicStudio', 'assets/dialogue_objects/backgrounds/music_studio.png');
+        // Studio background (Tireek and Tryston are painted into it)
+        this.load.image('introStudio', 'assets/dialogue_objects/backgrounds/intro_studio.png');
     }
 
     create() {
@@ -60,12 +56,16 @@ class IntroDialogueScene extends Phaser.Scene {
         const centerX = this.virtualWidth / 2;
         const centerY = this.virtualHeight / 2;
 
-        // Add music studio background
-        this.add.image(centerX, centerY, 'musicStudio').setOrigin(0.5, 0.5).setDepth(0);
+        // Studio background, scaled to cover the whole virtual screen (it's wider than 5:3,
+        // so a little gets cropped off the sides). Nudged down so the top letterbox bar clears
+        // their hats - the gap this leaves at the bottom is hidden behind the bottom bar.
+        const backgroundOffsetY = 30;
+        const background = this.add.image(centerX, centerY + backgroundOffsetY, 'introStudio').setOrigin(0.5, 0.5).setDepth(0);
+        background.setScale(Math.max(
+            this.virtualWidth / background.width,
+            this.virtualHeight / background.height
+        ));
 
-        // Add character portraits
-        this.createCharacterPortraits();
-        
         // Add cinematic black bars (letterbox)
         this.createCinematicBars();
 
@@ -156,31 +156,6 @@ class IntroDialogueScene extends Phaser.Scene {
         this.cameras.main.fadeIn(1000, 0, 0, 0);
     }
 
-    createCharacterPortraits() {
-        const screenWidth = this.virtualWidth;
-        const screenHeight = this.virtualHeight;
-        const centerX = screenWidth / 2;
-        
-        // Tireek on the left (closer to center, moved down)
-        this.tireekPortrait = this.add.image(centerX - 300, screenHeight / 2 + 50, 'dialogueTireek');
-        this.tireekPortrait.setOrigin(0.5, 0.5);
-        // Scale to fit nicely (adjust as needed based on image size)
-        const tireekScale = Math.min(screenHeight * 0.7 / this.tireekPortrait.height, 450 / this.tireekPortrait.width);
-        this.tireekPortrait.setScale(tireekScale);
-        this.tireekPortrait.setDepth(1);
-        
-        // Avery/Tryston on the right (flipped horizontally, closer to center, moved down)
-        this.trystonPortrait = this.add.image(centerX + 300, screenHeight / 2 + 50, 'dialogueTryston');
-        this.trystonPortrait.setOrigin(0.5, 0.5);
-        this.trystonPortrait.setFlipX(true); // Flip horizontally
-        // Scale to fit nicely (adjust as needed based on image size)
-        const trystonScale = Math.min(screenHeight * 0.7 / this.trystonPortrait.height, 450 / this.trystonPortrait.width);
-        this.trystonPortrait.setScale(trystonScale);
-        this.trystonPortrait.setDepth(1);
-        
-        console.log('💬 Character portraits created: Tireek (left), Avery (right, flipped)');
-    }
-    
     createCinematicBars() {
         const screenWidth = this.virtualWidth;
         const screenHeight = this.virtualHeight;
